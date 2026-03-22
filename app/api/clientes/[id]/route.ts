@@ -1,0 +1,56 @@
+// GET/PUT/DELETE /api/clientes/[id]
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getAuthSession, unauthorized, notFound, serverError } from '@/lib/api-helpers'
+
+export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
+  const cliente = await prisma.cliente.findFirst({
+    where: { id: params.id, deletedAt: null },
+    include: {
+      rota: true,
+      locacoes: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } },
+      cobrancas: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 10 },
+    },
+  })
+
+  if (!cliente) return notFound('Cliente não encontrado')
+  return NextResponse.json(cliente)
+}
+
+export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
+  try {
+    const body = await req.json()
+    const { id: _, ...data } = body
+
+    const cliente = await prisma.cliente.update({
+      where: { id: params.id },
+      data: { ...data, version: { increment: 1 }, deviceId: 'web', needsSync: true },
+    })
+
+    return NextResponse.json(cliente)
+  } catch (err) {
+    console.error('[PUT /clientes/id]', err)
+    return serverError()
+  }
+}
+
+export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
+  try {
+    await prisma.cliente.update({
+      where: { id: params.id },
+      data: { deletedAt: new Date(), needsSync: true, version: { increment: 1 } },
+    })
+    return NextResponse.json({ success: true })
+  } catch {
+    return serverError()
+  }
+}

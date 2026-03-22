@@ -1,0 +1,313 @@
+// prisma/schema.prisma
+// Espelha exatamente os tipos TypeScript do mobile (shared/types.ts)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// CAMPOS DE SYNC — presentes em todas as entidades syncáveis
+// (espelha SyncableEntity do mobile)
+// ============================================================
+
+model Rota {
+  id           String    @id @default(uuid())
+  descricao    String
+  status       String    @default("Ativo")
+  // Sync
+  syncStatus   String    @default("synced")
+  lastSyncedAt String?
+  needsSync    Boolean   @default(false)
+  version      Int       @default(1)
+  deviceId     String    @default("")
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  clientes        Cliente[]
+  usuarioRotas    UsuarioRota[]
+
+  @@map("rotas")
+}
+
+model Cliente {
+  id                String    @id @default(uuid())
+  tipo              String    @default("cliente")
+  tipoPessoa        String    // 'Fisica' | 'Juridica'
+  identificador     String    @unique
+  nomeExibicao      String
+  nomeCompleto      String?
+  razaoSocial       String?
+  nomeFantasia      String?
+  cpf               String?
+  cnpj              String?
+  rg                String?
+  inscricaoEstadual String?
+  email             String?
+  telefonePrincipal String
+  contatos          Json?     // Contato[]
+  cep               String
+  logradouro        String
+  numero            String
+  complemento       String?
+  bairro            String
+  cidade            String
+  estado            String
+  rotaId            String
+  status            String    @default("Ativo")
+  observacao        String?
+  dataCadastro      String?
+  // Sync
+  syncStatus        String    @default("synced")
+  lastSyncedAt      String?
+  needsSync         Boolean   @default(false)
+  version           Int       @default(1)
+  deviceId          String    @default("")
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  rota      Rota       @relation(fields: [rotaId], references: [id])
+  locacoes  Locacao[]
+  cobrancas Cobranca[]
+
+  @@map("clientes")
+  @@index([rotaId])
+  @@index([status])
+}
+
+model Produto {
+  id                       String    @id @default(uuid())
+  tipo                     String    @default("produto")
+  identificador            String    @unique
+  numeroRelogio            String
+  tipoId                   String
+  tipoNome                 String
+  descricaoId              String
+  descricaoNome            String
+  tamanhoId                String
+  tamanhoNome              String
+  codigoCH                 String?
+  codigoABLF               String?
+  conservacao              String    // 'Ótima' | 'Boa' | 'Regular' | 'Ruim' | 'Péssima'
+  statusProduto            String    @default("Ativo")
+  dataFabricacao           String?
+  dataUltimaManutencao     String?
+  relatorioUltimaManutencao String?
+  dataAvaliacao            String?
+  aprovacao                String?
+  estabelecimento          String?
+  observacao               String?
+  dataCadastro             String?
+  // Sync
+  syncStatus               String    @default("synced")
+  lastSyncedAt             String?
+  needsSync                Boolean   @default(false)
+  version                  Int       @default(1)
+  deviceId                 String    @default("")
+  deletedAt                DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  locacoes         Locacao[]
+  cobrancas        Cobranca[]
+  historicoRelogio HistoricoRelogio[]
+
+  @@map("produtos")
+  @@index([statusProduto])
+}
+
+model Locacao {
+  id                   String    @id @default(uuid())
+  tipo                 String    @default("locacao")
+  clienteId            String
+  clienteNome          String
+  produtoId            String
+  produtoIdentificador String
+  produtoTipo          String
+  dataLocacao          String
+  dataFim              String?
+  observacao           String?
+  formaPagamento       String    // 'Periodo' | 'PercentualPagar' | 'PercentualReceber'
+  numeroRelogio        String
+  precoFicha           Float
+  percentualEmpresa    Float
+  percentualCliente    Float
+  periodicidade        String?
+  valorFixo            Float?
+  dataPrimeiraCobranca String?
+  status               String    @default("Ativa")
+  ultimaLeituraRelogio Float?
+  dataUltimaCobranca   String?
+  trocaPano            Boolean   @default(false)
+  dataUltimaManutencao String?
+  // Sync
+  syncStatus           String    @default("synced")
+  lastSyncedAt         String?
+  needsSync            Boolean   @default(false)
+  version              Int       @default(1)
+  deviceId             String    @default("")
+  deletedAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  cliente   Cliente    @relation(fields: [clienteId], references: [id])
+  produto   Produto    @relation(fields: [produtoId], references: [id])
+  cobrancas Cobranca[]
+
+  @@map("locacoes")
+  @@index([clienteId])
+  @@index([produtoId])
+  @@index([status])
+}
+
+model Cobranca {
+  id                    String    @id @default(uuid())
+  tipo                  String    @default("cobranca")
+  locacaoId             String
+  clienteId             String
+  clienteNome           String
+  produtoId             String?
+  produtoIdentificador  String
+  dataInicio            String
+  dataFim               String
+  dataPagamento         String?
+  relogioAnterior       Float
+  relogioAtual          Float
+  fichasRodadas         Float
+  valorFicha            Float
+  totalBruto            Float
+  descontoPartidasQtd   Float?
+  descontoPartidasValor Float?
+  descontoDinheiro      Float?
+  percentualEmpresa     Float
+  subtotalAposDescontos Float
+  valorPercentual       Float
+  totalClientePaga      Float
+  valorRecebido         Float
+  saldoDevedorGerado    Float
+  status                String    // 'Pago' | 'Parcial' | 'Pendente' | 'Atrasado'
+  dataVencimento        String?
+  observacao            String?
+  // Sync
+  syncStatus            String    @default("synced")
+  lastSyncedAt          String?
+  needsSync             Boolean   @default(false)
+  version               Int       @default(1)
+  deviceId              String    @default("")
+  deletedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  locacao  Locacao  @relation(fields: [locacaoId], references: [id])
+  cliente  Cliente  @relation(fields: [clienteId], references: [id])
+  produto  Produto? @relation(fields: [produtoId], references: [id])
+
+  @@map("cobrancas")
+  @@index([clienteId])
+  @@index([status])
+  @@index([dataFim])
+}
+
+model Usuario {
+  id                      String    @id @default(uuid())
+  tipo                    String    @default("usuario")
+  nome                    String
+  cpf                     String?
+  telefone                String?
+  email                   String    @unique
+  senha                   String    // bcrypt hash
+  tipoPermissao           String    // 'Administrador' | 'Secretario' | 'AcessoControlado'
+  permissoesWeb           Json
+  permissoesMobile        Json
+  status                  String    @default("Ativo")
+  bloqueado               Boolean   @default(false)
+  dataUltimoAcesso        String?
+  ultimoAcessoDispositivo String?
+  // Sync
+  syncStatus              String    @default("synced")
+  lastSyncedAt            String?
+  needsSync               Boolean   @default(false)
+  version                 Int       @default(1)
+  deviceId                String    @default("")
+  deletedAt               DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  rotasPermitidas UsuarioRota[]
+
+  @@map("usuarios")
+}
+
+model UsuarioRota {
+  usuarioId String
+  rotaId    String
+  usuario   Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  rota      Rota    @relation(fields: [rotaId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, rotaId])
+  @@map("usuario_rotas")
+}
+
+model Dispositivo {
+  id                  String    @id @default(uuid())
+  nome                String
+  chave               String    @unique
+  tipo                String    @default("Celular")
+  status              String    @default("ativo")
+  ultimaSincronizacao DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@map("dispositivos")
+}
+
+model ChangeLog {
+  id         String    @id @default(uuid())
+  entityId   String
+  entityType String
+  operation  String    // 'create' | 'update' | 'delete'
+  changes    Json
+  timestamp  DateTime  @default(now())
+  deviceId   String
+  synced     Boolean   @default(false)
+  syncedAt   DateTime?
+
+  @@map("change_logs")
+  @@index([entityType, entityId])
+  @@index([deviceId, synced])
+  @@index([timestamp])
+}
+
+model SyncConflict {
+  id            String    @id @default(uuid())
+  entityId      String
+  entityType    String
+  localVersion  Json
+  remoteVersion Json
+  conflictType  String    // 'update' | 'delete'
+  resolution    String?   // 'local' | 'remote' | 'newest' | 'manual'
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@map("sync_conflicts")
+}
+
+model HistoricoRelogio {
+  id                 String   @id @default(uuid())
+  produtoId          String
+  relogioAnterior    String
+  relogioNovo        String
+  motivo             String
+  dataAlteracao      DateTime @default(now())
+  usuarioResponsavel String
+
+  produto Produto @relation(fields: [produtoId], references: [id])
+
+  @@map("historico_relogio")
+}

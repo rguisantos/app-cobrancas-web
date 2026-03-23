@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
         permissoesWeb:    permissoes[rest.tipoPermissao].web,
         permissoesMobile: permissoes[rest.tipoPermissao].mobile,
         deviceId: 'web', version: 1,
+        rotasPermitidas: rotasPermitidas || [],
         rotasPermitidasRel: rotasPermitidas ? { create: rotasPermitidas.map(rotaId => ({ rotaId })) } : undefined,
       },
     })

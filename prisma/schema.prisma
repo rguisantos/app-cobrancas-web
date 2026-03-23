@@ -1,5 +1,5 @@
 // prisma/schema.prisma
-// Espelha exatamente os tipos TypeScript do mobile (shared/types.ts)
+// Espelha EXATAMENTE os tipos TypeScript do mobile (src/types/index.ts)
 
 generator client {
   provider = "prisma-client-js"
@@ -18,7 +18,7 @@ datasource db {
 model Rota {
   id           String    @id @default(uuid())
   descricao    String
-  status       String    @default("Ativo")
+  status       String    @default("Ativo")  // 'Ativo' | 'Inativo'
   // Sync
   syncStatus   String    @default("synced")
   lastSyncedAt String?
@@ -38,32 +38,51 @@ model Rota {
 model Cliente {
   id                String    @id @default(uuid())
   tipo              String    @default("cliente")
+  
+  // Tipo de pessoa
   tipoPessoa        String    // 'Fisica' | 'Juridica'
+  
+  // Identificação
   identificador     String    @unique
-  nomeExibicao      String
+  
+  // Dados Pessoa Física
+  cpf               String?
+  rg                String?
   nomeCompleto      String?
+  
+  // Dados Pessoa Jurídica
+  cnpj              String?
   razaoSocial       String?
   nomeFantasia      String?
-  cpf               String?
-  cnpj              String?
-  rg                String?
   inscricaoEstadual String?
+  
+  // Campo unificado para exibição
+  nomeExibicao      String
+  
+  // Contatos
   email             String?
   telefonePrincipal String
   contatos          Json?     // Contato[]
+  
+  // Endereço
   cep               String
   logradouro        String
   numero            String
   complemento       String?
   bairro            String
   cidade            String
-  estado            String
+  estado            String    // Sigla: "MS"
+  
+  // Vínculo com Rota
   rotaId            String
-  rotaNome          String?   // Nome da rota para exibição (do mobile)
-  status            String    @default("Ativo")
-  observacao        String?
+  rotaNome          String?   // Para exibição fácil
+  
+  // Sistema
+  status            String    @default("Ativo")  // 'Ativo' | 'Inativo'
   dataCadastro      String?
-  dataUltimaAlteracao String? // Data da última alteração (do mobile)
+  dataUltimaAlteracao String?
+  observacao        String?
+  
   // Sync
   syncStatus        String    @default("synced")
   lastSyncedAt      String?
@@ -86,26 +105,46 @@ model Cliente {
 model Produto {
   id                       String    @id @default(uuid())
   tipo                     String    @default("produto")
+  
+  // Identificação (o identificador JÁ É a numeração física)
   identificador            String    @unique
+  
+  // Número do relógio/contador (separado do identificador)
   numeroRelogio            String
+  
+  // Características (vínculos com tabelas de apoio)
   tipoId                   String
-  tipoNome                 String
+  tipoNome                 String    // ex: "Bilhar"
+  
   descricaoId              String
-  descricaoNome            String
+  descricaoNome            String    // ex: "Azul"
+  
   tamanhoId                String
-  tamanhoNome              String
+  tamanhoNome              String    // ex: "2,20"
+  
+  // Códigos internos (opcional)
   codigoCH                 String?
   codigoABLF               String?
+  
+  // Estado do Produto
   conservacao              String    // 'Ótima' | 'Boa' | 'Regular' | 'Ruim' | 'Péssima'
-  statusProduto            String    @default("Ativo")
+  statusProduto            String    @default("Ativo")  // 'Ativo' | 'Inativo' | 'Manutenção'
+  
+  // Manutenção
   dataFabricacao           String?
   dataUltimaManutencao     String?
   relatorioUltimaManutencao String?
   dataAvaliacao            String?
   aprovacao                String?
-  estabelecimento          String?
+  
+  // Localização/Situação
+  estabelecimento          String?   // ex: "Barracão" (quando não está locado)
   observacao               String?
+  
+  // Sistema
   dataCadastro             String?
+  dataUltimaAlteracao      String?
+  
   // Sync
   syncStatus               String    @default("synced")
   lastSyncedAt             String?
@@ -127,27 +166,46 @@ model Produto {
 model Locacao {
   id                   String    @id @default(uuid())
   tipo                 String    @default("locacao")
+  
+  // Vínculos
   clienteId            String
   clienteNome          String
   produtoId            String
   produtoIdentificador String
   produtoTipo          String
+  
+  // Dados da Locação
   dataLocacao          String
-  dataFim              String?
+  dataFim              String?   // Se existir, locação foi encerrada
   observacao           String?
+  
+  // Forma de Pagamento
   formaPagamento       String    // 'Periodo' | 'PercentualPagar' | 'PercentualReceber'
+  
+  // Dados do Contador
   numeroRelogio        String
-  precoFicha           Float
-  percentualEmpresa    Float
-  percentualCliente    Float
-  periodicidade        String?
+  precoFicha           Float     // Valor da ficha/partida
+  
+  // Percentuais
+  percentualEmpresa    Float     // % que fica com a empresa
+  percentualCliente    Float     // % que fica com o cliente
+  
+  // Para pagamento por Período (valor fixo)
+  periodicidade        String?   // 'Mensal' | 'Semanal' | 'Quinzenal' | 'Diária'
   valorFixo            Float?
   dataPrimeiraCobranca String?
-  status               String    @default("Ativa")
+  
+  // Status
+  status               String    @default("Ativa")  // 'Ativa' | 'Finalizada' | 'Cancelada'
+  
+  // Controle de Cobrança
   ultimaLeituraRelogio Float?
   dataUltimaCobranca   String?
+
+  // Manutenção
   trocaPano            Boolean   @default(false)
   dataUltimaManutencao String?
+  
   // Sync
   syncStatus           String    @default("synced")
   lastSyncedAt         String?
@@ -171,31 +229,48 @@ model Locacao {
 model Cobranca {
   id                    String    @id @default(uuid())
   tipo                  String    @default("cobranca")
+  
+  // Vínculos
   locacaoId             String
   clienteId             String
   clienteNome           String
   produtoId             String?
   produtoIdentificador  String
+  
+  // Período da cobrança
   dataInicio            String
   dataFim               String
   dataPagamento         String?
+  
+  // Leitura do Contador
   relogioAnterior       Float
   relogioAtual          Float
   fichasRodadas         Float
+  
+  // Cálculos
   valorFicha            Float
   totalBruto            Float
+  
+  // Descontos
   descontoPartidasQtd   Float?
   descontoPartidasValor Float?
   descontoDinheiro      Float?
+  
+  // Percentual
   percentualEmpresa     Float
   subtotalAposDescontos Float
   valorPercentual       Float
+  
+  // Totais
   totalClientePaga      Float
   valorRecebido         Float
   saldoDevedorGerado    Float
+  
+  // Status
   status                String    // 'Pago' | 'Parcial' | 'Pendente' | 'Atrasado'
   dataVencimento        String?
   observacao            String?
+  
   // Sync
   syncStatus            String    @default("synced")
   lastSyncedAt          String?
@@ -219,18 +294,26 @@ model Cobranca {
 model Usuario {
   id                      String    @id @default(uuid())
   tipo                    String    @default("usuario")
+  
   nome                    String
   cpf                     String?
   telefone                String?
   email                   String    @unique
   senha                   String    // bcrypt hash
+  
   tipoPermissao           String    // 'Administrador' | 'Secretario' | 'AcessoControlado'
   permissoesWeb           Json
   permissoesMobile        Json
+  
+  // Rotas permitidas (para Acesso Controlado)
+  rotasPermitidas         Json      // Array<string | number>
+  
   status                  String    @default("Ativo")
   bloqueado               Boolean   @default(false)
+  
   dataUltimoAcesso        String?
-  ultimoAcessoDispositivo String?
+  ultimoAcessoDispositivo String?   // 'Web' | 'Mobile'
+  
   // Sync
   syncStatus              String    @default("synced")
   lastSyncedAt            String?
@@ -241,7 +324,7 @@ model Usuario {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
-  rotasPermitidas UsuarioRota[]
+  rotasPermitidasRel UsuarioRota[]
 
   @@map("usuarios")
 }
@@ -367,7 +450,7 @@ model TamanhoProduto {
 }
 
 // ============================================================
-// MANUTENÇAS — Histórico de manutenções de produtos
+// MANUTENÇÕES — Histórico de manutenções de produtos
 // ============================================================
 
 model Manutencao {

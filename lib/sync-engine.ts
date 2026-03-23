@@ -13,7 +13,25 @@ const TABLE_MAP: Record<string, EntityTable> = {
   rota:     'rotas',
 }
 
-// Campos permitidos por modelo (sync-safe)
+// Mapeamento de nomes de campos Mobile -> Web (se diferentes)
+const FIELD_MAP: Record<string, Record<string, string>> = {
+  cliente: {
+    // Mobile -> Web (nomes iguais, sem mapeamento necessário)
+  },
+  produto: {
+    conservacao: 'conservacao',  // No mobile é conservacao, no web também
+    statusProduto: 'statusProduto',
+    numeroRelogio: 'numeroRelogio',
+  },
+  locacao: {
+    numeroRelogio: 'numeroRelogio',
+  },
+  cobranca: {
+    // Campos já estão com nomes iguais
+  },
+}
+
+// Campos permitidos por modelo (campos que existem no Prisma schema)
 const ALLOWED_FIELDS: Record<string, Set<string>> = {
   cliente: new Set([
     'tipo', 'tipoPessoa', 'identificador', 'nomeExibicao', 'nomeCompleto',
@@ -29,6 +47,7 @@ const ALLOWED_FIELDS: Record<string, Set<string>> = {
     'codigoCH', 'codigoABLF', 'conservacao', 'statusProduto',
     'dataFabricacao', 'dataUltimaManutencao', 'relatorioUltimaManutencao',
     'dataAvaliacao', 'aprovacao', 'estabelecimento', 'observacao', 'dataCadastro',
+    'dataUltimaAlteracao',
     'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId'
   ]),
   locacao: new Set([
@@ -70,14 +89,26 @@ function parseChanges(changes: any): Record<string, any> {
 // Filtrar apenas campos permitidos
 function filterAllowedFields(modelName: string, data: Record<string, any>): Record<string, any> {
   const allowed = ALLOWED_FIELDS[modelName]
-  if (!allowed) return data
+  if (!allowed) {
+    console.log(`[sync] Modelo não encontrado no ALLOWED_FIELDS: ${modelName}`)
+    return data
+  }
 
   const filtered: Record<string, any> = {}
+  const removed: string[] = []
+  
   for (const [key, value] of Object.entries(data)) {
     if (allowed.has(key)) {
       filtered[key] = value
+    } else if (!['id', 'createdAt', 'cpfCnpj', 'rgIe', 'locacaoAtiva', 'estaLocado'].includes(key)) {
+      removed.push(key)
     }
   }
+  
+  if (removed.length > 0) {
+    console.log(`[sync] Campos removidos de ${modelName}: ${removed.join(', ')}`)
+  }
+  
   return filtered
 }
 
@@ -94,17 +125,16 @@ function convertForPrisma(data: Record<string, any>): Record<string, any> {
     }
   }
   
-  // Converter boolean strings
-  if (converted.needsSync === 'true' || converted.needsSync === '1' || converted.needsSync === 1) {
-    converted.needsSync = true
-  } else if (converted.needsSync === 'false' || converted.needsSync === '0' || converted.needsSync === 0) {
-    converted.needsSync = false
-  }
-  
-  if (converted.trocaPano === 'true' || converted.trocaPano === '1' || converted.trocaPano === 1) {
-    converted.trocaPano = true
-  } else if (converted.trocaPano === 'false' || converted.trocaPano === '0' || converted.trocaPano === 0) {
-    converted.trocaPano = false
+  // Converter boolean strings/integers
+  const booleanFields = ['needsSync', 'trocaPano']
+  for (const field of booleanFields) {
+    if (converted[field] !== undefined && converted[field] !== null) {
+      if (converted[field] === 'true' || converted[field] === '1' || converted[field] === 1) {
+        converted[field] = true
+      } else if (converted[field] === 'false' || converted[field] === '0' || converted[field] === 0 || converted[field] === '') {
+        converted[field] = false
+      }
+    }
   }
   
   // Converter números
@@ -117,7 +147,7 @@ function convertForPrisma(data: Record<string, any>): Record<string, any> {
   ]
   
   for (const field of numericFields) {
-    if (converted[field] !== undefined && converted[field] !== null) {
+    if (converted[field] !== undefined && converted[field] !== null && converted[field] !== '') {
       const num = Number(converted[field])
       if (!isNaN(num)) {
         converted[field] = num
@@ -138,18 +168,23 @@ export async function processPush(
   const conflicts: SyncConflict[] = []
   const errors: string[] = []
 
-  console.log(`[sync/push] Processando ${changes.length} mudanças do dispositivo ${deviceId}`)
+  console.log(`[sync/push] ====== INICIANDO PUSH ======`)
+  console.log(`[sync/push] Dispositivo: ${deviceId}`)
+  console.log(`[sync/push] Total de mudanças: ${changes.length}`)
 
   for (const change of changes) {
     try {
       const table = TABLE_MAP[change.entityType]
       if (!table) { 
         errors.push(`Tipo desconhecido: ${change.entityType}`) 
+        console.error(`[sync/push] Tipo desconhecido: ${change.entityType}`)
         continue 
       }
 
       // Parsear o campo changes (pode vir como string JSON do SQLite)
       const changesData = parseChanges(change.changes)
+      console.log(`[sync/push] --- ${change.operation.toUpperCase()} ${change.entityType}:${change.entityId} ---`)
+      console.log(`[sync/push] Dados recebidos:`, JSON.stringify(changesData, null, 2).substring(0, 500))
 
       // Nome do modelo no Prisma (singular)
       const modelName = table.slice(0, -1) as 'cliente' | 'produto' | 'locacao' | 'cobranca' | 'rota'
@@ -157,14 +192,13 @@ export async function processPush(
 
       if (!repo) {
         errors.push(`Modelo não encontrado: ${modelName}`)
+        console.error(`[sync/push] Modelo não encontrado: ${modelName}`)
         continue
       }
 
-      console.log(`[sync/push] Processando ${change.operation} ${modelName}:${change.entityId}`)
-
       if (change.operation === 'delete') {
         // Soft delete
-        await repo.updateMany({
+        const result = await repo.updateMany({
           where: { id: change.entityId },
           data: { 
             deletedAt: new Date(), 
@@ -173,6 +207,8 @@ export async function processPush(
             deviceId 
           },
         })
+        
+        console.log(`[sync/push] Soft delete executado. Registros atualizados: ${result.count}`)
         
         // Registrar no changelog do servidor
         await prisma.changeLog.create({
@@ -187,13 +223,14 @@ export async function processPush(
           },
         })
         
-        console.log(`[sync/push] Delete concluído: ${modelName}:${change.entityId}`)
         continue
       }
 
       // Filtrar e converter dados
       let filteredData = filterAllowedFields(modelName, changesData)
       filteredData = convertForPrisma(filteredData)
+      
+      console.log(`[sync/push] Dados filtrados:`, JSON.stringify(filteredData, null, 2).substring(0, 500))
       
       // Preparar dados para create/update
       const data: Record<string, any> = { 
@@ -213,17 +250,22 @@ export async function processPush(
 
       if (!existing) {
         // CREATE - criar nova entidade
-        console.log(`[sync/push] Criando novo ${modelName}:${change.entityId}`)
+        console.log(`[sync/push] Criando novo registro...`)
         
-        await repo.create({ 
-          data: { 
-            id: change.entityId, 
-            ...data,
-            createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
-          } 
-        })
-        
-        console.log(`[sync/push] Criado com sucesso: ${modelName}:${change.entityId}`)
+        try {
+          const created = await repo.create({ 
+            data: { 
+              id: change.entityId, 
+              ...data,
+              createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
+            } 
+          })
+          console.log(`[sync/push] Registro criado com sucesso! ID: ${created.id}`)
+        } catch (createError) {
+          console.error(`[sync/push] Erro ao criar:`, createError)
+          errors.push(`Erro ao criar ${modelName}:${change.entityId} - ${String(createError)}`)
+          continue
+        }
       } else {
         // UPDATE - verificar conflito de versão
         const mobileVersion = Number(changesData.version) || 0
@@ -231,7 +273,7 @@ export async function processPush(
 
         if (serverVersion > mobileVersion && serverVersion > 0) {
           // Conflito detectado - servidor tem versão mais recente
-          console.log(`[sync/push] Conflito detectado: ${modelName}:${change.entityId} (server: ${serverVersion}, mobile: ${mobileVersion})`)
+          console.log(`[sync/push] CONFLITO! Server v${serverVersion} > Mobile v${mobileVersion}`)
           
           const conflict: SyncConflict = {
             entityId: change.entityId,
@@ -255,17 +297,22 @@ export async function processPush(
           })
         } else {
           // Sem conflito - atualizar
-          console.log(`[sync/push] Atualizando ${modelName}:${change.entityId}`)
+          console.log(`[sync/push] Atualizando registro existente (server v${serverVersion}, mobile v${mobileVersion})...`)
           
-          await repo.update({
-            where: { id: change.entityId },
-            data: { 
-              ...data, 
-              version: { increment: 1 } 
-            },
-          })
-          
-          console.log(`[sync/push] Atualizado com sucesso: ${modelName}:${change.entityId}`)
+          try {
+            await repo.update({
+              where: { id: change.entityId },
+              data: { 
+                ...data, 
+                version: { increment: 1 } 
+              },
+            })
+            console.log(`[sync/push] Registro atualizado com sucesso!`)
+          } catch (updateError) {
+            console.error(`[sync/push] Erro ao atualizar:`, updateError)
+            errors.push(`Erro ao atualizar ${modelName}:${change.entityId} - ${String(updateError)}`)
+            continue
+          }
         }
       }
 
@@ -285,7 +332,7 @@ export async function processPush(
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       errors.push(`Erro em ${change.entityType}:${change.entityId} - ${errorMsg}`)
-      console.error(`[sync/push] Erro em ${change.entityType}:${change.entityId}:`, err)
+      console.error(`[sync/push] ERRO CRÍTICO em ${change.entityType}:${change.entityId}:`, err)
     }
   }
 
@@ -295,11 +342,13 @@ export async function processPush(
       where: { id: deviceId },
       data: { ultimaSincronizacao: new Date() },
     })
-  } catch {
-    // Ignorar erro se dispositivo não encontrado
+  } catch (err) {
+    console.log(`[sync/push] Dispositivo não encontrado para atualizar última sync`)
   }
 
-  console.log(`[sync/push] Concluído. Conflitos: ${conflicts.length}, Erros: ${errors.length}`)
+  console.log(`[sync/push] ====== PUSH CONCLUÍDO ======`)
+  console.log(`[sync/push] Conflitos: ${conflicts.length}, Erros: ${errors.length}`)
+  
   return { conflicts, errors }
 }
 
@@ -312,11 +361,12 @@ export async function processPull(
 ): Promise<SyncResponse> {
   const since = new Date(lastSyncAt)
 
-  console.log(`[sync/pull] Buscando mudanças desde ${since.toISOString()} para dispositivo ${deviceId}`)
+  console.log(`[sync/pull] ====== INICIANDO PULL ======`)
+  console.log(`[sync/pull] Dispositivo: ${deviceId}`)
+  console.log(`[sync/pull] Buscando mudanças desde: ${since.toISOString()}`)
 
   // Buscar todas as entidades modificadas depois de lastSyncAt
   // que NÃO foram geradas por este dispositivo
-  // Incluir entidades deletadas (com deletedAt não nulo)
   const [clientes, produtos, locacoes, cobrancas, rotas, tiposProduto, descricoesProduto, tamanhosProduto] = await Promise.all([
     prisma.cliente.findMany({
       where: {
@@ -375,7 +425,16 @@ export async function processPull(
     }),
   ])
 
-  console.log(`[sync/pull] Encontrados: ${clientes.length} clientes, ${produtos.length} produtos, ${locacoes.length} locações, ${cobrancas.length} cobranças, ${rotas.length} rotas`)
+  console.log(`[sync/pull] Resultados:`)
+  console.log(`[sync/pull] - Clientes: ${clientes.length}`)
+  console.log(`[sync/pull] - Produtos: ${produtos.length}`)
+  console.log(`[sync/pull] - Locações: ${locacoes.length}`)
+  console.log(`[sync/pull] - Cobranças: ${cobrancas.length}`)
+  console.log(`[sync/pull] - Rotas: ${rotas.length}`)
+  console.log(`[sync/pull] - Tipos: ${tiposProduto.length}`)
+  console.log(`[sync/pull] - Descrições: ${descricoesProduto.length}`)
+  console.log(`[sync/pull] - Tamanhos: ${tamanhosProduto.length}`)
+  console.log(`[sync/pull] ====== PULL CONCLUÍDO ======`)
 
   // IMPORTANTE: O mobile espera as entidades dentro de 'changes'
   return {
@@ -407,7 +466,7 @@ export async function processPushAtributos(
 ): Promise<{ errors: string[] }> {
   const errors: string[] = []
 
-  console.log(`[sync/atributos] Processando ${tipos.length} tipos, ${descricoes.length} descrições, ${tamanhos.length} tamanhos`)
+  console.log(`[sync/atributos] Processando atributos: ${tipos.length} tipos, ${descricoes.length} descrições, ${tamanhos.length} tamanhos`)
 
   // Processar tipos de produto
   for (const tipo of tipos) {

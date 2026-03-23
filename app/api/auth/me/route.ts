@@ -18,14 +18,14 @@ export async function GET(req: NextRequest) {
   try {
     const usuario = await prisma.usuario.findUnique({
       where: { id: payload.sub },
-      include: { rotasPermitidas: { include: { rota: true } } },
+      include: { rotasPermitidasRel: { include: { rota: true } } },
     })
 
     if (!usuario || usuario.status !== 'Ativo' || usuario.bloqueado) {
       return NextResponse.json({ error: 'Usuário não encontrado ou inativo' }, { status: 404 })
     }
 
-    const rotasPermitidas = usuario.rotasPermitidas.map((ur) => ur.rotaId)
+    const rotasPermitidas = usuario.rotasPermitidasRel.map((ur) => ur.rotaId)
 
     return NextResponse.json({
       id: usuario.id,

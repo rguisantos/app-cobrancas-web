@@ -29,7 +29,7 @@ export const authOptions: NextAuthOptions = {
             bloqueado: false,
             deletedAt: null,
           },
-          include: { rotasPermitidas: { include: { rota: true } } },
+          include: { rotasPermitidasRel: { include: { rota: true } } },
         })
 
         if (!usuario) return null

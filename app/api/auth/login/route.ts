@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     const usuario = await prisma.usuario.findFirst({
       where: { email, status: 'Ativo', bloqueado: false, deletedAt: null },
-      include: { rotasPermitidas: { include: { rota: true } } },
+      include: { rotasPermitidasRel: { include: { rota: true } } },
     })
 
     if (!usuario) {
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       tipoPermissao: usuario.tipoPermissao,
     })
 
-    const rotasPermitidas = usuario.rotasPermitidas.map((ur) => ur.rotaId)
+    const rotasPermitidas = usuario.rotasPermitidasRel.map((ur) => ur.rotaId)
 
     return NextResponse.json({
       token,

@@ -59,9 +59,11 @@ model Cliente {
   cidade            String
   estado            String
   rotaId            String
+  rotaNome          String?   // Nome da rota para exibição (do mobile)
   status            String    @default("Ativo")
   observacao        String?
   dataCadastro      String?
+  dataUltimaAlteracao String? // Data da última alteração (do mobile)
   // Sync
   syncStatus        String    @default("synced")
   lastSyncedAt      String?

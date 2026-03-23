@@ -13,6 +13,48 @@ const TABLE_MAP: Record<string, EntityTable> = {
   rota:     'rotas',
 }
 
+// Campos permitidos por modelo (sync-safe)
+const ALLOWED_FIELDS: Record<string, Set<string>> = {
+  cliente: new Set([
+    'tipo', 'tipoPessoa', 'identificador', 'nomeExibicao', 'nomeCompleto',
+    'razaoSocial', 'nomeFantasia', 'cpf', 'cnpj', 'rg', 'inscricaoEstadual',
+    'email', 'telefonePrincipal', 'contatos', 'cep', 'logradouro', 'numero',
+    'complemento', 'bairro', 'cidade', 'estado', 'rotaId', 'rotaNome',
+    'status', 'observacao', 'dataCadastro', 'dataUltimaAlteracao',
+    'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId'
+  ]),
+  produto: new Set([
+    'tipo', 'identificador', 'numeroRelogio', 'tipoId', 'tipoNome',
+    'descricaoId', 'descricaoNome', 'tamanhoId', 'tamanhoNome',
+    'codigoCH', 'codigoABLF', 'conservacao', 'statusProduto',
+    'dataFabricacao', 'dataUltimaManutencao', 'relatorioUltimaManutencao',
+    'dataAvaliacao', 'aprovacao', 'estabelecimento', 'observacao', 'dataCadastro',
+    'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId'
+  ]),
+  locacao: new Set([
+    'tipo', 'clienteId', 'clienteNome', 'produtoId', 'produtoIdentificador',
+    'produtoTipo', 'dataLocacao', 'dataFim', 'observacao', 'formaPagamento',
+    'numeroRelogio', 'precoFicha', 'percentualEmpresa', 'percentualCliente',
+    'periodicidade', 'valorFixo', 'dataPrimeiraCobranca', 'status',
+    'ultimaLeituraRelogio', 'dataUltimaCobranca', 'trocaPano', 'dataUltimaManutencao',
+    'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId'
+  ]),
+  cobranca: new Set([
+    'tipo', 'locacaoId', 'clienteId', 'clienteNome', 'produtoId',
+    'produtoIdentificador', 'dataInicio', 'dataFim', 'dataPagamento',
+    'relogioAnterior', 'relogioAtual', 'fichasRodadas', 'valorFicha',
+    'totalBruto', 'descontoPartidasQtd', 'descontoPartidasValor', 'descontoDinheiro',
+    'percentualEmpresa', 'subtotalAposDescontos', 'valorPercentual',
+    'totalClientePaga', 'valorRecebido', 'saldoDevedorGerado',
+    'status', 'dataVencimento', 'observacao',
+    'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId'
+  ]),
+  rota: new Set([
+    'descricao', 'status',
+    'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId'
+  ]),
+}
+
 // Helper para parsear changes que pode vir como string JSON
 function parseChanges(changes: any): Record<string, any> {
   if (typeof changes === 'string') {
@@ -25,6 +67,67 @@ function parseChanges(changes: any): Record<string, any> {
   return changes || {}
 }
 
+// Filtrar apenas campos permitidos
+function filterAllowedFields(modelName: string, data: Record<string, any>): Record<string, any> {
+  const allowed = ALLOWED_FIELDS[modelName]
+  if (!allowed) return data
+
+  const filtered: Record<string, any> = {}
+  for (const [key, value] of Object.entries(data)) {
+    if (allowed.has(key)) {
+      filtered[key] = value
+    }
+  }
+  return filtered
+}
+
+// Converter tipos de dados para Prisma
+function convertForPrisma(data: Record<string, any>): Record<string, any> {
+  const converted = { ...data }
+  
+  // Converter contatos de string JSON para objeto
+  if (typeof converted.contatos === 'string') {
+    try {
+      converted.contatos = JSON.parse(converted.contatos)
+    } catch {
+      converted.contatos = null
+    }
+  }
+  
+  // Converter boolean strings
+  if (converted.needsSync === 'true' || converted.needsSync === '1' || converted.needsSync === 1) {
+    converted.needsSync = true
+  } else if (converted.needsSync === 'false' || converted.needsSync === '0' || converted.needsSync === 0) {
+    converted.needsSync = false
+  }
+  
+  if (converted.trocaPano === 'true' || converted.trocaPano === '1' || converted.trocaPano === 1) {
+    converted.trocaPano = true
+  } else if (converted.trocaPano === 'false' || converted.trocaPano === '0' || converted.trocaPano === 0) {
+    converted.trocaPano = false
+  }
+  
+  // Converter números
+  const numericFields = [
+    'version', 'precoFicha', 'percentualEmpresa', 'percentualCliente', 'valorFixo',
+    'relogioAnterior', 'relogioAtual', 'fichasRodadas', 'valorFicha', 'totalBruto',
+    'descontoPartidasQtd', 'descontoPartidasValor', 'descontoDinheiro',
+    'subtotalAposDescontos', 'valorPercentual', 'totalClientePaga',
+    'valorRecebido', 'saldoDevedorGerado', 'ultimaLeituraRelogio'
+  ]
+  
+  for (const field of numericFields) {
+    if (converted[field] !== undefined && converted[field] !== null) {
+      const num = Number(converted[field])
+      if (!isNaN(num)) {
+        converted[field] = num
+      }
+    }
+  }
+  
+  return converted
+}
+
 // ============================================================
 // PUSH — mobile → servidor
 // ============================================================
@@ -34,6 +137,8 @@ export async function processPush(
 ): Promise<{ conflicts: SyncConflict[]; errors: string[] }> {
   const conflicts: SyncConflict[] = []
   const errors: string[] = []
+
+  console.log(`[sync/push] Processando ${changes.length} mudanças do dispositivo ${deviceId}`)
 
   for (const change of changes) {
     try {
@@ -54,6 +159,8 @@ export async function processPush(
         errors.push(`Modelo não encontrado: ${modelName}`)
         continue
       }
+
+      console.log(`[sync/push] Processando ${change.operation} ${modelName}:${change.entityId}`)
 
       if (change.operation === 'delete') {
         // Soft delete
@@ -79,12 +186,18 @@ export async function processPush(
             syncedAt: new Date(),
           },
         })
+        
+        console.log(`[sync/push] Delete concluído: ${modelName}:${change.entityId}`)
         continue
       }
 
+      // Filtrar e converter dados
+      let filteredData = filterAllowedFields(modelName, changesData)
+      filteredData = convertForPrisma(filteredData)
+      
       // Preparar dados para create/update
       const data: Record<string, any> = { 
-        ...changesData, 
+        ...filteredData, 
         syncStatus: 'synced', 
         needsSync: false, 
         deviceId,
@@ -100,6 +213,8 @@ export async function processPush(
 
       if (!existing) {
         // CREATE - criar nova entidade
+        console.log(`[sync/push] Criando novo ${modelName}:${change.entityId}`)
+        
         await repo.create({ 
           data: { 
             id: change.entityId, 
@@ -107,13 +222,17 @@ export async function processPush(
             createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
           } 
         })
+        
+        console.log(`[sync/push] Criado com sucesso: ${modelName}:${change.entityId}`)
       } else {
         // UPDATE - verificar conflito de versão
-        const mobileVersion = changesData.version ?? 0
-        const serverVersion = existing.version ?? 0
+        const mobileVersion = Number(changesData.version) || 0
+        const serverVersion = Number(existing.version) || 0
 
         if (serverVersion > mobileVersion && serverVersion > 0) {
           // Conflito detectado - servidor tem versão mais recente
+          console.log(`[sync/push] Conflito detectado: ${modelName}:${change.entityId} (server: ${serverVersion}, mobile: ${mobileVersion})`)
+          
           const conflict: SyncConflict = {
             entityId: change.entityId,
             entityType: change.entityType,
@@ -136,6 +255,8 @@ export async function processPush(
           })
         } else {
           // Sem conflito - atualizar
+          console.log(`[sync/push] Atualizando ${modelName}:${change.entityId}`)
+          
           await repo.update({
             where: { id: change.entityId },
             data: { 
@@ -143,6 +264,8 @@ export async function processPush(
               version: { increment: 1 } 
             },
           })
+          
+          console.log(`[sync/push] Atualizado com sucesso: ${modelName}:${change.entityId}`)
         }
       }
 
@@ -162,12 +285,11 @@ export async function processPush(
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err)
       errors.push(`Erro em ${change.entityType}:${change.entityId} - ${errorMsg}`)
-      console.error('[sync/push] Erro:', err)
+      console.error(`[sync/push] Erro em ${change.entityType}:${change.entityId}:`, err)
     }
   }
 
   // Atualizar última sincronização do dispositivo
-  // O deviceId aqui é o ID do dispositivo, não a chave
   try {
     await prisma.dispositivo.updateMany({
       where: { id: deviceId },
@@ -177,6 +299,7 @@ export async function processPush(
     // Ignorar erro se dispositivo não encontrado
   }
 
+  console.log(`[sync/push] Concluído. Conflitos: ${conflicts.length}, Erros: ${errors.length}`)
   return { conflicts, errors }
 }
 
@@ -188,6 +311,8 @@ export async function processPull(
   lastSyncAt: string
 ): Promise<SyncResponse> {
   const since = new Date(lastSyncAt)
+
+  console.log(`[sync/pull] Buscando mudanças desde ${since.toISOString()} para dispositivo ${deviceId}`)
 
   // Buscar todas as entidades modificadas depois de lastSyncAt
   // que NÃO foram geradas por este dispositivo
@@ -250,6 +375,8 @@ export async function processPull(
     }),
   ])
 
+  console.log(`[sync/pull] Encontrados: ${clientes.length} clientes, ${produtos.length} produtos, ${locacoes.length} locações, ${cobrancas.length} cobranças, ${rotas.length} rotas`)
+
   // IMPORTANTE: O mobile espera as entidades dentro de 'changes'
   return {
     success: true,
@@ -279,6 +406,8 @@ export async function processPushAtributos(
   tamanhos: any[]
 ): Promise<{ errors: string[] }> {
   const errors: string[] = []
+
+  console.log(`[sync/atributos] Processando ${tipos.length} tipos, ${descricoes.length} descrições, ${tamanhos.length} tamanhos`)
 
   // Processar tipos de produto
   for (const tipo of tipos) {

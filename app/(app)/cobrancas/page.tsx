@@ -13,17 +13,18 @@ export const metadata: Metadata = { title: 'Cobranças' }
 
 export default async function CobrancasPage({
   searchParams,
-}: { searchParams: { status?: string; busca?: string; page?: string } }) {
+}: { searchParams: Promise<{ status?: string; busca?: string; page?: string }> }) {
+  const params = await searchParams
   await getSession()
-  const page = Number(searchParams.page || 1)
+  const page = Number(params.page || 1)
   const limit = 20
 
   const where: any = { deletedAt: null }
-  if (searchParams.status) where.status = searchParams.status
-  if (searchParams.busca) {
+  if (params.status) where.status = params.status
+  if (params.busca) {
     where.OR = [
-      { clienteNome: { contains: searchParams.busca, mode: 'insensitive' } },
-      { produtoIdentificador: { contains: searchParams.busca } },
+      { clienteNome: { contains: params.busca, mode: 'insensitive' } },
+      { produtoIdentificador: { contains: params.busca } },
     ]
   }
 
@@ -62,11 +63,11 @@ export default async function CobrancasPage({
       <form className="card p-4 mb-6 flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-48">
           <label className="label">Buscar</label>
-          <input name="busca" className="input" placeholder="Cliente ou produto..." defaultValue={searchParams.busca} />
+          <input name="busca" className="input" placeholder="Cliente ou produto..." defaultValue={params.busca} />
         </div>
         <div className="w-44">
           <label className="label">Status</label>
-          <select name="status" className="input" defaultValue={searchParams.status}>
+          <select name="status" className="input" defaultValue={params.status}>
             <option value="">Todos</option>
             <option value="Pago">Pago</option>
             <option value="Parcial">Parcial</option>
@@ -114,8 +115,8 @@ export default async function CobrancasPage({
             <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50 text-sm">
               <span className="text-slate-600">{(page-1)*limit+1}–{Math.min(page*limit, total)} de {total}</span>
               <div className="flex gap-2">
-                {page > 1 && <Link href={`?page=${page-1}&status=${searchParams.status||''}`} className="btn-secondary py-1 px-3 text-xs">← Anterior</Link>}
-                {page*limit < total && <Link href={`?page=${page+1}&status=${searchParams.status||''}`} className="btn-secondary py-1 px-3 text-xs">Próxima →</Link>}
+                {page > 1 && <Link href={`?page=${page-1}&status=${params.status||''}`} className="btn-secondary py-1 px-3 text-xs">← Anterior</Link>}
+                {page*limit < total && <Link href={`?page=${page+1}&status=${params.status||''}`} className="btn-secondary py-1 px-3 text-xs">Próxima →</Link>}
               </div>
             </div>
           )}

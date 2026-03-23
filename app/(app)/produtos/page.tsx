@@ -10,18 +10,19 @@ export const metadata: Metadata = { title: 'Produtos' }
 
 export default async function ProdutosPage({
   searchParams,
-}: { searchParams: { busca?: string; status?: string; page?: string } }) {
+}: { searchParams: Promise<{ busca?: string; status?: string; page?: string }> }) {
+  const params = await searchParams
   const session = await getSession()
-  const page = Number(searchParams.page || 1)
+  const page = Number(params.page || 1)
   const limit = 20
 
   const where: any = { deletedAt: null }
-  if (searchParams.status) where.statusProduto = searchParams.status
-  if (searchParams.busca) {
+  if (params.status) where.statusProduto = params.status
+  if (params.busca) {
     where.OR = [
-      { identificador: { contains: searchParams.busca, mode: 'insensitive' } },
-      { tipoNome:      { contains: searchParams.busca, mode: 'insensitive' } },
-      { numeroRelogio: { contains: searchParams.busca } },
+      { identificador: { contains: params.busca, mode: 'insensitive' } },
+      { tipoNome:      { contains: params.busca, mode: 'insensitive' } },
+      { numeroRelogio: { contains: params.busca } },
     ]
   }
 
@@ -55,11 +56,11 @@ export default async function ProdutosPage({
       <form className="card p-4 mb-6 flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-48">
           <label className="label">Buscar</label>
-          <input name="busca" className="input" placeholder="Número, tipo ou relógio..." defaultValue={searchParams.busca} />
+          <input name="busca" className="input" placeholder="Número, tipo ou relógio..." defaultValue={params.busca} />
         </div>
         <div className="w-44">
           <label className="label">Status</label>
-          <select name="status" className="input" defaultValue={searchParams.status}>
+          <select name="status" className="input" defaultValue={params.status}>
             <option value="">Todos</option>
             <option value="Ativo">Ativo</option>
             <option value="Inativo">Inativo</option>
@@ -113,8 +114,8 @@ export default async function ProdutosPage({
             <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50 text-sm text-slate-600">
               <span>Exibindo {(page-1)*limit+1}–{Math.min(page*limit, total)} de {total}</span>
               <div className="flex gap-2">
-                {page > 1 && <Link href={`?page=${page-1}&busca=${searchParams.busca||''}&status=${searchParams.status||''}`} className="btn-secondary py-1 px-3 text-xs">← Anterior</Link>}
-                {page * limit < total && <Link href={`?page=${page+1}&busca=${searchParams.busca||''}&status=${searchParams.status||''}`} className="btn-secondary py-1 px-3 text-xs">Próxima →</Link>}
+                {page > 1 && <Link href={`?page=${page-1}&busca=${params.busca||''}&status=${params.status||''}`} className="btn-secondary py-1 px-3 text-xs">← Anterior</Link>}
+                {page * limit < total && <Link href={`?page=${page+1}&busca=${params.busca||''}&status=${params.status||''}`} className="btn-secondary py-1 px-3 text-xs">Próxima →</Link>}
               </div>
             </div>
           )}

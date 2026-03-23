@@ -11,22 +11,23 @@ export const metadata: Metadata = { title: 'Clientes' }
 export default async function ClientesPage({
   searchParams,
 }: {
-  searchParams: { busca?: string; rotaId?: string; status?: string; page?: string }
+  searchParams: Promise<{ busca?: string; rotaId?: string; status?: string; page?: string }>
 }) {
+  const params = await searchParams
   const session = await getSession()
-  const page    = Number(searchParams.page || 1)
+  const page    = Number(params.page || 1)
   const limit   = 20
 
   const where: any = { deletedAt: null }
-  if (searchParams.busca) {
+  if (params.busca) {
     where.OR = [
-      { nomeExibicao:     { contains: searchParams.busca, mode: 'insensitive' } },
-      { identificador:    { contains: searchParams.busca, mode: 'insensitive' } },
-      { telefonePrincipal:{ contains: searchParams.busca } },
+      { nomeExibicao:     { contains: params.busca, mode: 'insensitive' } },
+      { identificador:    { contains: params.busca, mode: 'insensitive' } },
+      { telefonePrincipal:{ contains: params.busca } },
     ]
   }
-  if (searchParams.rotaId) where.rotaId = searchParams.rotaId
-  if (searchParams.status) where.status  = searchParams.status
+  if (params.rotaId) where.rotaId = params.rotaId
+  if (params.status) where.status  = params.status
 
   const [clientes, total, rotas] = await Promise.all([
     prisma.cliente.findMany({
@@ -60,18 +61,18 @@ export default async function ClientesPage({
       <form className="card p-4 mb-6 flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-48">
           <label className="label">Buscar</label>
-          <input name="busca" className="input" placeholder="Nome, código ou telefone..." defaultValue={searchParams.busca} />
+          <input name="busca" className="input" placeholder="Nome, código ou telefone..." defaultValue={params.busca} />
         </div>
         <div className="w-48">
           <label className="label">Rota</label>
-          <select name="rotaId" className="input" defaultValue={searchParams.rotaId}>
+          <select name="rotaId" className="input" defaultValue={params.rotaId}>
             <option value="">Todas as rotas</option>
             {rotas.map(r => <option key={r.id} value={r.id}>{r.descricao}</option>)}
           </select>
         </div>
         <div className="w-36">
           <label className="label">Status</label>
-          <select name="status" className="input" defaultValue={searchParams.status}>
+          <select name="status" className="input" defaultValue={params.status}>
             <option value="">Todos</option>
             <option value="Ativo">Ativo</option>
             <option value="Inativo">Inativo</option>
@@ -124,8 +125,8 @@ export default async function ClientesPage({
             <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50 text-sm text-slate-600">
               <span>Exibindo {(page-1)*limit+1}–{Math.min(page*limit, total)} de {total}</span>
               <div className="flex gap-2">
-                {page > 1 && <Link href={`?page=${page-1}&busca=${searchParams.busca||''}&rotaId=${searchParams.rotaId||''}`} className="btn-secondary py-1 px-3 text-xs">← Anterior</Link>}
-                {page * limit < total && <Link href={`?page=${page+1}&busca=${searchParams.busca||''}&rotaId=${searchParams.rotaId||''}`} className="btn-secondary py-1 px-3 text-xs">Próxima →</Link>}
+                {page > 1 && <Link href={`?page=${page-1}&busca=${params.busca||''}&rotaId=${params.rotaId||''}`} className="btn-secondary py-1 px-3 text-xs">← Anterior</Link>}
+                {page * limit < total && <Link href={`?page=${page+1}&busca=${params.busca||''}&rotaId=${params.rotaId||''}`} className="btn-secondary py-1 px-3 text-xs">Próxima →</Link>}
               </div>
             </div>
           )}

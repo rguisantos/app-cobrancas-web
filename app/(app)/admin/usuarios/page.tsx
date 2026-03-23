@@ -15,7 +15,7 @@ export default async function UsuariosPage() {
 
   const usuarios = await prisma.usuario.findMany({
     where: { deletedAt: null },
-    include: { rotasPermitidas: { include: { rota: { select: { descricao: true } } } } },
+    include: { rotasPermitidasRel: { include: { rota: { select: { descricao: true } } } } },
     orderBy: { nome: 'asc' },
   })
 
@@ -57,8 +57,8 @@ export default async function UsuariosPage() {
                   <Badge label={u.status} variant={u.status === 'Ativo' ? 'green' : 'red'} />
                 </td>
                 <td className="px-4 py-3 text-slate-600 text-xs">
-                  {u.rotasPermitidas.length > 0
-                    ? u.rotasPermitidas.map(r => r.rota.descricao).join(', ')
+                  {u.rotasPermitidasRel.length > 0
+                    ? u.rotasPermitidasRel.map(r => r.rota.descricao).join(', ')
                     : <span className="text-slate-400">Todas</span>}
                 </td>
                 <td className="px-4 py-3 text-slate-500 text-xs">

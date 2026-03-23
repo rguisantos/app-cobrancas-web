@@ -602,6 +602,10 @@ export interface SyncResponse {
   locacoes?: any[];
   cobrancas?: any[];
   rotas?: any[];
+  // Atributos de produto
+  tiposProduto?: any[];
+  descricoesProduto?: any[];
+  tamanhosProduto?: any[];
 }
 
 // ============================================================================

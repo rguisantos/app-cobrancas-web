@@ -311,3 +311,103 @@ model HistoricoRelogio {
 
   @@map("historico_relogio")
 }
+
+// ============================================================
+// ATRIBUTOS DE PRODUTO — Tabelas de apoio do mobile
+// ============================================================
+
+model TipoProduto {
+  id           String    @id @default(uuid())
+  nome         String    // ex: "Bilhar", "Jukebox Padrão Grande", "Mesa"
+  // Sync
+  syncStatus   String    @default("synced")
+  lastSyncedAt String?
+  needsSync    Boolean   @default(false)
+  version      Int       @default(1)
+  deviceId     String    @default("")
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("tipos_produto")
+}
+
+model DescricaoProduto {
+  id           String    @id @default(uuid())
+  nome         String    // ex: "Azul", "Branco/Carijo", "Preto"
+  // Sync
+  syncStatus   String    @default("synced")
+  lastSyncedAt String?
+  needsSync    Boolean   @default(false)
+  version      Int       @default(1)
+  deviceId     String    @default("")
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("descricoes_produto")
+}
+
+model TamanhoProduto {
+  id           String    @id @default(uuid())
+  nome         String    // ex: "2,00", "2,20", "Grande", "Média"
+  // Sync
+  syncStatus   String    @default("synced")
+  lastSyncedAt String?
+  needsSync    Boolean   @default(false)
+  version      Int       @default(1)
+  deviceId     String    @default("")
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("tamanhos_produto")
+}
+
+// ============================================================
+// MANUTENÇAS — Histórico de manutenções de produtos
+// ============================================================
+
+model Manutencao {
+  id                   String    @id @default(uuid())
+  produtoId            String
+  produtoIdentificador String?
+  produtoTipo          String?
+  clienteId            String?
+  clienteNome          String?
+  locacaoId            String?
+  cobrancaId           String?
+  tipo                 String    // 'trocaPano' | 'manutencao'
+  descricao            String?
+  data                 String
+  registradoPor        String?   // ID do usuário
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+
+  @@map("manutencoes")
+  @@index([produtoId])
+  @@index([data])
+}
+
+// ============================================================
+// ESTABELECIMENTOS — Locais de armazenamento
+// ============================================================
+
+model Estabelecimento {
+  id           String    @id @default(uuid())
+  nome         String    // ex: "Barracão", "Depósito Central"
+  endereco     String?
+  observacao   String?
+  // Sync
+  syncStatus   String    @default("synced")
+  lastSyncedAt String?
+  needsSync    Boolean   @default(false)
+  version      Int       @default(1)
+  deviceId     String    @default("")
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("estabelecimentos")
+}

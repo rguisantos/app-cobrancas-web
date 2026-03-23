@@ -131,13 +131,16 @@ export async function processPull(
     }),
   ])
 
+  // IMPORTANTE: O mobile espera as entidades dentro de 'changes'
   return {
     success: true,
     lastSyncAt: new Date().toISOString(),
-    clientes,
-    produtos,
-    locacoes,
-    cobrancas,
-    rotas,
+    changes: {
+      clientes,
+      produtos,
+      locacoes,
+      cobrancas,
+      rotas,
+    },
   }
 }

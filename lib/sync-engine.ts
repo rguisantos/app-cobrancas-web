@@ -38,7 +38,7 @@ export async function processPush(
         continue
       }
 
-      const data = { ...change.changes, syncStatus: 'synced', needsSync: false, deviceId }
+      const data: Record<string, any> = { ...change.changes, syncStatus: 'synced', needsSync: false, deviceId }
       delete data.id
 
       const existing = await repo.findUnique({ where: { id: change.entityId } })

@@ -12,19 +12,23 @@ import {
   Smartphone,
   RefreshCw,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  FileText,
+  MapPin
 } from 'lucide-react'
 
 const NAV = [
   { href: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
   { href: '/clientes',   label: 'Clientes',    icon: Users },
   { href: '/produtos',   label: 'Produtos',    icon: Package },
+  { href: '/locacoes',   label: 'Locações',    icon: FileText },
   { href: '/cobrancas',  label: 'Cobranças',   icon: DollarSign },
   { href: '/relatorios', label: 'Relatórios',  icon: TrendingUp },
 ]
 
 const NAV_ADMIN = [
   { href: '/admin/usuarios',    label: 'Usuários',     icon: UserCog },
+  { href: '/admin/rotas',       label: 'Rotas',        icon: MapPin },
   { href: '/admin/dispositivos',label: 'Dispositivos', icon: Smartphone },
   { href: '/admin/sync',        label: 'Sincronização',icon: RefreshCw },
 ]

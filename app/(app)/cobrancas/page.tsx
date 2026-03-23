@@ -45,7 +45,11 @@ export default async function CobrancasPage({
 
   return (
     <div>
-      <Header title="Cobranças" subtitle={`${total} registro${total !== 1 ? 's' : ''}`} />
+      <Header 
+        title="Cobranças" 
+        subtitle={`${total} registro${total !== 1 ? 's' : ''}`}
+        actions={<Link href="/cobrancas/nova" className="btn-primary">+ Nova Cobrança</Link>}
+      />
 
       {/* Resumo totalizadores */}
       <div className="grid grid-cols-2 gap-4 mb-6">

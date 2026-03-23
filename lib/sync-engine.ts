@@ -198,7 +198,6 @@ export async function processPull(
         updatedAt: { gt: since },
         OR: [
           { deviceId: { not: deviceId } },
-          { deviceId: null },
           { deviceId: '' },
         ],
       },
@@ -208,7 +207,6 @@ export async function processPull(
         updatedAt: { gt: since },
         OR: [
           { deviceId: { not: deviceId } },
-          { deviceId: null },
           { deviceId: '' },
         ],
       },
@@ -218,7 +216,6 @@ export async function processPull(
         updatedAt: { gt: since },
         OR: [
           { deviceId: { not: deviceId } },
-          { deviceId: null },
           { deviceId: '' },
         ],
       },
@@ -228,7 +225,6 @@ export async function processPull(
         updatedAt: { gt: since },
         OR: [
           { deviceId: { not: deviceId } },
-          { deviceId: null },
           { deviceId: '' },
         ],
       },
@@ -238,7 +234,6 @@ export async function processPull(
         updatedAt: { gt: since },
         OR: [
           { deviceId: { not: deviceId } },
-          { deviceId: null },
           { deviceId: '' },
         ],
       },

@@ -3,12 +3,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extrairToken, verificarToken } from '@/lib/jwt'
 import { processPush } from '@/lib/sync-engine'
+import type { ChangeLog, EntityType } from '@/shared/types'
 import { z } from 'zod'
 
 const changeLogSchema = z.object({
   id:         z.string(),
   entityId:   z.string(),
-  entityType: z.string(),
+  entityType: z.enum(['cliente', 'produto', 'locacao', 'cobranca', 'rota', 'usuario']),
   operation:  z.enum(['create', 'update', 'delete']),
   changes:    z.record(z.any()),
   timestamp:  z.string(),

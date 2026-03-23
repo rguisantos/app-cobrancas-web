@@ -11,11 +11,12 @@ import { ptBR } from 'date-fns/locale'
 
 export const metadata: Metadata = { title: 'Detalhes do Cliente' }
 
-export default async function ClienteDetailPage({ params }: { params: { id: string } }) {
+export default async function ClienteDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const session = await getSession()
 
   const cliente = await prisma.cliente.findFirst({
-    where: { id: params.id, deletedAt: null },
+    where: { id, deletedAt: null },
     include: {
       rota: true,
       locacoes: { where: { deletedAt: null }, orderBy: { dataLocacao: 'desc' } },

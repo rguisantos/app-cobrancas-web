@@ -3,12 +3,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, notFound, serverError } from '@/lib/api-helpers'
 
-export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const session = await getAuthSession()
   if (!session) return unauthorized()
 
   const cliente = await prisma.cliente.findFirst({
-    where: { id: params.id, deletedAt: null },
+    where: { id, deletedAt: null },
     include: {
       rota: true,
       locacoes: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } },
@@ -20,7 +21,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   return NextResponse.json(cliente)
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const session = await getAuthSession()
   if (!session) return unauthorized()
 
@@ -29,7 +31,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const { id: _, ...data } = body
 
     const cliente = await prisma.cliente.update({
-      where: { id: params.id },
+      where: { id },
       data: { ...data, version: { increment: 1 }, deviceId: 'web', needsSync: true },
     })
 
@@ -40,13 +42,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const session = await getAuthSession()
   if (!session) return unauthorized()
 
   try {
     await prisma.cliente.update({
-      where: { id: params.id },
+      where: { id },
       data: { deletedAt: new Date(), needsSync: true, version: { increment: 1 } },
     })
     return NextResponse.json({ success: true })

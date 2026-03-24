@@ -6,7 +6,7 @@ import Header from '@/components/layout/header'
 import Badge from '@/components/ui/badge'
 import { format, formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Key, Copy, Check, Smartphone } from 'lucide-render'
+import { Key, Copy, Check, Smartphone } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Dispositivos Móveis' }
 

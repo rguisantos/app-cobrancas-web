@@ -3,7 +3,7 @@
 import { prisma } from './prisma'
 import type { ChangeLog, SyncResponse, SyncConflict } from '@/shared/types'
 
-type EntityTable = 'clientes' | 'produtos' | 'locacoes' | 'cobrancas' | 'rotas'
+type EntityTable = 'clientes' | 'produtos' | 'locacoes' | 'cobrancas' | 'rotas' | 'usuarios'
 
 const TABLE_MAP: Record<string, EntityTable> = {
   cliente:  'clientes',
@@ -11,6 +11,7 @@ const TABLE_MAP: Record<string, EntityTable> = {
   locacao:  'locacoes',
   cobranca: 'cobrancas',
   rota:     'rotas',
+  usuario:  'usuarios',
 }
 
 // Mapeamento de nomes de campos Mobile -> Web (se diferentes)
@@ -72,6 +73,12 @@ const ALLOWED_FIELDS: Record<string, Set<string>> = {
     'descricao', 'status',
     'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId'
   ]),
+  usuario: new Set([
+    'tipo', 'nome', 'cpf', 'telefone', 'email', 'senha',
+    'tipoPermissao', 'permissoesWeb', 'permissoesMobile', 'rotasPermitidas',
+    'status', 'bloqueado', 'dataUltimoAcesso', 'ultimoAcessoDispositivo',
+    'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId'
+  ]),
 }
 
 // Helper para parsear changes que pode vir como string JSON
@@ -125,8 +132,31 @@ function convertForPrisma(data: Record<string, any>): Record<string, any> {
     }
   }
   
+  // Converter permissoesWeb/permissoesMobile de string JSON para objeto
+  if (typeof converted.permissoesWeb === 'string') {
+    try {
+      converted.permissoesWeb = JSON.parse(converted.permissoesWeb)
+    } catch {
+      converted.permissoesWeb = {}
+    }
+  }
+  if (typeof converted.permissoesMobile === 'string') {
+    try {
+      converted.permissoesMobile = JSON.parse(converted.permissoesMobile)
+    } catch {
+      converted.permissoesMobile = {}
+    }
+  }
+  if (typeof converted.rotasPermitidas === 'string') {
+    try {
+      converted.rotasPermitidas = JSON.parse(converted.rotasPermitidas)
+    } catch {
+      converted.rotasPermitidas = []
+    }
+  }
+  
   // Converter boolean strings/integers
-  const booleanFields = ['needsSync', 'trocaPano']
+  const booleanFields = ['needsSync', 'trocaPano', 'bloqueado']
   for (const field of booleanFields) {
     if (converted[field] !== undefined && converted[field] !== null) {
       if (converted[field] === 'true' || converted[field] === '1' || converted[field] === 1) {
@@ -158,6 +188,50 @@ function convertForPrisma(data: Record<string, any>): Record<string, any> {
   return converted
 }
 
+// Validar e resolver foreign keys
+async function validateForeignKeys(modelName: string, data: Record<string, any>): Promise<Record<string, any>> {
+  const result = { ...data }
+  
+  // Validar rotaId para cliente
+  if (modelName === 'cliente' && result.rotaId) {
+    const rotaExists = await prisma.rota.findUnique({ where: { id: result.rotaId } })
+    if (!rotaExists) {
+      console.log(`[sync] rotaId '${result.rotaId}' não encontrado, removendo referência`)
+      delete result.rotaId
+      result.rotaNome = result.rotaNome || null
+    }
+  }
+  
+  // Validar clienteId para locacao/cobranca
+  if ((modelName === 'locacao' || modelName === 'cobranca') && result.clienteId) {
+    const clienteExists = await prisma.cliente.findUnique({ where: { id: result.clienteId } })
+    if (!clienteExists) {
+      console.log(`[sync] clienteId '${result.clienteId}' não encontrado, removendo referência`)
+      delete result.clienteId
+    }
+  }
+  
+  // Validar produtoId para locacao/cobranca
+  if ((modelName === 'locacao' || modelName === 'cobranca') && result.produtoId) {
+    const produtoExists = await prisma.produto.findUnique({ where: { id: result.produtoId } })
+    if (!produtoExists) {
+      console.log(`[sync] produtoId '${result.produtoId}' não encontrado, removendo referência`)
+      delete result.produtoId
+    }
+  }
+  
+  // Validar locacaoId para cobranca
+  if (modelName === 'cobranca' && result.locacaoId) {
+    const locacaoExists = await prisma.locacao.findUnique({ where: { id: result.locacaoId } })
+    if (!locacaoExists) {
+      console.log(`[sync] locacaoId '${result.locacaoId}' não encontrado, removendo referência`)
+      delete result.locacaoId
+    }
+  }
+  
+  return result
+}
+
 // ============================================================
 // PUSH — mobile → servidor
 // ============================================================
@@ -187,7 +261,7 @@ export async function processPush(
       console.log(`[sync/push] Dados recebidos:`, JSON.stringify(changesData, null, 2).substring(0, 500))
 
       // Nome do modelo no Prisma (singular)
-      const modelName = table.slice(0, -1) as 'cliente' | 'produto' | 'locacao' | 'cobranca' | 'rota'
+      const modelName = table.slice(0, -1) as 'cliente' | 'produto' | 'locacao' | 'cobranca' | 'rota' | 'usuario'
       const repo = (prisma as any)[modelName]
 
       if (!repo) {
@@ -229,6 +303,9 @@ export async function processPush(
       // Filtrar e converter dados
       let filteredData = filterAllowedFields(modelName, changesData)
       filteredData = convertForPrisma(filteredData)
+      
+      // Validar foreign keys (remover referências inválidas)
+      filteredData = await validateForeignKeys(modelName, filteredData)
       
       console.log(`[sync/push] Dados filtrados:`, JSON.stringify(filteredData, null, 2).substring(0, 500))
       

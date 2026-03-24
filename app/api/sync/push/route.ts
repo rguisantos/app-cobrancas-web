@@ -26,23 +26,63 @@ const pushSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  const requestId = `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+  console.log(`\n[SYNC/PUSH:${requestId}] ========== PUSH REQUEST START ==========`)
+  console.log(`[SYNC/PUSH:${requestId}] Timestamp: ${new Date().toISOString()}`)
+
   // Autenticação via JWT do mobile
-  const token = extrairToken(req.headers.get('Authorization'))
-  if (!token || !verificarToken(token)) {
-    return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 })
+  const authHeader = req.headers.get('Authorization')
+  console.log(`[SYNC/PUSH:${requestId}] Auth header: ${authHeader ? 'presente' : 'ausente'}`)
+  
+  const token = extrairToken(authHeader)
+  if (!token) {
+    console.error(`[SYNC/PUSH:${requestId}] ❌ Token não encontrado no header`)
+    console.log(`[SYNC/PUSH:${requestId}] ========== PUSH REQUEST END (401) ==========\n`)
+    return NextResponse.json({ success: false, error: 'Token não fornecido' }, { status: 401 })
   }
+  
+  console.log(`[SYNC/PUSH:${requestId}] Token preview: ${token.substring(0, 30)}...`)
+  
+  const tokenValido = verificarToken(token)
+  if (!tokenValido) {
+    console.error(`[SYNC/PUSH:${requestId}] ❌ Token inválido ou expirado`)
+    console.log(`[SYNC/PUSH:${requestId}] ========== PUSH REQUEST END (401) ==========\n`)
+    return NextResponse.json({ success: false, error: 'Token inválido ou expirado' }, { status: 401 })
+  }
+  
+  console.log(`[SYNC/PUSH:${requestId}] ✅ Token válido`)
 
   try {
     const body = await req.json()
+    console.log(`[SYNC/PUSH:${requestId}] Body recebido:`, JSON.stringify(body).substring(0, 200))
+    
     const { deviceId, deviceKey, changes } = pushSchema.parse(body)
+    console.log(`[SYNC/PUSH:${requestId}] DeviceId: ${deviceId}`)
+    console.log(`[SYNC/PUSH:${requestId}] DeviceKey: ${deviceKey?.substring(0, 20)}...`)
+    console.log(`[SYNC/PUSH:${requestId}] Changes count: ${changes.length}`)
 
     // Validar dispositivo registrado
     const dispositivo = await prisma.dispositivo.findUnique({ where: { chave: deviceKey } })
-    if (!dispositivo || dispositivo.status !== 'ativo') {
-      return NextResponse.json({ success: false, error: 'Dispositivo não autorizado' }, { status: 403 })
+    if (!dispositivo) {
+      console.error(`[SYNC/PUSH:${requestId}] ❌ Dispositivo não encontrado: ${deviceKey?.substring(0, 20)}...`)
+      console.log(`[SYNC/PUSH:${requestId}] ========== PUSH REQUEST END (403) ==========\n`)
+      return NextResponse.json({ success: false, error: 'Dispositivo não encontrado' }, { status: 403 })
+    }
+    
+    console.log(`[SYNC/PUSH:${requestId}] Dispositivo encontrado: ${dispositivo.nome} (${dispositivo.status})`)
+    
+    if (dispositivo.status !== 'ativo') {
+      console.error(`[SYNC/PUSH:${requestId}] ❌ Dispositivo inativo: ${dispositivo.status}`)
+      console.log(`[SYNC/PUSH:${requestId}] ========== PUSH REQUEST END (403) ==========\n`)
+      return NextResponse.json({ success: false, error: 'Dispositivo inativo' }, { status: 403 })
     }
 
+    console.log(`[SYNC/PUSH:${requestId}] ✅ Dispositivo autorizado, processando mudanças...`)
     const { conflicts, errors } = await processPush(deviceId, changes)
+
+    console.log(`[SYNC/PUSH:${requestId}] ✅ PUSH concluído`)
+    console.log(`[SYNC/PUSH:${requestId}] Conflitos: ${conflicts.length}, Erros: ${errors.length}`)
+    console.log(`[SYNC/PUSH:${requestId}] ========== PUSH REQUEST END (200) ==========\n`)
 
     return NextResponse.json({
       success: true,
@@ -52,9 +92,12 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     if (err instanceof z.ZodError) {
+      console.error(`[SYNC/PUSH:${requestId}] ❌ Erro de validação:`, err.errors)
+      console.log(`[SYNC/PUSH:${requestId}] ========== PUSH REQUEST END (400) ==========\n`)
       return NextResponse.json({ success: false, error: 'Payload inválido', details: err.errors }, { status: 400 })
     }
-    console.error('[sync/push]', err)
+    console.error(`[SYNC/PUSH:${requestId}] ❌ Erro interno:`, err)
+    console.log(`[SYNC/PUSH:${requestId}] ========== PUSH REQUEST END (500) ==========\n`)
     return NextResponse.json({ success: false, error: 'Erro interno' }, { status: 500 })
   }
 }

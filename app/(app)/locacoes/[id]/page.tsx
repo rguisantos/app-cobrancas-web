@@ -8,7 +8,7 @@ import { StatusLocacaoBadge, StatusPagamentoBadge } from '@/components/ui/badge'
 import { formatarMoeda } from '@/shared/types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ArrowLeft, Edit, DollarSign } from 'lucide-react'
+import { ArrowLeft, Edit, DollarSign, ArrowRightCircle, Package } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Detalhes da Locação' }
 
@@ -44,6 +44,18 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
               <ArrowLeft className="w-4 h-4" />
               Voltar
             </Link>
+            {locacao.status === 'Ativa' && podeEditar && (
+              <>
+                <Link href={`/locacoes/${id}/relocar`} className="btn-secondary">
+                  <ArrowRightCircle className="w-4 h-4" />
+                  Relocar
+                </Link>
+                <Link href={`/locacoes/${id}/enviar-estoque`} className="btn-secondary bg-red-100 text-red-700 hover:bg-red-200 border-red-200">
+                  <Package className="w-4 h-4" />
+                  Enviar ao Estoque
+                </Link>
+              </>
+            )}
           </div>
         }
       />

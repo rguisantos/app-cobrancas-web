@@ -28,8 +28,16 @@ export default function EditarProdutoPage() {
     descricaoNome: '',
     tamanhoId: '',
     tamanhoNome: '',
+    codigoCH: '',
+    codigoABLF: '',
     conservacao: 'Boa',
     statusProduto: 'Ativo',
+    dataFabricacao: '',
+    dataUltimaManutencao: '',
+    relatorioUltimaManutencao: '',
+    dataAvaliacao: '',
+    aprovacao: '',
+    estabelecimento: '',
     observacao: ''
   })
 
@@ -53,8 +61,16 @@ export default function EditarProdutoPage() {
           descricaoNome: produtoData.descricaoNome || '',
           tamanhoId: produtoData.tamanhoId || '',
           tamanhoNome: produtoData.tamanhoNome || '',
+          codigoCH: produtoData.codigoCH || '',
+          codigoABLF: produtoData.codigoABLF || '',
           conservacao: produtoData.conservacao || 'Boa',
           statusProduto: produtoData.statusProduto || 'Ativo',
+          dataFabricacao: produtoData.dataFabricacao || '',
+          dataUltimaManutencao: produtoData.dataUltimaManutencao || '',
+          relatorioUltimaManutencao: produtoData.relatorioUltimaManutencao || '',
+          dataAvaliacao: produtoData.dataAvaliacao || '',
+          aprovacao: produtoData.aprovacao || '',
+          estabelecimento: produtoData.estabelecimento || '',
           observacao: produtoData.observacao || ''
         })
         setLoadingData(false)
@@ -151,9 +167,10 @@ export default function EditarProdutoPage() {
                 name="identificador"
                 value={formData.identificador}
                 onChange={handleChange}
-                className="input"
+                className="input bg-slate-50"
                 placeholder="Ex: 515"
                 required
+                readOnly
               />
             </div>
             <div>
@@ -165,6 +182,29 @@ export default function EditarProdutoPage() {
                 className="input"
                 placeholder="Ex: 8070"
                 required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="label">Código CH</label>
+              <input
+                name="codigoCH"
+                value={formData.codigoCH}
+                onChange={handleChange}
+                className="input"
+                placeholder="Código interno CH"
+              />
+            </div>
+            <div>
+              <label className="label">Código ABLF</label>
+              <input
+                name="codigoABLF"
+                value={formData.codigoABLF}
+                onChange={handleChange}
+                className="input"
+                placeholder="Código interno ABLF"
               />
             </div>
           </div>
@@ -250,6 +290,78 @@ export default function EditarProdutoPage() {
                 <option value="Manutenção">Manutenção</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        <div className="card p-6 mb-6">
+          <h2 className="font-semibold text-slate-900 mb-4">🔧 Manutenção</h2>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Data de Fabricação</label>
+              <input
+                type="date"
+                name="dataFabricacao"
+                value={formData.dataFabricacao}
+                onChange={handleChange}
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="label">Data da Última Manutenção</label>
+              <input
+                type="date"
+                name="dataUltimaManutencao"
+                value={formData.dataUltimaManutencao}
+                onChange={handleChange}
+                className="input"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="label">Relatório da Última Manutenção</label>
+            <textarea
+              name="relatorioUltimaManutencao"
+              value={formData.relatorioUltimaManutencao}
+              onChange={handleChange}
+              className="input min-h-[80px]"
+              placeholder="Descreva a manutenção realizada..."
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <label className="label">Data de Avaliação</label>
+              <input
+                type="date"
+                name="dataAvaliacao"
+                value={formData.dataAvaliacao}
+                onChange={handleChange}
+                className="input"
+              />
+            </div>
+            <div>
+              <label className="label">Aprovação</label>
+              <input
+                name="aprovacao"
+                value={formData.aprovacao}
+                onChange={handleChange}
+                className="input"
+                placeholder="Status de aprovação"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="label">Estabelecimento</label>
+            <input
+              name="estabelecimento"
+              value={formData.estabelecimento}
+              onChange={handleChange}
+              className="input"
+              placeholder="Local onde o produto está (ex: Barracão)"
+            />
           </div>
         </div>
 

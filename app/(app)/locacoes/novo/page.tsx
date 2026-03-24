@@ -27,6 +27,8 @@ export default function NovaLocacaoPage() {
     percentualEmpresa: '',
     periodicidade: '',
     valorFixo: '',
+    dataPrimeiraCobranca: '',
+    trocaPano: false,
     observacao: ''
   })
 
@@ -45,8 +47,12 @@ export default function NovaLocacaoPage() {
   const produtosDisponiveis = produtos.filter(p => p.statusProduto === 'Ativo')
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    const { name, value, type } = e.target
+    const checked = (e.target as HTMLInputElement).checked
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,6 +86,9 @@ export default function NovaLocacaoPage() {
           percentualCliente: 100 - (parseFloat(formData.percentualEmpresa) || 0),
           periodicidade: formData.periodicidade || null,
           valorFixo: formData.valorFixo ? parseFloat(formData.valorFixo) : null,
+          dataPrimeiraCobranca: formData.dataPrimeiraCobranca || null,
+          trocaPano: formData.trocaPano,
+          dataUltimaManutencao: formData.trocaPano ? new Date().toISOString() : null,
           observacao: formData.observacao || null,
           status: 'Ativa'
         })
@@ -269,7 +278,7 @@ export default function NovaLocacaoPage() {
                     <option value="Mensal">Mensal</option>
                   </select>
                 </div>
-                <div className="col-span-2">
+                <div>
                   <label className="label">Valor Fixo</label>
                   <input
                     type="number"
@@ -281,9 +290,37 @@ export default function NovaLocacaoPage() {
                     placeholder="0.00"
                   />
                 </div>
+                <div>
+                  <label className="label">Data Primeira Cobrança</label>
+                  <input
+                    type="date"
+                    name="dataPrimeiraCobranca"
+                    value={formData.dataPrimeiraCobranca}
+                    onChange={handleChange}
+                    className="input"
+                  />
+                </div>
               </>
             )}
           </div>
+        </div>
+
+        <div className="card p-6 mb-6">
+          <h2 className="font-semibold text-slate-900 mb-4">🔧 Manutenção</h2>
+          
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="trocaPano"
+              checked={formData.trocaPano}
+              onChange={handleChange}
+              className="w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+            />
+            <div>
+              <span className="font-medium text-slate-700">Troca de Pano / Manutenção Realizada</span>
+              <p className="text-sm text-slate-500">Marque se foi realizada manutenção no momento da locação</p>
+            </div>
+          </label>
         </div>
 
         <div className="card p-6 mb-6">

@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, User, Building2 } from 'lucide-react'
+import { ArrowLeft, Save, User, Building2, Plus, Trash2, MapPin, Loader2 } from 'lucide-react'
 import Header from '@/components/layout/header'
 
 interface Rota {
@@ -11,18 +11,45 @@ interface Rota {
   descricao: string
 }
 
+interface Estado {
+  id: number
+  sigla: string
+  nome: string
+}
+
+interface Cidade {
+  id: number
+  nome: string
+}
+
+interface Contato {
+  id: string
+  nome: string
+  telefone: string
+  whatsapp: boolean
+  principal: boolean
+}
+
 export default function NovoClientePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [loadingCep, setLoadingCep] = useState(false)
+  const [loadingCidades, setLoadingCidades] = useState(false)
   const [rotas, setRotas] = useState<Rota[]>([])
+  const [estados, setEstados] = useState<Estado[]>([])
+  const [cidades, setCidades] = useState<Cidade[]>([])
+  
   const [formData, setFormData] = useState({
     tipoPessoa: 'Fisica' as 'Fisica' | 'Juridica',
     identificador: '',
     nomeExibicao: '',
     nomeCompleto: '',
     razaoSocial: '',
+    nomeFantasia: '',
     cpf: '',
     cnpj: '',
+    rg: '',
+    inscricaoEstadual: '',
     email: '',
     telefonePrincipal: '',
     cep: '',
@@ -36,35 +63,143 @@ export default function NovoClientePage() {
     observacao: '',
     status: 'Ativo'
   })
+  
+  const [contatos, setContatos] = useState<Contato[]>([])
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
+  // Carregar rotas e estados ao montar
   useEffect(() => {
-    fetch('/api/rotas?status=Ativo')
-      .then(res => res.json())
-      .then(data => setRotas(data))
+    Promise.all([
+      fetch('/api/rotas?status=Ativo').then(res => res.json()),
+      fetch('/api/localizacao/estados').then(res => res.json())
+    ])
+      .then(([rotasData, estadosData]) => {
+        setRotas(rotasData)
+        setEstados(estadosData)
+      })
       .catch(console.error)
   }, [])
+
+  // Carregar cidades quando estado muda
+  useEffect(() => {
+    if (formData.estado) {
+      setLoadingCidades(true)
+      fetch(`/api/localizacao/cidades?uf=${formData.estado}`)
+        .then(res => res.json())
+        .then(data => setCidades(data))
+        .catch(console.error)
+        .finally(() => setLoadingCidades(false))
+    } else {
+      setCidades([])
+    }
+  }, [formData.estado])
+
+  // Buscar CEP
+  const buscarCep = useCallback(async (cep: string) => {
+    const cepLimpo = cep.replace(/\D/g, '')
+    if (cepLimpo.length !== 8) return
+
+    setLoadingCep(true)
+    setErrors(prev => ({ ...prev, cep: '' }))
+
+    try {
+      const response = await fetch(`/api/localizacao/cep?cep=${cepLimpo}`)
+      const data = await response.json()
+
+      if (data.error) {
+        setErrors(prev => ({ ...prev, cep: data.error }))
+        return
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        logradouro: data.logradouro || prev.logradouro,
+        bairro: data.bairro || prev.bairro,
+        cidade: data.cidade || prev.cidade,
+        estado: data.estado || prev.estado,
+      }))
+    } catch (err) {
+      console.error('Erro ao buscar CEP:', err)
+      setErrors(prev => ({ ...prev, cep: 'Erro ao buscar CEP' }))
+    } finally {
+      setLoadingCep(false)
+    }
+  }, [])
+
+  // Handler para CEP com debounce
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    // Formatar CEP
+    const formatted = value
+      .replace(/\D/g, '')
+      .replace(/(\d{5})(\d)/, '$1-$2')
+      .substring(0, 9)
+    
+    setFormData(prev => ({ ...prev, cep: formatted }))
+    
+    // Buscar quando tiver 8 dígitos
+    const digits = formatted.replace(/\D/g, '')
+    if (digits.length === 8) {
+      buscarCep(formatted)
+    }
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+    setErrors(prev => ({ ...prev, [name]: '' }))
+  }
+
+  // Contatos
+  const adicionarContato = () => {
+    setContatos(prev => [
+      ...prev,
+      {
+        id: `contato_${Date.now()}`,
+        nome: '',
+        telefone: '',
+        whatsapp: false,
+        principal: false
+      }
+    ])
+  }
+
+  const removerContato = (id: string) => {
+    setContatos(prev => prev.filter(c => c.id !== id))
+  }
+
+  const atualizarContato = (id: string, field: keyof Contato, value: string | boolean) => {
+    setContatos(prev =>
+      prev.map(c =>
+        c.id === id ? { ...c, [field]: value } : c
+      )
+    )
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setErrors({})
 
     try {
       const res = await fetch('/api/clientes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          contatos: contatos.filter(c => c.nome || c.telefone)
+        })
       })
 
       if (res.ok) {
         router.push('/clientes')
       } else {
         const error = await res.json()
-        alert(error.error || 'Erro ao salvar cliente')
+        if (error.errors) {
+          setErrors(error.errors)
+        } else {
+          alert(error.error || 'Erro ao salvar cliente')
+        }
       }
     } catch (err) {
       console.error(err)
@@ -88,6 +223,7 @@ export default function NovoClientePage() {
       />
 
       <form onSubmit={handleSubmit} className="max-w-4xl">
+        {/* Tipo de Pessoa */}
         <div className="card p-6 mb-6">
           <h2 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
             {formData.tipoPessoa === 'Fisica' ? <User className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
@@ -140,6 +276,7 @@ export default function NovoClientePage() {
                 placeholder="Ex: 10365"
                 required
               />
+              {errors.identificador && <p className="text-red-500 text-xs mt-1">{errors.identificador}</p>}
             </div>
             <div>
               <label className="label">Nome de Exibição *</label>
@@ -151,60 +288,100 @@ export default function NovoClientePage() {
                 placeholder="Nome curto para exibição"
                 required
               />
+              {errors.nomeExibicao && <p className="text-red-500 text-xs mt-1">{errors.nomeExibicao}</p>}
             </div>
           </div>
 
           {formData.tipoPessoa === 'Fisica' ? (
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div>
-                <label className="label">Nome Completo</label>
-                <input
-                  name="nomeCompleto"
-                  value={formData.nomeCompleto}
-                  onChange={handleChange}
-                  className="input"
-                  placeholder="Nome completo"
-                />
+            <>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="label">Nome Completo</label>
+                  <input
+                    name="nomeCompleto"
+                    value={formData.nomeCompleto}
+                    onChange={handleChange}
+                    className="input"
+                    placeholder="Nome completo"
+                  />
+                </div>
+                <div>
+                  <label className="label">CPF</label>
+                  <input
+                    name="cpf"
+                    value={formData.cpf}
+                    onChange={handleChange}
+                    className="input"
+                    placeholder="000.000.000-00"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="label">CPF</label>
-                <input
-                  name="cpf"
-                  value={formData.cpf}
-                  onChange={handleChange}
-                  className="input"
-                  placeholder="000.000.000-00"
-                />
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="label">RG</label>
+                  <input
+                    name="rg"
+                    value={formData.rg}
+                    onChange={handleChange}
+                    className="input"
+                    placeholder="00.000.000-0"
+                  />
+                </div>
               </div>
-            </div>
+            </>
           ) : (
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div>
-                <label className="label">Razão Social</label>
-                <input
-                  name="razaoSocial"
-                  value={formData.razaoSocial}
-                  onChange={handleChange}
-                  className="input"
-                  placeholder="Razão social da empresa"
-                />
+            <>
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="label">Razão Social</label>
+                  <input
+                    name="razaoSocial"
+                    value={formData.razaoSocial}
+                    onChange={handleChange}
+                    className="input"
+                    placeholder="Razão social da empresa"
+                  />
+                </div>
+                <div>
+                  <label className="label">Nome Fantasia</label>
+                  <input
+                    name="nomeFantasia"
+                    value={formData.nomeFantasia}
+                    onChange={handleChange}
+                    className="input"
+                    placeholder="Nome fantasia"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="label">CNPJ</label>
-                <input
-                  name="cnpj"
-                  value={formData.cnpj}
-                  onChange={handleChange}
-                  className="input"
-                  placeholder="00.000.000/0000-00"
-                />
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="label">CNPJ</label>
+                  <input
+                    name="cnpj"
+                    value={formData.cnpj}
+                    onChange={handleChange}
+                    className="input"
+                    placeholder="00.000.000/0000-00"
+                  />
+                </div>
+                <div>
+                  <label className="label">Inscrição Estadual</label>
+                  <input
+                    name="inscricaoEstadual"
+                    value={formData.inscricaoEstadual}
+                    onChange={handleChange}
+                    className="input"
+                    placeholder="000.000.000.000"
+                  />
+                </div>
               </div>
-            </div>
+            </>
           )}
         </div>
 
+        {/* Contato Principal */}
         <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">📞 Contato</h2>
+          <h2 className="font-semibold text-slate-900 mb-4">📞 Contato Principal</h2>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -232,20 +409,97 @@ export default function NovoClientePage() {
           </div>
         </div>
 
+        {/* Contatos Adicionais */}
         <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">📍 Endereço</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-slate-900">👥 Contatos Adicionais</h2>
+            <button
+              type="button"
+              onClick={adicionarContato}
+              className="btn-secondary text-sm py-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              Adicionar Contato
+            </button>
+          </div>
+
+          {contatos.length === 0 ? (
+            <p className="text-sm text-slate-400">Nenhum contato adicional. Clique em "Adicionar Contato" para incluir.</p>
+          ) : (
+            <div className="space-y-4">
+              {contatos.map((contato, index) => (
+                <div key={contato.id} className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-slate-600">Contato {index + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => removerContato(contato.id)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="label text-xs">Nome</label>
+                      <input
+                        value={contato.nome}
+                        onChange={(e) => atualizarContato(contato.id, 'nome', e.target.value)}
+                        className="input"
+                        placeholder="Nome do contato"
+                      />
+                    </div>
+                    <div>
+                      <label className="label text-xs">Telefone</label>
+                      <input
+                        value={contato.telefone}
+                        onChange={(e) => atualizarContato(contato.id, 'telefone', e.target.value)}
+                        className="input"
+                        placeholder="(00) 00000-0000"
+                      />
+                    </div>
+                    <div className="flex items-end gap-4 pb-1">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={contato.whatsapp}
+                          onChange={(e) => atualizarContato(contato.id, 'whatsapp', e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-300"
+                        />
+                        <span className="text-sm">WhatsApp</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Endereço */}
+        <div className="card p-6 mb-6">
+          <h2 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+            <MapPin className="w-5 h-5" />
+            Endereço
+          </h2>
           
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="label">CEP *</label>
-              <input
-                name="cep"
-                value={formData.cep}
-                onChange={handleChange}
-                className="input"
-                placeholder="00000-000"
-                required
-              />
+              <div className="relative">
+                <input
+                  name="cep"
+                  value={formData.cep}
+                  onChange={handleCepChange}
+                  className={`input ${errors.cep ? 'border-red-500' : ''}`}
+                  placeholder="00000-000"
+                  required
+                />
+                {loadingCep && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-primary-500" />
+                )}
+              </div>
+              {errors.cep && <p className="text-red-500 text-xs mt-1">{errors.cep}</p>}
             </div>
             <div className="col-span-2">
               <label className="label">Logradouro *</label>
@@ -297,27 +551,37 @@ export default function NovoClientePage() {
 
           <div className="grid grid-cols-3 gap-4 mt-4">
             <div>
-              <label className="label">Cidade *</label>
-              <input
-                name="cidade"
-                value={formData.cidade}
-                onChange={handleChange}
-                className="input"
-                placeholder="Cidade"
-                required
-              />
-            </div>
-            <div>
               <label className="label">Estado *</label>
-              <input
+              <select
                 name="estado"
                 value={formData.estado}
                 onChange={handleChange}
                 className="input"
-                placeholder="UF"
-                maxLength={2}
                 required
-              />
+              >
+                <option value="">Selecione</option>
+                {estados.map(e => (
+                  <option key={e.id} value={e.sigla}>{e.sigla} - {e.nome}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Cidade *</label>
+              <select
+                name="cidade"
+                value={formData.cidade}
+                onChange={handleChange}
+                className="input"
+                required
+                disabled={!formData.estado || loadingCidades}
+              >
+                <option value="">
+                  {loadingCidades ? 'Carregando...' : 'Selecione'}
+                </option>
+                {cidades.map(c => (
+                  <option key={c.id} value={c.nome}>{c.nome}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="label">Rota *</label>
@@ -337,6 +601,7 @@ export default function NovoClientePage() {
           </div>
         </div>
 
+        {/* Outras Informações */}
         <div className="card p-6 mb-6">
           <h2 className="font-semibold text-slate-900 mb-4">📝 Outras Informações</h2>
           
@@ -371,7 +636,7 @@ export default function NovoClientePage() {
           <button type="submit" disabled={loading} className="btn-primary">
             {loading ? (
               <>
-                <span className="animate-spin">⏳</span>
+                <Loader2 className="w-4 h-4 animate-spin" />
                 Salvando...
               </>
             ) : (

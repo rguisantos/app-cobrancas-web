@@ -343,6 +343,7 @@ model Dispositivo {
   id                  String    @id @default(uuid())
   nome                String
   chave               String    @unique
+  senhaNumerica       String?   // Senha de 6 dígitos para primeiro acesso no mobile
   tipo                String    @default("Celular")
   status              String    @default("ativo")
   ultimaSincronizacao DateTime?

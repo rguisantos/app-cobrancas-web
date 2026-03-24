@@ -44,7 +44,6 @@ export default function EditarClientePage() {
   
   const [formData, setFormData] = useState({
     tipoPessoa: 'Fisica' as 'Fisica' | 'Juridica',
-    identificador: '',
     nomeExibicao: '',
     nomeCompleto: '',
     razaoSocial: '',
@@ -66,6 +65,12 @@ export default function EditarClientePage() {
     observacao: '',
     status: 'Ativo'
   })
+
+  // Identificador é gerado automaticamente (como no mobile)
+  const getIdentificador = useCallback(() => {
+    const documento = formData.tipoPessoa === 'Fisica' ? formData.cpf : formData.cnpj
+    return documento.replace(/\D/g, '') // Remove formatação
+  }, [formData.tipoPessoa, formData.cpf, formData.cnpj])
   
   const [contatos, setContatos] = useState<Contato[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -82,7 +87,6 @@ export default function EditarClientePage() {
         setEstados(estadosData)
         setFormData({
           tipoPessoa: clienteData.tipoPessoa || 'Fisica',
-          identificador: clienteData.identificador || '',
           nomeExibicao: clienteData.nomeExibicao || '',
           nomeCompleto: clienteData.nomeCompleto || '',
           razaoSocial: clienteData.razaoSocial || '',
@@ -226,6 +230,7 @@ export default function EditarClientePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          identificador: getIdentificador(), // Gerado automaticamente como no mobile
           contatos: contatos.filter(c => c.nome || c.telefone)
         })
       })
@@ -312,30 +317,20 @@ export default function EditarClientePage() {
             </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Código/Identificador *</label>
-              <input
-                name="identificador"
-                value={formData.identificador}
-                onChange={handleChange}
-                className="input"
-                placeholder="Ex: 10365"
-                required
-              />
-            </div>
-            <div>
-              <label className="label">Nome de Exibição *</label>
-              <input
-                name="nomeExibicao"
-                value={formData.nomeExibicao}
-                onChange={handleChange}
-                className="input"
-                placeholder="Nome curto para exibição"
-                required
-              />
-            </div>
+          <div className="mb-4">
+            <label className="label">Nome de Exibição *</label>
+            <input
+              name="nomeExibicao"
+              value={formData.nomeExibicao}
+              onChange={handleChange}
+              className="input"
+              placeholder="Nome curto para exibição"
+              required
+            />
           </div>
+          <p className="text-xs text-slate-500 -mt-2 mb-4">
+            💡 O identificador é gerado automaticamente a partir do CPF/CNPJ
+          </p>
 
           {formData.tipoPessoa === 'Fisica' ? (
             <>

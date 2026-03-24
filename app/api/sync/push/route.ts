@@ -6,17 +6,30 @@ import { processPush } from '@/lib/sync-engine'
 import type { ChangeLog, EntityType } from '@/shared/types'
 import { z } from 'zod'
 
+// Schema flexível para aceitar tipos do SQLite (string JSON, number, null)
 const changeLogSchema = z.object({
   id:         z.string(),
   entityId:   z.string(),
   entityType: z.enum(['cliente', 'produto', 'locacao', 'cobranca', 'rota', 'usuario']),
   operation:  z.enum(['create', 'update', 'delete']),
-  changes:    z.record(z.any()),
+  changes:    z.union([z.record(z.any()), z.string()]), // Pode ser objeto ou string JSON
   timestamp:  z.string(),
   deviceId:   z.string(),
-  synced:     z.boolean(),
-  syncedAt:   z.string().optional(),
+  synced:     z.union([z.boolean(), z.number()]), // Pode ser boolean ou 0/1
+  syncedAt:   z.string().nullable().optional(), // Pode ser null
 })
+
+// Função para normalizar dados do SQLite
+function normalizeChangeLog(change: z.infer<typeof changeLogSchema>) {
+  return {
+    ...change,
+    changes: typeof change.changes === 'string' 
+      ? JSON.parse(change.changes) 
+      : change.changes,
+    synced: Boolean(change.synced),
+    syncedAt: change.syncedAt || undefined,
+  }
+}
 
 const pushSchema = z.object({
   deviceId:   z.string(),
@@ -78,7 +91,12 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[SYNC/PUSH:${requestId}] ✅ Dispositivo autorizado, processando mudanças...`)
-    const { conflicts, errors } = await processPush(deviceId, changes)
+    
+    // Normalizar dados do SQLite (converter tipos)
+    const normalizedChanges = changes.map(normalizeChangeLog)
+    console.log(`[SYNC/PUSH:${requestId}] Mudanças normalizadas: ${normalizedChanges.length}`)
+    
+    const { conflicts, errors } = await processPush(deviceId, normalizedChanges)
 
     console.log(`[SYNC/PUSH:${requestId}] ✅ PUSH concluído`)
     console.log(`[SYNC/PUSH:${requestId}] Conflitos: ${conflicts.length}, Erros: ${errors.length}`)

@@ -1,6 +1,6 @@
 // POST /api/equipamentos — Mobile registra dispositivo
+// Não requer autenticação pois é usado no primeiro registro do dispositivo
 import { NextRequest, NextResponse } from 'next/server'
-import { extrairToken, verificarToken } from '@/lib/jwt'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 
@@ -13,10 +13,8 @@ const schema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const token = extrairToken(req.headers.get('Authorization'))
-  if (!token || !verificarToken(token)) {
-    return NextResponse.json({ success: false, error: 'Não autorizado' }, { status: 401 })
-  }
+  // Não requer autenticação - registro inicial do dispositivo
+  // O dispositivo será validado posteriormente durante sync
 
   try {
     const body = await req.json()
@@ -33,6 +31,7 @@ export async function POST(req: NextRequest) {
     if (err instanceof z.ZodError) {
       return NextResponse.json({ success: false, error: 'Dados inválidos' }, { status: 400 })
     }
+    console.error('[POST /api/equipamentos]', err)
     return NextResponse.json({ success: false, error: 'Erro interno' }, { status: 500 })
   }
 }

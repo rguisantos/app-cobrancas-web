@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: 'Monitor de Sincronização' }
 
 export default async function SyncPage() {
   const session = await getSession()
-  if (session?.user.tipoPermissao !== 'Administrador') redirect('/dashboard')
+  if (!session?.user || session.user.tipoPermissao !== 'Administrador') redirect('/dashboard')
 
   const [conflitos, changelogs, dispositivos] = await Promise.all([
     prisma.syncConflict.findMany({ where: { resolution: null }, orderBy: { createdAt: 'desc' }, take: 20 }),

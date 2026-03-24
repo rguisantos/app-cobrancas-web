@@ -34,7 +34,7 @@ function SenhaNumerica({ senha }: { senha?: string | null }) {
 
 export default async function DispositivosPage() {
   const session = await getSession()
-  if (session?.user.tipoPermissao !== 'Administrador') redirect('/dashboard')
+  if (!session?.user || session.user.tipoPermissao !== 'Administrador') redirect('/dashboard')
 
   const dispositivos = await prisma.dispositivo.findMany({ 
     orderBy: { createdAt: 'desc' } 

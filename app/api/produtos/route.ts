@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const statusProduto = searchParams.get('status')
   const busca = searchParams.get('busca')
+  const disponiveis = searchParams.get('disponiveis') // Filtrar apenas disponíveis
   const page  = Number(searchParams.get('page') || 1)
   const limit = Number(searchParams.get('limit') || 20)
 
@@ -20,6 +21,20 @@ export async function GET(req: NextRequest) {
       { tipoNome:      { contains: busca, mode: 'insensitive' } },
       { numeroRelogio: { contains: busca } },
     ]
+  }
+
+  // Se filtrar por disponíveis, buscar produtos que NÃO têm locação ativa
+  if (disponiveis === 'true') {
+    // Buscar IDs de produtos com locação ativa
+    const locacoesAtivas = await prisma.locacao.findMany({
+      where: { status: 'Ativa', deletedAt: null },
+      select: { produtoId: true }
+    })
+    const produtosLocados = locacoesAtivas.map(l => l.produtoId)
+    
+    // Filtrar produtos que não estão locados E estão ativos
+    where.statusProduto = 'Ativo'
+    where.NOT = { id: { in: produtosLocados } }
   }
 
   const [produtos, total] = await Promise.all([

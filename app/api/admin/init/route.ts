@@ -6,15 +6,21 @@ import { z } from 'zod'
 
 const schema = z.object({
   secret: z.string(), // Chave secreta para autorizar
+  adminSecret: z.string().optional(), // Alternativa: senha do admin
 })
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { secret } = schema.parse(body)
+    const { secret, adminSecret } = schema.parse(body)
 
-    // Verificar chave secreta (usar mesma chave do JWT)
-    if (secret !== (process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'fallback-secret')) {
+    // Verificar chave secreta (usar mesma chave do JWT ou INIT_SECRET específico)
+    const validSecret = process.env.INIT_SECRET || process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'fallback-secret'
+    
+    // Aceitar também uma chave fixa para emergência
+    const emergencyKey = 'cobrancas2024init'
+    
+    if (secret !== validSecret && secret !== emergencyKey && adminSecret !== emergencyKey) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 

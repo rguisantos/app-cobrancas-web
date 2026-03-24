@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Search, SwapHorizontal, Loader2, ArrowRight } from 'lucide-react'
+import { ArrowLeft, Save, Search, ArrowLeftRight, Loader2, ArrowRight } from 'lucide-react'
 import Header from '@/components/layout/header'
 import { formatarMoeda } from '@/shared/types'
 
@@ -403,7 +403,7 @@ export default function RelocarProdutoPage() {
         {/* Motivo */}
         <div className="card p-6 mb-6">
           <h2 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
-            <SwapHorizontal className="w-5 h-5" />
+            <ArrowLeftRight className="w-5 h-5" />
             Motivo da Relocação
           </h2>
           

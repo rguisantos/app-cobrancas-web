@@ -11,8 +11,8 @@ export function unauthorized() {
   return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 }
 
-export function forbidden() {
-  return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+export function forbidden(msg = 'Acesso negado') {
+  return NextResponse.json({ error: msg }, { status: 403 })
 }
 
 export function notFound(msg = 'Não encontrado') {

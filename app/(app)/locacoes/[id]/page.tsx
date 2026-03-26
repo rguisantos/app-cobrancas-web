@@ -8,7 +8,7 @@ import { StatusLocacaoBadge, StatusPagamentoBadge } from '@/components/ui/badge'
 import { formatarMoeda } from '@/shared/types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ArrowLeft, Edit, DollarSign, ArrowRightCircle, Package } from 'lucide-react'
+import { ArrowLeft, Edit, ArrowRightCircle, Package, Eye, DollarSign } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Detalhes da Locação' }
 
@@ -33,26 +33,29 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
 
   const podeEditar = session?.user.permissoesWeb?.todosCadastros
 
+  // Identificar a última cobrança
+  const ultimaCobrancaId = locacao.cobrancas[0]?.id
+
   return (
     <div>
       <Header
         title={`${locacao.produtoTipo} N° ${locacao.produtoIdentificador}`}
         subtitle={`Locação para ${locacao.clienteNome}`}
         actions={
-          <div className="flex gap-2">
-            <Link href="/locacoes" className="btn-secondary">
+          <div className="flex gap-2 flex-wrap">
+            <Link href="/locacoes" className="btn-secondary text-sm">
               <ArrowLeft className="w-4 h-4" />
-              Voltar
+              <span className="hidden sm:inline">Voltar</span>
             </Link>
             {locacao.status === 'Ativa' && podeEditar && (
               <>
-                <Link href={`/locacoes/${id}/relocar`} className="btn-secondary">
+                <Link href={`/locacoes/${id}/relocar`} className="btn-secondary text-sm">
                   <ArrowRightCircle className="w-4 h-4" />
-                  Relocar
+                  <span className="hidden sm:inline">Relocar</span>
                 </Link>
-                <Link href={`/locacoes/${id}/enviar-estoque`} className="btn-secondary bg-red-100 text-red-700 hover:bg-red-200 border-red-200">
+                <Link href={`/locacoes/${id}/enviar-estoque`} className="btn-secondary bg-red-100 text-red-700 hover:bg-red-200 border-red-200 text-sm">
                   <Package className="w-4 h-4" />
-                  Enviar ao Estoque
+                  <span className="hidden sm:inline">Estoque</span>
                 </Link>
               </>
             )}
@@ -60,18 +63,18 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
         }
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Main content */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 md:space-y-6">
           {/* Dados da locação */}
-          <div className="card p-6">
+          <div className="card p-4 md:p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-slate-900">📋 Dados da Locação</h2>
               <StatusLocacaoBadge status={locacao.status} />
             </div>
-            <dl className="grid grid-cols-2 gap-4 text-sm">
+            <dl className="grid grid-cols-2 gap-3 md:gap-4 text-sm">
               <div>
-                <dt className="text-slate-500">Cliente</dt>
+                <dt className="text-slate-500 text-xs">Cliente</dt>
                 <dd className="mt-1">
                   <Link href={`/clientes/${locacao.clienteId}`} className="text-primary-600 hover:underline font-medium">
                     {locacao.clienteNome}
@@ -79,7 +82,7 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
                 </dd>
               </div>
               <div>
-                <dt className="text-slate-500">Produto</dt>
+                <dt className="text-slate-500 text-xs">Produto</dt>
                 <dd className="mt-1">
                   <Link href={`/produtos/${locacao.produtoId}`} className="text-primary-600 hover:underline font-medium">
                     {locacao.produtoTipo} N° {locacao.produtoIdentificador}
@@ -87,31 +90,31 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
                 </dd>
               </div>
               <div>
-                <dt className="text-slate-500">Data da Locação</dt>
+                <dt className="text-slate-500 text-xs">Data da Locação</dt>
                 <dd className="mt-1">{format(new Date(locacao.dataLocacao), 'dd/MM/yyyy', { locale: ptBR })}</dd>
               </div>
               {locacao.dataFim && (
                 <div>
-                  <dt className="text-slate-500">Data de Término</dt>
+                  <dt className="text-slate-500 text-xs">Data de Término</dt>
                   <dd className="mt-1">{format(new Date(locacao.dataFim), 'dd/MM/yyyy', { locale: ptBR })}</dd>
                 </div>
               )}
               <div>
-                <dt className="text-slate-500">Forma de Pagamento</dt>
+                <dt className="text-slate-500 text-xs">Forma de Pagamento</dt>
                 <dd className="mt-1">{locacao.formaPagamento}</dd>
               </div>
               <div>
-                <dt className="text-slate-500">Número do Relógio</dt>
-                <dd className="mt-1 font-mono">{locacao.produto?.numeroRelogio || locacao.numeroRelogio}</dd>
+                <dt className="text-slate-500 text-xs">Número do Relógio</dt>
+                <dd className="mt-1 font-mono font-bold">{locacao.produto?.numeroRelogio || locacao.numeroRelogio}</dd>
               </div>
               {locacao.formaPagamento !== 'Periodo' && (
                 <>
                   <div>
-                    <dt className="text-slate-500">Preço da Ficha</dt>
+                    <dt className="text-slate-500 text-xs">Preço da Ficha</dt>
                     <dd className="mt-1">{formatarMoeda(locacao.precoFicha)}</dd>
                   </div>
                   <div>
-                    <dt className="text-slate-500">Percentual Empresa</dt>
+                    <dt className="text-slate-500 text-xs">Percentual Empresa</dt>
                     <dd className="mt-1">{locacao.percentualEmpresa}%</dd>
                   </div>
                 </>
@@ -119,12 +122,12 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
               {locacao.formaPagamento === 'Periodo' && locacao.valorFixo && (
                 <>
                   <div>
-                    <dt className="text-slate-500">Valor Fixo</dt>
-                    <dd className="mt-1">{formatarMoeda(locacao.valorFixo)}</dd>
+                    <dt className="text-slate-500 text-xs">Valor Fixo</dt>
+                    <dd className="mt-1 font-bold text-green-700">{formatarMoeda(locacao.valorFixo)}</dd>
                   </div>
                   {locacao.periodicidade && (
                     <div>
-                      <dt className="text-slate-500">Periodicidade</dt>
+                      <dt className="text-slate-500 text-xs">Periodicidade</dt>
                       <dd className="mt-1">{locacao.periodicidade}</dd>
                     </div>
                   )}
@@ -132,7 +135,7 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
               )}
               {locacao.observacao && (
                 <div className="col-span-2">
-                  <dt className="text-slate-500">Observação</dt>
+                  <dt className="text-slate-500 text-xs">Observação</dt>
                   <dd className="mt-1 text-slate-700">{locacao.observacao}</dd>
                 </div>
               )}
@@ -140,7 +143,7 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
           </div>
 
           {/* Histórico de cobranças */}
-          <div className="card p-6">
+          <div className="card p-4 md:p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-slate-900">💰 Histórico de Cobranças</h2>
               <span className="text-sm text-slate-500">{locacao.cobrancas.length} cobrança(s)</span>
@@ -148,38 +151,126 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
             {locacao.cobrancas.length === 0 ? (
               <p className="text-sm text-slate-400">Nenhuma cobrança registrada para esta locação.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="text-left font-medium text-slate-500 pb-2">Período</th>
-                    <th className="text-right font-medium text-slate-500 pb-2">Fichas</th>
-                    <th className="text-right font-medium text-slate-500 pb-2">Total Bruto</th>
-                    <th className="text-right font-medium text-slate-500 pb-2">Recebido</th>
-                    <th className="text-center font-medium text-slate-500 pb-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {locacao.cobrancas.map(c => (
-                    <tr key={c.id} className="hover:bg-slate-50">
-                      <td className="py-2">
-                        {format(new Date(c.dataInicio), 'dd/MM/yy', { locale: ptBR })} — {format(new Date(c.dataFim), 'dd/MM/yy', { locale: ptBR })}
-                      </td>
-                      <td className="py-2 text-right text-slate-600">{c.fichasRodadas}</td>
-                      <td className="py-2 text-right text-slate-600">{formatarMoeda(c.totalBruto)}</td>
-                      <td className="py-2 text-right font-medium text-green-700">{formatarMoeda(c.valorRecebido)}</td>
-                      <td className="py-2 text-center"><StatusPagamentoBadge status={c.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <>
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-100">
+                        <th className="text-left font-medium text-slate-500 pb-2 text-xs">Período</th>
+                        <th className="text-right font-medium text-slate-500 pb-2 text-xs">Relógio</th>
+                        <th className="text-right font-medium text-slate-500 pb-2 text-xs">Fichas</th>
+                        <th className="text-right font-medium text-slate-500 pb-2 text-xs">Total</th>
+                        <th className="text-right font-medium text-slate-500 pb-2 text-xs">Recebido</th>
+                        <th className="text-center font-medium text-slate-500 pb-2 text-xs">Status</th>
+                        <th className="text-center font-medium text-slate-500 pb-2 text-xs">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {locacao.cobrancas.map((c, idx) => {
+                        const isUltima = idx === 0 && locacao.status === 'Ativa'
+                        return (
+                          <tr key={c.id} className={`hover:bg-slate-50 ${isUltima ? 'bg-green-50/50' : ''}`}>
+                            <td className="py-3 text-xs">
+                              {format(new Date(c.dataInicio), 'dd/MM/yy', { locale: ptBR })} — {format(new Date(c.dataFim), 'dd/MM/yy', { locale: ptBR })}
+                              {isUltima && (
+                                <span className="ml-2 text-xs text-green-600 font-medium">(atual)</span>
+                              )}
+                            </td>
+                            <td className="py-3 text-right font-mono text-xs text-slate-600">
+                              {c.relogioAnterior} → {c.relogioAtual}
+                            </td>
+                            <td className="py-3 text-right text-slate-600">{c.fichasRodadas}</td>
+                            <td className="py-3 text-right text-slate-600">{formatarMoeda(c.totalClientePaga)}</td>
+                            <td className="py-3 text-right font-medium text-green-700">{formatarMoeda(c.valorRecebido)}</td>
+                            <td className="py-3 text-center"><StatusPagamentoBadge status={c.status} /></td>
+                            <td className="py-3">
+                              <div className="flex items-center justify-center gap-1">
+                                <Link 
+                                  href={`/cobrancas/${c.id}`}
+                                  className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-primary-600"
+                                  title="Ver detalhes"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </Link>
+                                {isUltima && podeEditar && (
+                                  <Link 
+                                    href={`/cobrancas/${c.id}/editar`}
+                                    className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-primary-600"
+                                    title="Editar (última cobrança)"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Link>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Cards */}
+                <div className="md:hidden space-y-3">
+                  {locacao.cobrancas.map((c, idx) => {
+                    const isUltima = idx === 0 && locacao.status === 'Ativa'
+                    return (
+                      <Link 
+                        key={c.id} 
+                        href={`/cobrancas/${c.id}`}
+                        className={`block p-3 rounded-lg border ${isUltima ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="text-xs text-slate-500">
+                              {format(new Date(c.dataInicio), 'dd/MM/yy', { locale: ptBR })} — {format(new Date(c.dataFim), 'dd/MM/yy', { locale: ptBR })}
+                            </p>
+                            {isUltima && (
+                              <span className="text-xs text-green-600 font-medium">Cobrança atual</span>
+                            )}
+                          </div>
+                          <StatusPagamentoBadge status={c.status} />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-sm">
+                          <div>
+                            <span className="text-xs text-slate-400">Relógio</span>
+                            <p className="font-mono text-xs">{c.relogioAnterior} → {c.relogioAtual}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs text-slate-400">Fichas</span>
+                            <p className="font-medium">{c.fichasRodadas}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs text-slate-400">Total</span>
+                            <p className="font-medium">{formatarMoeda(c.totalClientePaga)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200">
+                          <div>
+                            <span className="text-xs text-slate-400">Recebido</span>
+                            <span className="ml-2 font-medium text-green-700">{formatarMoeda(c.valorRecebido)}</span>
+                          </div>
+                          {isUltima && podeEditar && (
+                            <span className="text-xs text-primary-600 font-medium flex items-center gap-1">
+                              <Edit className="w-3 h-3" />
+                              Editar
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </>
             )}
           </div>
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-6">
+        <div className="space-y-4 md:space-y-6">
           {/* Cliente info */}
-          <div className="card p-5">
+          <div className="card p-4 md:p-5">
             <h3 className="font-semibold text-slate-900 mb-4">👤 Cliente</h3>
             <div className="space-y-2 text-sm">
               <p className="font-medium">{locacao.cliente?.nomeExibicao ?? locacao.clienteNome}</p>
@@ -199,7 +290,7 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
           </div>
 
           {/* Resumo */}
-          <div className="card p-5">
+          <div className="card p-4 md:p-5">
             <h3 className="font-semibold text-slate-900 mb-4">📊 Resumo</h3>
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
@@ -218,7 +309,7 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
                   {formatarMoeda(locacao.cobrancas.reduce((s, c) => s + c.saldoDevedorGerado, 0))}
                 </span>
               </div>
-              {locacao.ultimaLeituraRelogio !== null && (
+              {locacao.ultimaLeituraRelogio !== null && locacao.ultimaLeituraRelogio !== undefined && (
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">Última leitura</span>
                   <span className="font-mono">{locacao.ultimaLeituraRelogio}</span>
@@ -228,7 +319,7 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
           </div>
 
           {/* Produto info */}
-          <div className="card p-5">
+          <div className="card p-4 md:p-5">
             <h3 className="font-semibold text-slate-900 mb-4">🎱 Produto</h3>
             <div className="space-y-2 text-sm">
               <p className="font-medium">{locacao.produto?.tipoNome} N° {locacao.produto?.identificador}</p>

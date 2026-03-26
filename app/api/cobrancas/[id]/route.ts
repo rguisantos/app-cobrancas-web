@@ -1,12 +1,187 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, notFound, serverError } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, notFound, serverError, forbidden } from '@/lib/api-helpers'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await getAuthSession()
   if (!session) return unauthorized()
-  const cobranca = await prisma.cobranca.findFirst({ where: { id, deletedAt: null }, include: { cliente: true, locacao: true } })
+  const cobranca = await prisma.cobranca.findFirst({ 
+    where: { id, deletedAt: null }, 
+    include: { 
+      cliente: true, 
+      locacao: {
+        include: {
+          cobrancas: {
+            where: { deletedAt: null },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { id: true }
+          }
+        }
+      }
+    } 
+  })
   if (!cobranca) return notFound()
   return NextResponse.json(cobranca)
+}
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+  
+  // Verificar permissão
+  if (!session.user.permissoesWeb?.todosCadastros) {
+    return forbidden('Sem permissão para editar cobranças')
+  }
+
+  try {
+    const cobrancaExistente = await prisma.cobranca.findFirst({
+      where: { id, deletedAt: null },
+      include: {
+        locacao: {
+          select: {
+            id: true,
+            status: true,
+            cobrancas: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: { id: true }
+            }
+          }
+        }
+      }
+    })
+
+    if (!cobrancaExistente) return notFound('Cobrança não encontrada')
+
+    // Verificar se é a última cobrança da locação ativa
+    const isUltimaCobranca = 
+      cobrancaExistente.locacao?.cobrancas?.[0]?.id === id && 
+      cobrancaExistente.locacao?.status === 'Ativa'
+
+    if (!isUltimaCobranca) {
+      return forbidden('Apenas a última cobrança de uma locação ativa pode ser editada')
+    }
+
+    const body = await req.json()
+    
+    // Campos que podem ser editados
+    const dadosAtualizacao: any = {
+      updatedAt: new Date(),
+      needsSync: true,
+      syncStatus: 'pending',
+    }
+
+    // Descontos
+    if (body.descontoPartidasQtd !== undefined) {
+      dadosAtualizacao.descontoPartidasQtd = body.descontoPartidasQtd
+    }
+    if (body.descontoPartidasValor !== undefined) {
+      dadosAtualizacao.descontoPartidasValor = body.descontoPartidasValor
+    }
+    if (body.descontoDinheiro !== undefined) {
+      dadosAtualizacao.descontoDinheiro = body.descontoDinheiro
+    }
+
+    // Cálculos
+    if (body.subtotalAposDescontos !== undefined) {
+      dadosAtualizacao.subtotalAposDescontos = body.subtotalAposDescontos
+    }
+    if (body.valorPercentual !== undefined) {
+      dadosAtualizacao.valorPercentual = body.valorPercentual
+    }
+    if (body.totalClientePaga !== undefined) {
+      dadosAtualizacao.totalClientePaga = body.totalClientePaga
+    }
+
+    // Pagamento
+    if (body.valorRecebido !== undefined) {
+      dadosAtualizacao.valorRecebido = body.valorRecebido
+    }
+    if (body.saldoDevedorGerado !== undefined) {
+      dadosAtualizacao.saldoDevedorGerado = body.saldoDevedorGerado
+    }
+    if (body.status !== undefined) {
+      dadosAtualizacao.status = body.status
+    }
+    if (body.dataPagamento !== undefined) {
+      dadosAtualizacao.dataPagamento = body.dataPagamento
+    }
+
+    // Observação
+    if (body.observacao !== undefined) {
+      dadosAtualizacao.observacao = body.observacao
+    }
+
+    const cobrancaAtualizada = await prisma.cobranca.update({
+      where: { id },
+      data: dadosAtualizacao,
+    })
+
+    return NextResponse.json(cobrancaAtualizada)
+  } catch (err) {
+    console.error(err)
+    return serverError()
+  }
+}
+
+export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+  
+  // Verificar permissão
+  if (!session.user.permissoesWeb?.todosCadastros) {
+    return forbidden('Sem permissão para excluir cobranças')
+  }
+
+  try {
+    const cobrancaExistente = await prisma.cobranca.findFirst({
+      where: { id, deletedAt: null },
+      include: {
+        locacao: {
+          select: {
+            id: true,
+            status: true,
+            cobrancas: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: { id: true }
+            }
+          }
+        }
+      }
+    })
+
+    if (!cobrancaExistente) return notFound('Cobrança não encontrada')
+
+    // Verificar se é a última cobrança da locação ativa
+    const isUltimaCobranca = 
+      cobrancaExistente.locacao?.cobrancas?.[0]?.id === id && 
+      cobrancaExistente.locacao?.status === 'Ativa'
+
+    if (!isUltimaCobranca) {
+      return forbidden('Apenas a última cobrança de uma locação ativa pode ser excluída')
+    }
+
+    // Soft delete
+    const cobrancaExcluida = await prisma.cobranca.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        updatedAt: new Date(),
+        needsSync: true,
+        syncStatus: 'pending',
+      },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error(err)
+    return serverError()
+  }
 }

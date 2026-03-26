@@ -205,4 +205,16 @@
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
   }
+
+  /* Scroll horizontal suave para tabelas em mobile */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  /* Indicador visual de scroll */
+  .scroll-shadow-right {
+    background: 
+      linear-gradient(to right, white 90%, transparent);
+  }
 }

@@ -8,7 +8,7 @@ import { StatusLocacaoBadge, StatusPagamentoBadge } from '@/components/ui/badge'
 import { formatarMoeda } from '@/shared/types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ArrowLeft, Edit, ArrowRightCircle, Package, Eye, DollarSign } from 'lucide-react'
+import { ArrowLeft, Edit, ArrowRightCircle, Package, Eye } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Detalhes da Locação' }
 
@@ -32,9 +32,6 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
   if (!locacao) notFound()
 
   const podeEditar = session?.user.permissoesWeb?.todosCadastros
-
-  // Identificar a última cobrança
-  const ultimaCobrancaId = locacao.cobrancas[0]?.id
 
   return (
     <div>
@@ -152,18 +149,18 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
               <p className="text-sm text-slate-400">Nenhuma cobrança registrada para esta locação.</p>
             ) : (
               <>
-                {/* Desktop Table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-sm">
+                {/* Tabela com scroll horizontal */}
+                <div className="overflow-x-auto -webkit-overflow-scrolling-touch" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  <table className="w-full text-sm min-w-[600px]">
                     <thead>
                       <tr className="border-b border-slate-100">
-                        <th className="text-left font-medium text-slate-500 pb-2 text-xs">Período</th>
-                        <th className="text-right font-medium text-slate-500 pb-2 text-xs">Relógio</th>
-                        <th className="text-right font-medium text-slate-500 pb-2 text-xs">Fichas</th>
-                        <th className="text-right font-medium text-slate-500 pb-2 text-xs">Total</th>
-                        <th className="text-right font-medium text-slate-500 pb-2 text-xs">Recebido</th>
-                        <th className="text-center font-medium text-slate-500 pb-2 text-xs">Status</th>
-                        <th className="text-center font-medium text-slate-500 pb-2 text-xs">Ações</th>
+                        <th className="text-left font-medium text-slate-500 pb-2 text-xs whitespace-nowrap">Período</th>
+                        <th className="text-right font-medium text-slate-500 pb-2 text-xs whitespace-nowrap">Relógio</th>
+                        <th className="text-right font-medium text-slate-500 pb-2 text-xs whitespace-nowrap">Fichas</th>
+                        <th className="text-right font-medium text-slate-500 pb-2 text-xs whitespace-nowrap">Total</th>
+                        <th className="text-right font-medium text-slate-500 pb-2 text-xs whitespace-nowrap">Recebido</th>
+                        <th className="text-center font-medium text-slate-500 pb-2 text-xs whitespace-nowrap">Status</th>
+                        <th className="text-center font-medium text-slate-500 pb-2 text-xs whitespace-nowrap">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -171,13 +168,13 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
                         const isUltima = idx === 0 && locacao.status === 'Ativa'
                         return (
                           <tr key={c.id} className={`hover:bg-slate-50 ${isUltima ? 'bg-green-50/50' : ''}`}>
-                            <td className="py-3 text-xs">
+                            <td className="py-3 text-xs whitespace-nowrap">
                               {format(new Date(c.dataInicio), 'dd/MM/yy', { locale: ptBR })} — {format(new Date(c.dataFim), 'dd/MM/yy', { locale: ptBR })}
                               {isUltima && (
                                 <span className="ml-2 text-xs text-green-600 font-medium">(atual)</span>
                               )}
                             </td>
-                            <td className="py-3 text-right font-mono text-xs text-slate-600">
+                            <td className="py-3 text-right font-mono text-xs text-slate-600 whitespace-nowrap">
                               {c.relogioAnterior} → {c.relogioAtual}
                             </td>
                             <td className="py-3 text-right text-slate-600">{c.fichasRodadas}</td>
@@ -210,58 +207,10 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
                     </tbody>
                   </table>
                 </div>
-
-                {/* Mobile Cards */}
-                <div className="md:hidden space-y-3">
-                  {locacao.cobrancas.map((c, idx) => {
-                    const isUltima = idx === 0 && locacao.status === 'Ativa'
-                    return (
-                      <Link 
-                        key={c.id} 
-                        href={`/cobrancas/${c.id}`}
-                        className={`block p-3 rounded-lg border ${isUltima ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div>
-                            <p className="text-xs text-slate-500">
-                              {format(new Date(c.dataInicio), 'dd/MM/yy', { locale: ptBR })} — {format(new Date(c.dataFim), 'dd/MM/yy', { locale: ptBR })}
-                            </p>
-                            {isUltima && (
-                              <span className="text-xs text-green-600 font-medium">Cobrança atual</span>
-                            )}
-                          </div>
-                          <StatusPagamentoBadge status={c.status} />
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 text-sm">
-                          <div>
-                            <span className="text-xs text-slate-400">Relógio</span>
-                            <p className="font-mono text-xs">{c.relogioAnterior} → {c.relogioAtual}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-slate-400">Fichas</span>
-                            <p className="font-medium">{c.fichasRodadas}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-slate-400">Total</span>
-                            <p className="font-medium">{formatarMoeda(c.totalClientePaga)}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200">
-                          <div>
-                            <span className="text-xs text-slate-400">Recebido</span>
-                            <span className="ml-2 font-medium text-green-700">{formatarMoeda(c.valorRecebido)}</span>
-                          </div>
-                          {isUltima && podeEditar && (
-                            <span className="text-xs text-primary-600 font-medium flex items-center gap-1">
-                              <Edit className="w-3 h-3" />
-                              Editar
-                            </span>
-                          )}
-                        </div>
-                      </Link>
-                    )
-                  })}
-                </div>
+                {/* Indicador de scroll para mobile */}
+                <p className="text-xs text-slate-400 mt-2 md:hidden text-center">
+                  ← Arraste para ver mais colunas →
+                </p>
               </>
             )}
           </div>

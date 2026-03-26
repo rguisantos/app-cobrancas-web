@@ -109,72 +109,74 @@ export default async function CobrancasPage({
         <div className="card"><EmptyState icon="💰" title="Nenhuma cobrança encontrada" /></div>
       ) : (
         <>
-          {/* Desktop Table */}
-          <div className="card overflow-hidden hidden md:block">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left font-medium text-slate-500 px-4 py-3">Cliente</th>
-                  <th className="text-left font-medium text-slate-500 px-4 py-3">Produto</th>
-                  <th className="text-left font-medium text-slate-500 px-4 py-3">Período</th>
-                  <th className="text-right font-medium text-slate-500 px-4 py-3">Relógio</th>
-                  <th className="text-right font-medium text-slate-500 px-4 py-3">Fichas</th>
-                  <th className="text-right font-medium text-slate-500 px-4 py-3">Total</th>
-                  <th className="text-right font-medium text-slate-500 px-4 py-3">Recebido</th>
-                  <th className="text-center font-medium text-slate-500 px-4 py-3">Status</th>
-                  <th className="text-center font-medium text-slate-500 px-4 py-3">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {cobrancas.map(c => {
-                  const ultima = isUltimaCobranca(c)
-                  return (
-                    <tr key={c.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-3 font-medium text-slate-900 max-w-[160px] truncate">
-                        <Link href={`/clientes/${c.clienteId}`} className="hover:text-primary-600">
-                          {c.cliente?.nomeExibicao ?? c.clienteNome}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-slate-600">
-                        <Link href={`/locacoes/${c.locacaoId}`} className="hover:text-primary-600">
-                          {c.produtoIdentificador}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 text-xs">
-                        {format(new Date(c.dataInicio), 'dd/MM/yy', { locale: ptBR })} — {format(new Date(c.dataFim), 'dd/MM/yy', { locale: ptBR })}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono text-slate-600 text-xs">
-                        {c.relogioAnterior} → {c.relogioAtual}
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-600">{c.fichasRodadas}</td>
-                      <td className="px-4 py-3 text-right text-slate-600">{formatarMoeda(c.totalClientePaga)}</td>
-                      <td className="px-4 py-3 text-right font-medium text-green-700">{formatarMoeda(c.valorRecebido)}</td>
-                      <td className="px-4 py-3 text-center"><StatusPagamentoBadge status={c.status} /></td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-1">
-                          <Link 
-                            href={`/cobrancas/${c.id}`}
-                            className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-primary-600"
-                            title="Ver detalhes"
-                          >
-                            <Eye className="w-4 h-4" />
+          {/* Tabela com scroll horizontal - funciona em mobile */}
+          <div className="card overflow-hidden">
+            <div className="overflow-x-auto -webkit-overflow-scrolling-touch" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <table className="w-full text-sm min-w-[800px]">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="text-left font-medium text-slate-500 px-4 py-3 whitespace-nowrap">Cliente</th>
+                    <th className="text-left font-medium text-slate-500 px-4 py-3 whitespace-nowrap">Produto</th>
+                    <th className="text-left font-medium text-slate-500 px-4 py-3 whitespace-nowrap">Período</th>
+                    <th className="text-right font-medium text-slate-500 px-4 py-3 whitespace-nowrap">Relógio</th>
+                    <th className="text-right font-medium text-slate-500 px-4 py-3 whitespace-nowrap">Fichas</th>
+                    <th className="text-right font-medium text-slate-500 px-4 py-3 whitespace-nowrap">Total</th>
+                    <th className="text-right font-medium text-slate-500 px-4 py-3 whitespace-nowrap">Recebido</th>
+                    <th className="text-center font-medium text-slate-500 px-4 py-3 whitespace-nowrap">Status</th>
+                    <th className="text-center font-medium text-slate-500 px-4 py-3 whitespace-nowrap">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {cobrancas.map(c => {
+                    const ultima = isUltimaCobranca(c)
+                    return (
+                      <tr key={c.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-medium text-slate-900 max-w-[160px] truncate">
+                          <Link href={`/clientes/${c.clienteId}`} className="hover:text-primary-600">
+                            {c.cliente?.nomeExibicao ?? c.clienteNome}
                           </Link>
-                          {ultima && podeEditar && (
+                        </td>
+                        <td className="px-4 py-3 font-mono text-slate-600 whitespace-nowrap">
+                          <Link href={`/locacoes/${c.locacaoId}`} className="hover:text-primary-600">
+                            {c.produtoIdentificador}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">
+                          {format(new Date(c.dataInicio), 'dd/MM/yy', { locale: ptBR })} — {format(new Date(c.dataFim), 'dd/MM/yy', { locale: ptBR })}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-slate-600 text-xs whitespace-nowrap">
+                          {c.relogioAnterior} → {c.relogioAtual}
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-600">{c.fichasRodadas}</td>
+                        <td className="px-4 py-3 text-right text-slate-600">{formatarMoeda(c.totalClientePaga)}</td>
+                        <td className="px-4 py-3 text-right font-medium text-green-700">{formatarMoeda(c.valorRecebido)}</td>
+                        <td className="px-4 py-3 text-center"><StatusPagamentoBadge status={c.status} /></td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1">
                             <Link 
-                              href={`/cobrancas/${c.id}/editar`}
+                              href={`/cobrancas/${c.id}`}
                               className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-primary-600"
-                              title="Editar (última cobrança)"
+                              title="Ver detalhes"
                             >
-                              <Edit className="w-4 h-4" />
+                              <Eye className="w-4 h-4" />
                             </Link>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                            {ultima && podeEditar && (
+                              <Link 
+                                href={`/cobrancas/${c.id}/editar`}
+                                className="p-1.5 rounded hover:bg-slate-100 text-slate-500 hover:text-primary-600"
+                                title="Editar (última cobrança)"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Link>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
             {total > limit && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50 text-sm">
                 <span className="text-slate-600">{(page-1)*limit+1}–{Math.min(page*limit, total)} de {total}</span>
@@ -186,70 +188,10 @@ export default async function CobrancasPage({
             )}
           </div>
 
-          {/* Mobile Cards */}
-          <div className="md:hidden space-y-3">
-            {cobrancas.map(c => {
-              const ultima = isUltimaCobranca(c)
-              return (
-                <Link key={c.id} href={`/cobrancas/${c.id}`} className="card p-4 block hover:bg-slate-50">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="font-medium text-slate-900">{c.cliente?.nomeExibicao ?? c.clienteNome}</p>
-                      <p className="text-sm text-slate-500 font-mono">{c.produtoIdentificador}</p>
-                    </div>
-                    <StatusPagamentoBadge status={c.status} />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                    <div>
-                      <span className="text-slate-400 text-xs">Período</span>
-                      <p className="text-slate-600">
-                        {format(new Date(c.dataInicio), 'dd/MM/yy', { locale: ptBR })} — {format(new Date(c.dataFim), 'dd/MM/yy', { locale: ptBR })}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 text-xs">Relógio</span>
-                      <p className="font-mono text-slate-600">{c.relogioAnterior} → {c.relogioAtual}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <div>
-                      <span className="text-xs text-slate-400">Fichas</span>
-                      <span className="ml-2 font-medium">{c.fichasRodadas}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs text-slate-400">Total</span>
-                      <span className="ml-2 font-medium">{formatarMoeda(c.totalClientePaga)}</span>
-                    </div>
-                    <div>
-                      <span className="text-xs text-slate-400">Recebido</span>
-                      <span className="ml-2 font-medium text-green-700">{formatarMoeda(c.valorRecebido)}</span>
-                    </div>
-                  </div>
-
-                  {ultima && podeEditar && (
-                    <div className="mt-3 pt-2 border-t border-slate-100 flex justify-end">
-                      <span className="text-xs text-primary-600 font-medium flex items-center gap-1">
-                        <Edit className="w-3 h-3" />
-                        Editar disponível
-                      </span>
-                    </div>
-                  )}
-                </Link>
-              )
-            })}
-
-            {total > limit && (
-              <div className="flex items-center justify-between py-3 text-sm">
-                <span className="text-slate-600">{(page-1)*limit+1}–{Math.min(page*limit, total)} de {total}</span>
-                <div className="flex gap-2">
-                  {page > 1 && <Link href={`?page=${page-1}&status=${params.status||''}`} className="btn-secondary py-1 px-3 text-xs">← Anterior</Link>}
-                  {page*limit < total && <Link href={`?page=${page+1}&status=${params.status||''}`} className="btn-secondary py-1 px-3 text-xs">Próxima →</Link>}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Indicador de scroll para mobile */}
+          <p className="text-xs text-slate-400 mt-2 md:hidden text-center">
+            ← Arraste para ver mais colunas →
+          </p>
         </>
       )}
     </div>

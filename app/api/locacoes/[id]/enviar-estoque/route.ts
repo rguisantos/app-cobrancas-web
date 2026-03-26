@@ -50,12 +50,12 @@ export async function POST(
         }
       })
       
-      // 2. Atualizar produto (definir estabelecimento)
+      // 2. Atualizar produto (definir estabelecimento e LIMPAR observacao)
       await tx.produto.update({
         where: { id: locacaoAtual.produtoId },
         data: {
           estabelecimento: data.estabelecimento,
-          observacao: data.observacao || `Enviado para ${data.estabelecimento}: ${data.motivo}`,
+          observacao: null, // Limpar observacao para evitar que apareça em futuras locações
           statusProduto: 'Ativo',
           version: { increment: 1 },
           deviceId: 'web',

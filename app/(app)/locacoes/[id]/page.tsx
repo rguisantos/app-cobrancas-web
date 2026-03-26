@@ -102,27 +102,33 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
               </div>
               <div>
                 <dt className="text-slate-500">Número do Relógio</dt>
-                <dd className="mt-1 font-mono">{locacao.numeroRelogio}</dd>
+                <dd className="mt-1 font-mono">{locacao.produto?.numeroRelogio || locacao.numeroRelogio}</dd>
               </div>
-              <div>
-                <dt className="text-slate-500">Preço da Ficha</dt>
-                <dd className="mt-1">{formatarMoeda(locacao.precoFicha)}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Percentual Empresa</dt>
-                <dd className="mt-1">{locacao.percentualEmpresa}%</dd>
-              </div>
-              {locacao.valorFixo && (
-                <div>
-                  <dt className="text-slate-500">Valor Fixo</dt>
-                  <dd className="mt-1">{formatarMoeda(locacao.valorFixo)}</dd>
-                </div>
+              {locacao.formaPagamento !== 'Periodo' && (
+                <>
+                  <div>
+                    <dt className="text-slate-500">Preço da Ficha</dt>
+                    <dd className="mt-1">{formatarMoeda(locacao.precoFicha)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Percentual Empresa</dt>
+                    <dd className="mt-1">{locacao.percentualEmpresa}%</dd>
+                  </div>
+                </>
               )}
-              {locacao.periodicidade && (
-                <div>
-                  <dt className="text-slate-500">Periodicidade</dt>
-                  <dd className="mt-1">{locacao.periodicidade}</dd>
-                </div>
+              {locacao.formaPagamento === 'Periodo' && locacao.valorFixo && (
+                <>
+                  <div>
+                    <dt className="text-slate-500">Valor Fixo</dt>
+                    <dd className="mt-1">{formatarMoeda(locacao.valorFixo)}</dd>
+                  </div>
+                  {locacao.periodicidade && (
+                    <div>
+                      <dt className="text-slate-500">Periodicidade</dt>
+                      <dd className="mt-1">{locacao.periodicidade}</dd>
+                    </div>
+                  )}
+                </>
               )}
               {locacao.observacao && (
                 <div className="col-span-2">

@@ -28,7 +28,7 @@ export default async function LocacoesPage({
       where,
       include: {
         cliente: { select: { nomeExibicao: true } },
-        produto: { select: { identificador: true, tipoNome: true } }
+        produto: { select: { identificador: true, tipoNome: true, numeroRelogio: true } }
       },
       orderBy: { dataLocacao: 'desc' },
       skip: (page - 1) * limit,
@@ -106,7 +106,7 @@ export default async function LocacoesPage({
                   <td className="px-4 py-3 text-slate-600 text-xs">{l.formaPagamento}</td>
                   <td className="px-4 py-3 text-right">{l.percentualEmpresa}%</td>
                   <td className="px-4 py-3 text-right">{formatarMoeda(l.precoFicha)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-slate-600">{l.numeroRelogio}</td>
+                  <td className="px-4 py-3 text-right font-mono text-slate-600">{l.produto?.numeroRelogio || l.numeroRelogio}</td>
                   <td className="px-4 py-3 text-center"><StatusLocacaoBadge status={l.status} /></td>
                   <td className="px-4 py-3 text-right text-slate-500">{format(new Date(l.dataLocacao), 'dd/MM/yy', { locale: ptBR })}</td>
                   <td className="px-4 py-3">

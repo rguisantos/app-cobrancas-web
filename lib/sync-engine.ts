@@ -5,6 +5,8 @@ import type { ChangeLog, SyncResponse, SyncConflict } from '@/shared/types'
 
 type EntityTable = 'clientes' | 'produtos' | 'locacoes' | 'cobrancas' | 'rotas' | 'usuarios'
 
+type ModelName = 'cliente' | 'produto' | 'locacao' | 'cobranca' | 'rota' | 'usuario'
+
 const TABLE_MAP: Record<string, EntityTable> = {
   cliente:  'clientes',
   produto:  'produtos',
@@ -13,6 +15,26 @@ const TABLE_MAP: Record<string, EntityTable> = {
   rota:     'rotas',
   usuario:  'usuarios',
 }
+
+// Mapeamento correto de tabela para modelo (singularização)
+const TABLE_TO_MODEL_MAP: Record<EntityTable, ModelName> = {
+  clientes:  'cliente',
+  produtos:  'produto',
+  locacoes:  'locacao',
+  cobrancas: 'cobranca',
+  rotas:     'rota',
+  usuarios:  'usuario',
+}
+
+// Ordem de processamento por dependência
+const PROCESSING_ORDER: ModelName[] = [
+  'rota',      // Sem dependências
+  'cliente',   // Sem dependências (exceto rota)
+  'produto',   // Sem dependências
+  'locacao',   // Depende de cliente e produto
+  'cobranca',  // Depende de locacao, cliente e produto
+  'usuario',   // Sem dependências
+]
 
 // Mapeamento de nomes de campos Mobile -> Web (se diferentes)
 const FIELD_MAP: Record<string, Record<string, string>> = {
@@ -232,6 +254,15 @@ async function validateForeignKeys(modelName: string, data: Record<string, any>)
   return result
 }
 
+// Ordenar mudanças por dependência (processar locacoes antes de cobrancas)
+function sortChangesByDependency(changes: ChangeLog[]): ChangeLog[] {
+  return changes.sort((a, b) => {
+    const orderA = PROCESSING_ORDER.indexOf(TABLE_TO_MODEL_MAP[TABLE_MAP[a.entityType]] as ModelName)
+    const orderB = PROCESSING_ORDER.indexOf(TABLE_TO_MODEL_MAP[TABLE_MAP[b.entityType]] as ModelName)
+    return orderA - orderB
+  })
+}
+
 // ============================================================
 // PUSH — mobile → servidor
 // ============================================================
@@ -246,7 +277,12 @@ export async function processPush(
   console.log(`[sync/push] Dispositivo: ${deviceId}`)
   console.log(`[sync/push] Total de mudanças: ${changes.length}`)
 
-  for (const change of changes) {
+  // IMPORTANTE: Ordenar mudanças por dependência
+  // Processar na ordem: rota, cliente, produto, locacao, cobranca, usuario
+  const sortedChanges = sortChangesByDependency(changes)
+  console.log(`[sync/push] Ordem de processamento: ${sortedChanges.map(c => c.entityType).join(', ')}`)
+
+  for (const change of sortedChanges) {
     try {
       const table = TABLE_MAP[change.entityType]
       if (!table) { 
@@ -260,8 +296,8 @@ export async function processPush(
       console.log(`[sync/push] --- ${change.operation.toUpperCase()} ${change.entityType}:${change.entityId} ---`)
       console.log(`[sync/push] Dados recebidos:`, JSON.stringify(changesData, null, 2).substring(0, 500))
 
-      // Nome do modelo no Prisma (singular)
-      const modelName = table.slice(0, -1) as 'cliente' | 'produto' | 'locacao' | 'cobranca' | 'rota' | 'usuario'
+      // Nome do modelo no Prisma (singular) - usar mapeamento correto
+      const modelName = TABLE_TO_MODEL_MAP[table]
       const repo = (prisma as any)[modelName]
 
       if (!repo) {

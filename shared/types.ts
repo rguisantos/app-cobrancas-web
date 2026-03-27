@@ -593,6 +593,7 @@ export interface SyncResponse {
     locacoes?: any[];
     cobrancas?: any[];
     rotas?: any[];
+    usuarios?: any[];  // Adicionar para sincronização de permissões
   };
   conflicts?: SyncConflict[];
   errors?: string[];

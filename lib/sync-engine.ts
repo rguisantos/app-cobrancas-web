@@ -480,9 +480,11 @@ export async function processPull(
 
   // Buscar todas as entidades modificadas depois de lastSyncAt
   // que NÃO foram geradas por este dispositivo
-  const [clientes, produtos, locacoes, cobrancas, rotas, tiposProduto, descricoesProduto, tamanhosProduto] = await Promise.all([
+  // IMPORTANTE: Filtrar deletedAt: null para não retornar registros excluídos
+  const [clientes, produtos, locacoes, cobrancas, rotas, usuarios, tiposProduto, descricoesProduto, tamanhosProduto] = await Promise.all([
     prisma.cliente.findMany({
       where: {
+        deletedAt: null,  // Não retornar excluídos
         updatedAt: { gt: since },
         OR: [
           { deviceId: { not: deviceId } },
@@ -492,6 +494,7 @@ export async function processPull(
     }),
     prisma.produto.findMany({
       where: {
+        deletedAt: null,  // Não retornar excluídos
         updatedAt: { gt: since },
         OR: [
           { deviceId: { not: deviceId } },
@@ -501,6 +504,7 @@ export async function processPull(
     }),
     prisma.locacao.findMany({
       where: {
+        deletedAt: null,  // Não retornar excluídos
         updatedAt: { gt: since },
         OR: [
           { deviceId: { not: deviceId } },
@@ -510,6 +514,7 @@ export async function processPull(
     }),
     prisma.cobranca.findMany({
       where: {
+        deletedAt: null,  // Não retornar excluídos
         updatedAt: { gt: since },
         OR: [
           { deviceId: { not: deviceId } },
@@ -519,6 +524,7 @@ export async function processPull(
     }),
     prisma.rota.findMany({
       where: {
+        deletedAt: null,  // Não retornar excluídos
         updatedAt: { gt: since },
         OR: [
           { deviceId: { not: deviceId } },
@@ -526,15 +532,44 @@ export async function processPull(
         ],
       },
     }),
+    // Usuários - sincronizar permissões alteradas no web
+    prisma.usuario.findMany({
+      where: {
+        deletedAt: null,  // Não retornar excluídos
+        updatedAt: { gt: since },
+      },
+      select: {
+        id: true,
+        nome: true,
+        cpf: true,
+        telefone: true,
+        email: true,
+        tipoPermissao: true,
+        permissoesWeb: true,
+        permissoesMobile: true,
+        rotasPermitidas: true,
+        status: true,
+        bloqueado: true,
+        dataUltimoAcesso: true,
+        ultimoAcessoDispositivo: true,
+        syncStatus: true,
+        lastSyncedAt: true,
+        needsSync: true,
+        version: true,
+        deviceId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
     // Atributos de produto
     prisma.tipoProduto.findMany({
-      where: { updatedAt: { gt: since } },
+      where: { deletedAt: null, updatedAt: { gt: since } },
     }),
     prisma.descricaoProduto.findMany({
-      where: { updatedAt: { gt: since } },
+      where: { deletedAt: null, updatedAt: { gt: since } },
     }),
     prisma.tamanhoProduto.findMany({
-      where: { updatedAt: { gt: since } },
+      where: { deletedAt: null, updatedAt: { gt: since } },
     }),
   ])
 
@@ -544,6 +579,7 @@ export async function processPull(
   console.log(`[sync/pull] - Locações: ${locacoes.length}`)
   console.log(`[sync/pull] - Cobranças: ${cobrancas.length}`)
   console.log(`[sync/pull] - Rotas: ${rotas.length}`)
+  console.log(`[sync/pull] - Usuários: ${usuarios.length}`)
   console.log(`[sync/pull] - Tipos: ${tiposProduto.length}`)
   console.log(`[sync/pull] - Descrições: ${descricoesProduto.length}`)
   console.log(`[sync/pull] - Tamanhos: ${tamanhosProduto.length}`)
@@ -559,6 +595,7 @@ export async function processPull(
       locacoes,
       cobrancas,
       rotas,
+      usuarios,  // Adicionar usuários para sincronização de permissões
     },
     // Atributos de produto (para sincronização completa)
     tiposProduto,

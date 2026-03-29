@@ -48,7 +48,7 @@ O **App Cobranças Web** é uma plataforma completa para:
 | **Tailwind CSS** | 3.x | Estilização |
 | **Zod** | 3.x | Validação de schemas |
 | **Lucide React** | - | Ícones |
-| **date-fns** | 4.x | Manipulação de datas |
+| **date-fns** | 3.x | Manipulação de datas |
 
 ---
 
@@ -91,6 +91,11 @@ REFRESH_TOKEN_EXPIRES_IN="7d"
 
 # Opcional
 ENVIRONMENT="development"
+
+# Inicialização segura (endpoint /api/admin/init)
+INIT_SECRET="chave-forte-para-bootstrap"
+INIT_ADMIN_PASSWORD="senha-inicial-do-admin"
+ALLOW_INIT_ENDPOINT="false"
 ```
 
 ### Inicialização
@@ -110,7 +115,7 @@ npm run dev
 
 - **URL:** http://localhost:3000
 - **Email:** admin@locacao.com
-- **Senha:** admin123
+- **Senha:** definida por `INIT_ADMIN_PASSWORD` (ou no corpo da requisição de init)
 
 ---
 

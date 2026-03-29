@@ -44,11 +44,6 @@ export default function Sidebar() {
 
   const isActive = (href: string) => pathname.startsWith(href)
 
-  // Close sidebar on route change (mobile)
-  useEffect(() => {
-    setIsOpen(false)
-  }, [pathname])
-
   // Close sidebar when clicking outside on mobile
   useEffect(() => {
     const handleResize = () => {
@@ -119,6 +114,7 @@ export default function Sidebar() {
               <Link 
                 key={item.href} 
                 href={item.href} 
+                onClick={() => setIsOpen(false)}
                 className={`sidebar-link group ${active ? 'sidebar-link-active' : 'sidebar-link-inactive'}`}
               >
                 <Icon className={`w-5 h-5 ${active ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`} />
@@ -138,6 +134,7 @@ export default function Sidebar() {
                   <Link 
                     key={item.href} 
                     href={item.href} 
+                    onClick={() => setIsOpen(false)}
                     className={`sidebar-link group ${active ? 'sidebar-link-active' : 'sidebar-link-inactive'}`}
                   >
                     <Icon className={`w-5 h-5 ${active ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}`} />
@@ -168,6 +165,7 @@ export default function Sidebar() {
           
           <Link 
             href="/api/auth/signout" 
+            onClick={() => setIsOpen(false)}
             className="flex items-center gap-2 px-3 py-2.5 mt-2 text-sm text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors group"
           >
             <LogOut className="w-4 h-4" />

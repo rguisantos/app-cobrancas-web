@@ -3,24 +3,34 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hashSenha } from '@/lib/hash'
 import { z } from 'zod'
+import crypto from 'crypto'
 
 const schema = z.object({
   secret: z.string(), // Chave secreta para autorizar
-  adminSecret: z.string().optional(), // Alternativa: senha do admin
+  adminPassword: z.string().min(8).optional(),
 })
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const { secret, adminSecret } = schema.parse(body)
+    // Segurança: impedir uso em produção por padrão
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_INIT_ENDPOINT !== 'true') {
+      return NextResponse.json({ error: 'Endpoint desabilitado em produção' }, { status: 403 })
+    }
 
-    // Verificar chave secreta (usar mesma chave do JWT ou INIT_SECRET específico)
-    const validSecret = process.env.INIT_SECRET || process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'fallback-secret'
-    
-    // Aceitar também uma chave fixa para emergência
-    const emergencyKey = 'cobrancas2024init'
-    
-    if (secret !== validSecret && secret !== emergencyKey && adminSecret !== emergencyKey) {
+    const body = await req.json()
+    const { secret, adminPassword } = schema.parse(body)
+
+    // Verificar chave secreta estrita (sem fallback inseguro)
+    const validSecret = process.env.INIT_SECRET
+    if (!validSecret) {
+      return NextResponse.json({ error: 'INIT_SECRET não configurado no servidor' }, { status: 500 })
+    }
+
+    const provided = Buffer.from(secret, 'utf8')
+    const expected = Buffer.from(validSecret, 'utf8')
+    const secretMatches = provided.length === expected.length && crypto.timingSafeEqual(provided, expected)
+
+    if (!secretMatches) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
     }
 
@@ -28,7 +38,13 @@ export async function POST(req: NextRequest) {
 
     // Admin
     const adminEmail = 'admin@locacao.com'
-    const adminSenha = 'admin123'
+    const adminSenha = adminPassword || process.env.INIT_ADMIN_PASSWORD
+    if (!adminSenha) {
+      return NextResponse.json(
+        { error: 'Senha inicial do admin não informada. Envie adminPassword ou configure INIT_ADMIN_PASSWORD' },
+        { status: 400 }
+      )
+    }
     const senhaHash = await hashSenha(adminSenha)
 
     const permissoesAdmin = {

@@ -464,7 +464,7 @@ export default function EditarClientePage() {
           </div>
 
           {contatos.length === 0 ? (
-            <p className="text-sm text-slate-400">Nenhum contato adicional. Clique em "Adicionar Contato" para incluir.</p>
+            <p className="text-sm text-slate-400">Nenhum contato adicional. Clique em &quot;Adicionar Contato&quot; para incluir.</p>
           ) : (
             <div className="space-y-4">
               {contatos.map((contato, index) => (

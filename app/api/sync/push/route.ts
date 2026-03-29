@@ -54,8 +54,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Token não fornecido' }, { status: 401 })
   }
   
-  console.log(`[SYNC/PUSH:${requestId}] Token preview: ${token.substring(0, 30)}...`)
-  
   const tokenValido = verificarToken(token)
   if (!tokenValido) {
     console.error(`[SYNC/PUSH:${requestId}] ❌ Token inválido ou expirado`)
@@ -67,8 +65,6 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    console.log(`[SYNC/PUSH:${requestId}] Body recebido:`, JSON.stringify(body).substring(0, 200))
-    
     const { deviceId, deviceKey, changes } = pushSchema.parse(body)
     console.log(`[SYNC/PUSH:${requestId}] DeviceId: ${deviceId}`)
     console.log(`[SYNC/PUSH:${requestId}] DeviceKey: ${deviceKey?.substring(0, 20)}...`)

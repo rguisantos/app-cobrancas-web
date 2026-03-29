@@ -9,6 +9,12 @@ import { ptBR } from 'date-fns/locale'
 import { Key, Copy, Check, Smartphone } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Dispositivos Móveis' }
+const ONE_DAY_MS = 24 * 60 * 60 * 1000
+
+function sincronizacaoAtrasada(ultimaSincronizacao?: Date | null) {
+  if (!ultimaSincronizacao) return true
+  return Date.now() - ultimaSincronizacao.getTime() > ONE_DAY_MS
+}
 
 // Componente para exibir e copiar senha
 function SenhaNumerica({ senha }: { senha?: string | null }) {
@@ -79,9 +85,7 @@ export default async function DispositivosPage() {
               </tr>
             )}
             {dispositivos.map(d => {
-              const atrasado = d.ultimaSincronizacao
-                ? (Date.now() - d.ultimaSincronizacao.getTime()) > 24 * 60 * 60 * 1000
-                : true
+              const atrasado = sincronizacaoAtrasada(d.ultimaSincronizacao)
               return (
                 <tr key={d.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-900">{d.nome}</td>

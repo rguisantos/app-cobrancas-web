@@ -6,6 +6,7 @@ import StatCard from '@/components/ui/stat-card'
 import { formatarMoeda } from '@/shared/types'
 import CobrancasRecentesTable from './cobrancas-recentes'
 import AlertasCard from './alertas-card'
+import Link from 'next/link'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 export const revalidate = 60 // revalida a cada 60s
@@ -149,12 +150,12 @@ export default async function DashboardPage() {
                 <h2 className="text-lg font-semibold text-slate-900">Cobranças Recentes</h2>
                 <p className="text-sm text-slate-500 mt-0.5">Últimas transações registradas</p>
               </div>
-              <a 
-                href="/cobrancas" 
+              <Link
+                href="/cobrancas"
                 className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors"
               >
                 Ver todas →
-              </a>
+              </Link>
             </div>
             <CobrancasRecentesTable cobrancas={data.cobrancasRecentes} />
           </div>

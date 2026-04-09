@@ -123,7 +123,7 @@ export default function NovaCobrancaPage() {
 
     try {
       const valorRecebido = parseFloat(formData.valorRecebido) || 0
-      const saldoDevedorGerado = calculos.totalClientePaga - valorRecebido
+      const saldoDevedorGerado = Math.max(0, calculos.totalClientePaga - valorRecebido) // nunca negativo
 
       const res = await fetch('/api/cobrancas', {
         method: 'POST',

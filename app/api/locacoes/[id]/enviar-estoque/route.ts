@@ -2,7 +2,7 @@
 // Envia produto para estoque (finaliza locação e atualiza produto)
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, notFound, serverError } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, notFound, serverError, forbidden } from '@/lib/api-helpers'
 import { z } from 'zod'
 
 const enviarEstoqueSchema = z.object({
@@ -18,7 +18,13 @@ export async function POST(
   const { id } = await params
   const session = await getAuthSession()
   if (!session) return unauthorized()
-  
+
+  // Verificar permissão de locação/estoque
+  if (session.user.tipoPermissao === 'AcessoControlado' &&
+      !session.user.permissoesWeb?.locacaoRelocacaoEstoque) {
+    return forbidden('Sem permissão para enviar produtos ao estoque')
+  }
+
   try {
     const body = await req.json()
     const data = enviarEstoqueSchema.parse(body)

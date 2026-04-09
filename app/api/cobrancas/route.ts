@@ -1,6 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, serverError } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, forbidden, serverError } from '@/lib/api-helpers'
+import { z } from 'zod'
+
+// Schema explícito — sem mass assignment
+const createSchema = z.object({
+  id:                   z.string().optional(),
+  locacaoId:            z.string(),
+  clienteId:            z.string(),
+  clienteNome:          z.string(),
+  produtoId:            z.string().optional(),
+  produtoIdentificador: z.string(),
+  dataInicio:           z.string(),
+  dataFim:              z.string(),
+  dataPagamento:        z.string().optional().nullable(),
+  relogioAnterior:      z.number(),
+  relogioAtual:         z.number(),
+  fichasRodadas:        z.number(),
+  valorFicha:           z.number(),
+  totalBruto:           z.number(),
+  descontoPartidasQtd:  z.number().optional().nullable(),
+  descontoPartidasValor:z.number().optional().nullable(),
+  descontoDinheiro:     z.number().optional().nullable(),
+  percentualEmpresa:    z.number(),
+  subtotalAposDescontos:z.number(),
+  valorPercentual:      z.number(),
+  totalClientePaga:     z.number(),
+  valorRecebido:        z.number(),
+  saldoDevedorGerado:   z.number(),
+  status:               z.enum(['Pago', 'Parcial', 'Pendente', 'Atrasado']).default('Pendente'),
+  dataVencimento:       z.string().optional().nullable(),
+  observacao:           z.string().optional().nullable(),
+})
 
 export async function GET(req: NextRequest) {
   const session = await getAuthSession()
@@ -30,10 +61,34 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getAuthSession()
   if (!session) return unauthorized()
+
+  // Verificar permissão: somente quem pode realizar cobranças
+  if (session.user.tipoPermissao === 'AcessoControlado' &&
+      !session.user.permissoesWeb?.todosCadastros) {
+    return forbidden('Sem permissão para registrar cobranças')
+  }
+
   try {
     const body = await req.json()
-    const { id, ...rest } = body
-    const cobranca = await prisma.cobranca.create({ data: { ...(id ? { id } : {}), ...rest, syncStatus: 'synced', needsSync: false, deviceId: 'web', version: 1 } })
+    const data = createSchema.parse(body)
+    const { id, ...rest } = data
+
+    const cobranca = await prisma.cobranca.create({
+      data: {
+        ...(id ? { id } : {}),
+        ...rest,
+        syncStatus: 'synced',
+        needsSync:  false,
+        deviceId:   'web',
+        version:    1,
+      },
+    })
     return NextResponse.json(cobranca, { status: 201 })
-  } catch (err) { console.error(err); return serverError() }
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ error: 'Dados inválidos', details: err.errors }, { status: 400 })
+    }
+    console.error('[POST /cobrancas]', err)
+    return serverError()
+  }
 }

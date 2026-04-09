@@ -221,6 +221,22 @@ export default function EditarClientePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Validação front-end antes de submeter
+    const newErrors: Record<string, string> = {}
+    if (!formData.nomeExibicao?.trim() || formData.nomeExibicao.trim().length < 2) {
+      newErrors.nomeExibicao = 'Nome de exibição deve ter pelo menos 2 caracteres'
+    }
+    if (!formData.telefonePrincipal?.trim()) {
+      newErrors.telefonePrincipal = 'Telefone é obrigatório'
+    }
+    if (!formData.rotaId) {
+      newErrors.rotaId = 'Selecione uma rota'
+    }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+
     setLoading(true)
     setErrors({})
 

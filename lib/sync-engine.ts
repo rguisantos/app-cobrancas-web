@@ -320,9 +320,12 @@ export async function processPush(
         
         console.log(`[sync/push] Soft delete executado. Registros atualizados: ${result.count}`)
         
-        // Registrar no changelog do servidor
-        await prisma.changeLog.create({
-          data: {
+        // Registrar no changelog do servidor (upsert por ID do mobile — idempotente em retries)
+        await prisma.changeLog.upsert({
+          where: { id: change.id },
+          update: { synced: true, syncedAt: new Date() },
+          create: {
+            id: change.id,
             entityId: change.entityId,
             entityType: change.entityType,
             operation: 'delete',
@@ -429,9 +432,12 @@ export async function processPush(
         }
       }
 
-      // Registrar no changelog do servidor
-      await prisma.changeLog.create({
-        data: {
+      // Registrar no changelog do servidor (upsert por ID do mobile — idempotente em retries)
+      await prisma.changeLog.upsert({
+        where: { id: change.id },
+        update: { synced: true, syncedAt: new Date() },
+        create: {
+          id: change.id,
           entityId: change.entityId,
           entityType: change.entityType,
           operation: change.operation,
@@ -474,6 +480,13 @@ export async function processPull(
 ): Promise<SyncResponse> {
   const since = new Date(lastSyncAt)
 
+  // Detectar device estale (offline > 30 dias = janela de purge do ChangeLog)
+  const diasOffline = (Date.now() - since.getTime()) / (1000 * 60 * 60 * 24)
+  const isStale = diasOffline > 30
+  if (isStale) {
+    console.warn(`[sync/pull] Device estale: ${Math.round(diasOffline)} dias sem sync — mobile deve exibir aviso`)
+  }
+
   console.log(`[sync/pull] ====== INICIANDO PULL ======`)
   console.log(`[sync/pull] Dispositivo: ${deviceId}`)
   console.log(`[sync/pull] Buscando mudanças desde: ${since.toISOString()}`)
@@ -491,6 +504,7 @@ export async function processPull(
           { deviceId: '' },
         ],
       },
+      take: 500,  // Limita payload — device estale usa flag isStale para resync
     }),
     prisma.produto.findMany({
       where: {
@@ -501,6 +515,7 @@ export async function processPull(
           { deviceId: '' },
         ],
       },
+      take: 500,  // Limita payload — device estale usa flag isStale para resync
     }),
     prisma.locacao.findMany({
       where: {
@@ -511,6 +526,7 @@ export async function processPull(
           { deviceId: '' },
         ],
       },
+      take: 500,  // Limita payload — device estale usa flag isStale para resync
     }),
     prisma.cobranca.findMany({
       where: {
@@ -521,6 +537,7 @@ export async function processPull(
           { deviceId: '' },
         ],
       },
+      take: 500,  // Limita payload — device estale usa flag isStale para resync
     }),
     prisma.rota.findMany({
       where: {
@@ -531,6 +548,7 @@ export async function processPull(
           { deviceId: '' },
         ],
       },
+      take: 500,  // Limita payload — device estale usa flag isStale para resync
     }),
     // Usuários - sincronizar permissões alteradas no web
     prisma.usuario.findMany({
@@ -685,4 +703,28 @@ export async function processPushAtributos(
   }
 
   return { errors }
+}
+
+// ============================================================
+// PURGE DE CHANGELOG ANTIGO
+// ============================================================
+
+/**
+ * Remove entradas do ChangeLog já sincronizadas há mais de N dias.
+ * Deve ser chamado periodicamente (ex: via cron ou após cada sync bem-sucedido).
+ * Padrão: 30 dias — mantém histórico recente para debug.
+ */
+export async function purgeOldChangeLogs(diasRetencao: number = 30): Promise<number> {
+  const limite = new Date()
+  limite.setDate(limite.getDate() - diasRetencao)
+
+  const result = await prisma.changeLog.deleteMany({
+    where: {
+      synced: true,
+      syncedAt: { lt: limite },
+    },
+  })
+
+  console.log(`[sync/purge] Removidos ${result.count} changelogs antigos (>${diasRetencao} dias)`)
+  return result.count
 }

@@ -1,4 +1,4 @@
-// GET /api/sync/conflicts — Lista conflitos pendentes
+// GET /api/sync/conflicts — Lista conflitos pendentes do dispositivo autenticado
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extrairToken, verificarToken } from '@/lib/jwt'
@@ -20,9 +20,11 @@ export async function GET(req: NextRequest) {
       deviceId: searchParams.get('deviceId') || undefined,
     })
 
+    // FIX: aplicar filtro de deviceId — cada dispositivo só vê seus próprios conflitos
     const conflicts = await prisma.syncConflict.findMany({
       where: {
         resolvedAt: null,
+        ...(deviceId ? { deviceId } : {}),
       },
       orderBy: { createdAt: 'desc' },
     })

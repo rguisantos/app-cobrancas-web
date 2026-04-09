@@ -14,6 +14,9 @@ export async function GET(req: NextRequest) {
     const clienteId = searchParams.get('clienteId')
     const produtoId = searchParams.get('produtoId')
 
+    const limitParam = req.nextUrl?.searchParams?.get('limit')
+    const limit = limitParam ? Math.min(parseInt(limitParam), 500) : 200
+
     const locacoes = await prisma.locacao.findMany({
       where: {
         status: 'Ativa',
@@ -21,6 +24,7 @@ export async function GET(req: NextRequest) {
         ...(clienteId && { clienteId }),
         ...(produtoId && { produtoId }),
       },
+      take: limit,
       include: {
         cliente: {
           select: {

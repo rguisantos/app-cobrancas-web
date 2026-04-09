@@ -9,10 +9,11 @@ export async function GET(req: NextRequest) {
   if (!session || session.user.tipoPermissao !== 'Administrador') return unauthorized()
   const usuarios = await prisma.usuario.findMany({
     where: { deletedAt: null },
-    include: { 
-      rotasPermitidasRel: { 
-        include: { rota: { select: { id: true, descricao: true } } } 
-      } 
+    omit: { senha: true },  // Hash bcrypt nunca deve ser exposto via API
+    include: {
+      rotasPermitidasRel: {
+        include: { rota: { select: { id: true, descricao: true } } }
+      }
     },
     orderBy: { nome: 'asc' },
   })

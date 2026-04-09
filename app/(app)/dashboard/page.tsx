@@ -9,7 +9,7 @@ import AlertasCard from './alertas-card'
 import Link from 'next/link'
 
 export const metadata: Metadata = { title: 'Dashboard' }
-export const revalidate = 60 // revalida a cada 60s
+// revalidate removido — dados financeiros não devem ser cacheados entre usuários
 
 async function getDashboardData() {
   const hoje = new Date()
@@ -33,10 +33,18 @@ async function getDashboardData() {
       _sum: { valorRecebido: true },
       _count: true,
     }),
-    prisma.cobranca.aggregate({
-      where: { deletedAt: null, status: { in: ['Parcial', 'Pendente', 'Atrasado'] } },
-      _sum: { saldoDevedorGerado: true },
-    }),
+    // Saldo correto: somente a última cobrança por locação (evita duplicação)
+    prisma.$queryRaw<{ total: number }[]>`
+      SELECT COALESCE(SUM(saldo_devedor_gerado), 0)::float AS total
+      FROM (
+        SELECT DISTINCT ON (locacao_id) saldo_devedor_gerado
+        FROM cobrancas
+        WHERE deleted_at IS NULL
+          AND status IN ('Parcial', 'Pendente', 'Atrasado')
+          AND saldo_devedor_gerado > 0
+        ORDER BY locacao_id, updated_at DESC, created_at DESC
+      ) latest
+    `,
     prisma.cobranca.count({ where: { status: 'Atrasado', deletedAt: null } }),
     prisma.cobranca.findMany({
       where: { deletedAt: null },
@@ -54,7 +62,7 @@ async function getDashboardData() {
     produtosEstoque: totalProdutos - produtosLocados,
     receitaMes: cobrancasMes._sum.valorRecebido ?? 0,
     totalCobrancasMes: cobrancasMes._count,
-    saldoDevedor: saldoDevedor._sum.saldoDevedorGerado ?? 0,
+    saldoDevedor: saldoDevedor[0]?.total ?? 0,
     cobrancasAtrasadas,
     cobrancasRecentes,
     conflictsPendentes,

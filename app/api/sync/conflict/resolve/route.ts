@@ -56,14 +56,26 @@ export async function POST(req: NextRequest) {
       rota: 'rota',
     }
 
+    // Campos proibidos — nunca devem ser sobrescritos via resolução de conflito
+    const CAMPOS_PROIBIDOS = new Set([
+      'id', 'createdAt', 'deletedAt', 'senha',
+      'deviceId', 'syncStatus', 'needsSync', 'version',
+    ])
+
     const tableName = entityTableMap[conflito.entityType]
     if (tableName && versao) {
       const repo = (prisma as any)[tableName]
       if (repo) {
+        // Filtrar campos proibidos para evitar mass assignment
+        const dadosFiltrados: Record<string, any> = {}
+        for (const [k, v] of Object.entries(versao as Record<string, any>)) {
+          if (!CAMPOS_PROIBIDOS.has(k)) dadosFiltrados[k] = v
+        }
+
         await repo.update({
           where: { id: conflito.entityId },
           data: {
-            ...versao,
+            ...dadosFiltrados,
             version: { increment: 1 },
             syncStatus: 'synced',
             needsSync: true, // Marcar para sincronizar com outros dispositivos

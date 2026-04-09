@@ -2,17 +2,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, serverError } from '@/lib/api-helpers'
 
-export async function GET(req: NextRequest) {
-  const session = await getAuthSession()
-  if (!session) return unauthorized()
+// Aceita NextAuth session (web client) OU JWT Bearer (mobile)
+async function isAuthenticated(req: NextRequest): Promise<boolean> {
+  const { getServerSession } = await import('next-auth')
+  const { authOptions }      = await import('@/lib/auth')
+  const session = await getServerSession(authOptions)
+  if (session) return true
+  const { extrairToken, verificarToken } = await import('@/lib/jwt')
+  const token = extrairToken(req.headers.get('Authorization'))
+  return !!(token && verificarToken(token))
+}
 
+async function isAdmin(req: NextRequest): Promise<boolean> {
+  const { getServerSession } = await import('next-auth')
+  const { authOptions }      = await import('@/lib/auth')
+  const session = await getServerSession(authOptions)
+  if (session) return session.user.tipoPermissao === 'Administrador'
+  // Mobile: JWT não carrega tipoPermissao; atributos só criáveis por admin no web
+  return false
+}
+
+export async function GET(req: NextRequest) {
+  if (!await isAuthenticated(req)) return unauthorized()
   try {
-    const descricoes = await prisma.descricaoProduto.findMany({
+    const itens = await prisma.descricaoProduto.findMany({
       where: { deletedAt: null },
       orderBy: { nome: 'asc' },
       select: { id: true, nome: true }
     })
-    return NextResponse.json(descricoes)
+    return NextResponse.json(itens)
   } catch (err) {
     console.error('[GET /descricoes-produto]', err)
     return serverError()
@@ -20,22 +38,20 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getAuthSession()
-  if (!session) return unauthorized()
-  if (session.user.tipoPermissao !== 'Administrador') {
-    return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
+  if (!await isAuthenticated(req)) return unauthorized()
+  if (!await isAdmin(req)) {
+    return NextResponse.json({ error: 'Apenas administradores podem criar atributos' }, { status: 403 })
   }
-
   try {
     const body = await req.json()
-    const descricao = await prisma.descricaoProduto.create({
-      data: { 
-        nome: body.nome,
-        deviceId: 'web',
-        version: 1
-      }
+    const nome = typeof body.nome === 'string' ? body.nome.trim() : ''
+    if (!nome || nome.length < 2) {
+      return NextResponse.json({ error: 'Nome deve ter pelo menos 2 caracteres' }, { status: 400 })
+    }
+    const item = await prisma.descricaoProduto.create({
+      data: { nome, deviceId: 'web', version: 1 }
     })
-    return NextResponse.json(descricao, { status: 201 })
+    return NextResponse.json(item, { status: 201 })
   } catch (err) {
     console.error('[POST /descricoes-produto]', err)
     return serverError()

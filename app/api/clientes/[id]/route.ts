@@ -1,7 +1,7 @@
 // GET/PUT/DELETE /api/clientes/[id]
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, notFound, serverError } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, notFound, serverError, forbidden } from '@/lib/api-helpers'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -28,7 +28,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     const body = await req.json()
-    const { id: _, ...data } = body
+    const allowed = ['tipoPessoa', 'identificador', 'nomeExibicao', 'nomeCompleto', 'razaoSocial', 'nomeFantasia', 'cpf', 'cnpj', 'rg', 'inscricaoEstadual', 'email', 'telefonePrincipal', 'contatos', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'estado', 'rotaId', 'rotaNome', 'status', 'observacao', 'dataCadastro', 'dataUltimaAlteracao']
+    const data: Record<string, any> = {}
+    for (const key of allowed) {
+      if (key in body) data[key] = body[key]
+    }
 
     const cliente = await prisma.cliente.update({
       where: { id },

@@ -81,15 +81,26 @@ export default function NovoUsuarioPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Validações
+    // Validações completas antes de submeter
     const newErrors: Record<string, string> = {}
+
+    if (!formData.nome.trim() || formData.nome.trim().length < 2) {
+      newErrors.nome = 'Nome deve ter pelo menos 2 caracteres'
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!formData.email.trim() || !emailRegex.test(formData.email)) {
+      newErrors.email = 'E-mail inválido'
+    }
+    if (!formData.senha || formData.senha.length < 6) {
+      newErrors.senha = 'A senha deve ter pelo menos 6 caracteres'
+    }
     if (formData.senha !== formData.confirmarSenha) {
       newErrors.confirmarSenha = 'As senhas não coincidem'
     }
-    if (formData.senha.length < 6) {
-      newErrors.senha = 'A senha deve ter pelo menos 6 caracteres'
+    if (!formData.tipoPermissao) {
+      newErrors.tipoPermissao = 'Selecione o tipo de permissão'
     }
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
       return

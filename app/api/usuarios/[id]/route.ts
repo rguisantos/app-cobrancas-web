@@ -36,6 +36,7 @@ export async function GET(
   
   const usuario = await prisma.usuario.findFirst({
     where: { id, deletedAt: null },
+    omit: { senha: true },  // Hash bcrypt nunca deve ser exposto via API
     include: {
       rotasPermitidasRel: {
         include: { rota: { select: { id: true, descricao: true } } }

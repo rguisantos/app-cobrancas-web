@@ -14,9 +14,11 @@ export async function GET() {
     totalProdutos,
     produtosLocados,
     cobrancasMes,
-    saldoDevedor,
     cobrancasAtrasadas,
     conflictsPendentes,
+    // Buscar última cobrança por locação para calcular saldo devedor correto
+    // (cada cobrança já carrega o saldo acumulado — somar todas duplicaria)
+    ultimasCobrancasPorLocacao,
   ] = await Promise.all([
     prisma.cliente.count({ where: { status: 'Ativo', deletedAt: null } }),
     prisma.produto.count({ where: { deletedAt: null } }),
@@ -26,24 +28,34 @@ export async function GET() {
       _sum: { valorRecebido: true },
       _count: true,
     }),
-    prisma.cobranca.aggregate({
-      where: { deletedAt: null, status: { in: ['Parcial', 'Pendente', 'Atrasado'] } },
-      _sum: { saldoDevedorGerado: true },
-    }),
     prisma.cobranca.count({ where: { status: 'Atrasado', deletedAt: null } }),
     prisma.syncConflict.count({ where: { resolution: null } }),
+    // Buscar a cobrança mais recente de cada locação com saldo em aberto
+    prisma.$queryRaw<{ saldo: number }[]>`
+      SELECT COALESCE(SUM(saldo_devedor_gerado), 0) AS saldo
+      FROM (
+        SELECT DISTINCT ON ("locacao_id") "saldo_devedor_gerado"
+        FROM cobrancas
+        WHERE "deleted_at" IS NULL
+          AND status IN ('Parcial', 'Pendente', 'Atrasado')
+          AND "saldo_devedor_gerado" > 0
+        ORDER BY "locacao_id", "updated_at" DESC, "created_at" DESC
+      ) latest
+    `,
   ])
+
+  const saldoDevedor = Number(ultimasCobrancasPorLocacao[0]?.saldo ?? 0)
 
   return NextResponse.json({
     totalClientes,
     totalProdutos,
     produtosLocados,
-    produtosEstoque: totalProdutos - produtosLocados,
-    receitaMes:       cobrancasMes._sum.valorRecebido ?? 0,
-    totalCobrancasMes: cobrancasMes._count,
-    saldoDevedor:     saldoDevedor._sum.saldoDevedorGerado ?? 0,
+    produtosEstoque:      totalProdutos - produtosLocados,
+    receitaMes:           cobrancasMes._sum.valorRecebido ?? 0,
+    totalCobrancasMes:    cobrancasMes._count,
+    saldoDevedor,
     cobrancasAtrasadas,
     conflictsPendentes,
-    dataReferencia:   hoje.toISOString(),
+    dataReferencia:       hoje.toISOString(),
   })
 }

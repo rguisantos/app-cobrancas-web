@@ -10,7 +10,11 @@ async function main() {
 
   // Admin
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@locacao.com'
-  const adminSenha = process.env.ADMIN_SENHA || 'admin123'
+  const adminSenha = process.env.ADMIN_SENHA || (() => {
+    console.warn('⚠️  ATENÇÃO: ADMIN_SENHA não configurado! Usando senha padrão insegura.')
+    console.warn('   Configure a variável de ambiente ADMIN_SENHA antes de fazer deploy em produção.')
+    return 'admin123'
+  })()
   const senhaHash  = await bcrypt.hash(adminSenha, 12)
 
   const permissoesAdmin = {

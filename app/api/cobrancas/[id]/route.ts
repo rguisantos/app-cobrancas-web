@@ -102,7 +102,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       dadosAtualizacao.valorRecebido = body.valorRecebido
     }
     if (body.saldoDevedorGerado !== undefined) {
-      dadosAtualizacao.saldoDevedorGerado = body.saldoDevedorGerado
+      // Garantir que saldo nunca seja negativo no banco
+      dadosAtualizacao.saldoDevedorGerado = Math.max(0, Number(body.saldoDevedorGerado) || 0)
     }
     if (body.status !== undefined) {
       dadosAtualizacao.status = body.status

@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extrairToken, verificarToken } from '@/lib/jwt'
-import { processPush } from '@/lib/sync-engine'
+import { processPush, purgeOldChangeLogs } from '@/lib/sync-engine'
 import type { ChangeLog, EntityType } from '@/shared/types'
 import { z } from 'zod'
 
@@ -97,6 +97,15 @@ export async function POST(req: NextRequest) {
     console.log(`[SYNC/PUSH:${requestId}] ✅ PUSH concluído`)
     console.log(`[SYNC/PUSH:${requestId}] Conflitos: ${conflicts.length}, Erros: ${errors.length}`)
     console.log(`[SYNC/PUSH:${requestId}] ========== PUSH REQUEST END (200) ==========\n`)
+
+    // Purge assíncrono — throttle simples via header de timestamp do último purge
+    // Roda apenas ~1x/hora baseado no timestamp do request (não por sessão)
+    const requestMinute = Math.floor(Date.now() / (1000 * 60 * 60))  // muda a cada hora
+    if (requestMinute % 24 === 0) {  // ~1x a cada 24 ciclos (24h se 1 push/hora)
+      purgeOldChangeLogs(30).catch(err =>
+        console.warn('[SYNC/PUSH] Erro no purge de changelog:', err)
+      )
+    }
 
     return NextResponse.json({
       success: true,

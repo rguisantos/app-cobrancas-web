@@ -4,7 +4,7 @@ import Header from '@/components/layout/header'
 import { formatarMoeda } from '@/shared/types'
 
 export const metadata: Metadata = { title: 'Relatórios' }
-export const revalidate = 300
+// revalidate removido — página com dados financeiros sensíveis não deve ser cacheada
 
 export default async function RelatoriosPage() {
   const hoje = new Date()
@@ -14,7 +14,21 @@ export default async function RelatoriosPage() {
   const [receitaMes, receitaAno, saldoDevedor, porStatus, porRota] = await Promise.all([
     prisma.cobranca.aggregate({ where: { deletedAt: null, createdAt: { gte: inicioMes } }, _sum: { valorRecebido: true }, _count: true }),
     prisma.cobranca.aggregate({ where: { deletedAt: null, createdAt: { gte: inicioAno  } }, _sum: { valorRecebido: true }, _count: true }),
-    prisma.cobranca.aggregate({ where: { deletedAt: null, status: { in: ['Parcial','Pendente','Atrasado'] } }, _sum: { saldoDevedorGerado: true }, _count: true }),
+    // Saldo devedor correto: somente a última cobrança por locação
+    // (cada cobrança carrega o saldo acumulado — somar todas duplicaria o valor)
+    prisma.$queryRaw<{ total: number; count: number }[]>`
+      SELECT
+        COALESCE(SUM(saldo_devedor_gerado), 0)::float AS total,
+        COUNT(*)::int AS count
+      FROM (
+        SELECT DISTINCT ON (locacao_id) saldo_devedor_gerado
+        FROM cobrancas
+        WHERE deleted_at IS NULL
+          AND status IN ('Parcial', 'Pendente', 'Atrasado')
+          AND saldo_devedor_gerado > 0
+        ORDER BY locacao_id, updated_at DESC, created_at DESC
+      ) latest
+    `,
     prisma.cobranca.groupBy({ by: ['status'], where: { deletedAt: null }, _count: true, _sum: { valorRecebido: true } }),
     prisma.cliente.groupBy({
       by: ['rotaId'],
@@ -45,8 +59,8 @@ export default async function RelatoriosPage() {
         </div>
         <div className="card p-5 bg-red-50">
           <p className="text-sm font-medium text-red-700">Saldo Devedor Total</p>
-          <p className="text-3xl font-bold text-red-800 mt-1">{formatarMoeda(saldoDevedor._sum.saldoDevedorGerado ?? 0)}</p>
-          <p className="text-xs text-red-600 mt-1">{saldoDevedor._count} cobranças em aberto</p>
+          <p className="text-3xl font-bold text-red-800 mt-1">{formatarMoeda(saldoDevedor[0]?.total ?? 0)}</p>
+          <p className="text-xs text-red-600 mt-1">{saldoDevedor[0]?.count ?? 0} locações em aberto</p>
         </div>
       </div>
 

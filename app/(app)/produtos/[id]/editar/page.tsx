@@ -15,6 +15,7 @@ export default function EditarProdutoPage() {
   const params = useParams()
   const id = params.id as string
   const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [loadingData, setLoadingData] = useState(true)
   const [tipos, setTipos] = useState<TipoProduto[]>([])
   const [descricoes, setDescricoes] = useState<DescricaoProduto[]>([])
@@ -112,6 +113,25 @@ export default function EditarProdutoPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Validação front-end antes de submeter
+    const newErrors: Record<string, string> = {}
+    if (!formData.identificador?.trim()) {
+      newErrors.identificador = 'Identificador é obrigatório'
+    }
+    if (!formData.tipoId) {
+      newErrors.tipoId = 'Selecione o tipo do produto'
+    }
+    if (!formData.descricaoId) {
+      newErrors.descricaoId = 'Selecione a descrição do produto'
+    }
+    if (!formData.tamanhoId) {
+      newErrors.tamanhoId = 'Selecione o tamanho do produto'
+    }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+
     setLoading(true)
 
     try {

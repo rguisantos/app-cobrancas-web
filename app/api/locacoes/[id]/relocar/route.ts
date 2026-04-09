@@ -2,7 +2,7 @@
 // Reloca um produto para outro cliente (finaliza locação atual e cria nova)
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, notFound, serverError } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, notFound, serverError, forbidden } from '@/lib/api-helpers'
 import { z } from 'zod'
 
 const relocarSchema = z.object({
@@ -27,7 +27,13 @@ export async function POST(
   const { id } = await params
   const session = await getAuthSession()
   if (!session) return unauthorized()
-  
+
+  // Verificar permissão de relocação
+  if (session.user.tipoPermissao === 'AcessoControlado' &&
+      !session.user.permissoesWeb?.locacaoRelocacaoEstoque) {
+    return forbidden('Sem permissão para realizar relocações')
+  }
+
   try {
     const body = await req.json()
     const data = relocarSchema.parse(body)

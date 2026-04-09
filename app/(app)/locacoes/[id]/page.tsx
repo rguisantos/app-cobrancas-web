@@ -15,6 +15,7 @@ export const metadata: Metadata = { title: 'Detalhes da Locação' }
 export default async function LocacaoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await getSession()
+  if (!session) notFound() // Layout já redireciona, mas garante aqui também
 
   const locacao = await prisma.locacao.findFirst({
     where: { id, deletedAt: null },

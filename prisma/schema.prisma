@@ -100,6 +100,7 @@ model Cliente {
   @@map("clientes")
   @@index([rotaId])
   @@index([status])
+  @@index([updatedAt])              // Para sync pull
 }
 
 model Produto {
@@ -161,6 +162,7 @@ model Produto {
 
   @@map("produtos")
   @@index([statusProduto])
+  @@index([updatedAt])              // Para sync pull
 }
 
 model Locacao {
@@ -224,6 +226,7 @@ model Locacao {
   @@index([clienteId])
   @@index([produtoId])
   @@index([status])
+  @@index([updatedAt])              // Para sync pull
 }
 
 model Cobranca {
@@ -289,6 +292,8 @@ model Cobranca {
   @@index([clienteId])
   @@index([status])
   @@index([dataFim])
+  @@index([updatedAt])              // Para sync pull
+  @@index([locacaoId])              // Para saldo devedor por locação
 }
 
 model Usuario {
@@ -326,6 +331,7 @@ model Usuario {
 
   rotasPermitidasRel UsuarioRota[]
 
+  @@index([updatedAt])              // Para sync pull de permissões
   @@map("usuarios")
 }
 
@@ -368,6 +374,7 @@ model ChangeLog {
   @@index([entityType, entityId])
   @@index([deviceId, synced])
   @@index([timestamp])
+  @@index([synced, syncedAt])  // Para purge: WHERE synced=true AND syncedAt < limite
 }
 
 model SyncConflict {

@@ -2,7 +2,23 @@
 // Lista todos os estados brasileiros (IBGE)
 import { NextResponse } from 'next/server'
 
-export async function GET() {
+// Auth helper: aceita NextAuth session (web) OU JWT Bearer (mobile)
+async function isAuthenticated(req: import('next/server').NextRequest): Promise<boolean> {
+  // 1. Tentar NextAuth session (usado pelo web client via cookie)
+  const { getServerSession } = await import('next-auth')
+  const { authOptions }      = await import('@/lib/auth')
+  const session = await getServerSession(authOptions)
+  if (session) return true
+
+  // 2. Tentar JWT Bearer (usado pelo app mobile)
+  const { extrairToken, verificarToken } = await import('@/lib/jwt')
+  const token = extrairToken(req.headers.get('Authorization'))
+  if (token && verificarToken(token)) return true
+
+  return false
+}
+
+export async function GET(req: import('next/server').NextRequest) {
   try {
     const response = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados')
     const data = await response.json()

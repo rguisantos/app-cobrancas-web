@@ -37,7 +37,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     const body = await req.json()
-    const { id: _, ...data } = body
+    // Allowlist — apenas campos editáveis da rota
+    const data: Record<string, any> = {}
+    if (body.descricao !== undefined) data.descricao = String(body.descricao)
+    if (body.status    !== undefined) data.status    = String(body.status)
 
     const rota = await prisma.rota.update({
       where: { id },
@@ -45,8 +48,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         ...data,
         version: { increment: 1 },
         deviceId: 'web',
-        needsSync: true
-      }
+        needsSync: true,
+      },
     })
 
     return NextResponse.json(rota)

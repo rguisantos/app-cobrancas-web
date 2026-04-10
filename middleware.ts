@@ -41,7 +41,7 @@ export const config = {
     '/api/usuarios/:path*',
     '/api/dashboard/:path*',
     '/api/sync/:path*',
-    '/api/admin/:path*',
+    // '/api/admin/:path*' - removido para permitir migrate com token próprio
     '/api/localizacao/:path*',
     '/api/estabelecimentos/:path*',
   ],

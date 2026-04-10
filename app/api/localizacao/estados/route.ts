@@ -19,6 +19,11 @@ async function isAuthenticated(req: import('next/server').NextRequest): Promise<
 }
 
 export async function GET(req: import('next/server').NextRequest) {
+  // Verificar autenticação
+  if (!(await isAuthenticated(req))) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+
   try {
     const response = await fetch('https://servicodados.ibge.gov.br/api/v1/localidades/estados')
     const data = await response.json()

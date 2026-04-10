@@ -24,7 +24,7 @@ const createSchema = z.object({
   status:               z.enum(['Ativa', 'Finalizada', 'Cancelada']).default('Ativa'),
   ultimaLeituraRelogio: z.number().optional().nullable(),
   dataUltimaCobranca:   z.string().optional().nullable(),
-  trocaPano:            z.boolean().optional().nullable(),
+  trocaPano:            z.boolean().optional(),
   dataUltimaManutencao: z.string().optional().nullable(),
 })
 

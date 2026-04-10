@@ -43,5 +43,6 @@ export const config = {
     '/api/sync/:path*',
     '/api/admin/:path*',
     '/api/localizacao/:path*',
+    '/api/estabelecimentos/:path*',
   ],
 }

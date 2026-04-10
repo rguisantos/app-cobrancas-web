@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getAuthSession, unauthorized } from '@/lib/api-helpers'
 
 // GET - Listar estabelecimentos
 export async function GET(req: NextRequest) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
   try {
     const estabelecimentos = await prisma.estabelecimento.findMany({
       where: { deletedAt: null },

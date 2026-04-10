@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       include: { rotasPermitidasRel: { include: { rota: true } } },
     })
 
-    if (!usuario || usuario.status !== 'Ativo' || usuario.bloqueado) {
+    if (!usuario || usuario.status !== 'Ativo' || usuario.bloqueado || usuario.deletedAt) {
       return NextResponse.json({ error: 'Usuário não encontrado ou inativo' }, { status: 404 })
     }
 

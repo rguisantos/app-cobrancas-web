@@ -19,6 +19,11 @@ async function isAuthenticated(req: import('next/server').NextRequest): Promise<
 }
 
 export async function GET(req: NextRequest) {
+  // Verificar autenticação
+  if (!(await isAuthenticated(req))) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+
   const { searchParams } = new URL(req.url)
   const cep = searchParams.get('cep')?.replace(/\D/g, '')
 

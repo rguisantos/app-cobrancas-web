@@ -46,9 +46,8 @@ export async function GET(
   
   if (!usuario) return notFound('Usuário não encontrado')
   
-  // Remover senha do retorno
-  const { senha, ...usuarioSemSenha } = usuario
-  return NextResponse.json(usuarioSemSenha)
+  // Senha já foi omitida na query
+  return NextResponse.json(usuario)
 }
 
 export async function PUT(

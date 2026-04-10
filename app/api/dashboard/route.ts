@@ -16,8 +16,6 @@ export async function GET() {
     cobrancasMes,
     cobrancasAtrasadas,
     conflictsPendentes,
-    // Buscar última cobrança por locação para calcular saldo devedor correto
-    // (cada cobrança já carrega o saldo acumulado — somar todas duplicaria)
     ultimasCobrancasPorLocacao,
   ] = await Promise.all([
     prisma.cliente.count({ where: { status: 'Ativo', deletedAt: null } }),
@@ -32,14 +30,14 @@ export async function GET() {
     prisma.syncConflict.count({ where: { resolution: null } }),
     // Buscar a cobrança mais recente de cada locação com saldo em aberto
     prisma.$queryRaw<{ saldo: number }[]>`
-      SELECT COALESCE(SUM(saldo_devedor_gerado), 0) AS saldo
+      SELECT COALESCE(SUM("saldoDevedorGerado"), 0) AS saldo
       FROM (
-        SELECT DISTINCT ON ("locacao_id") "saldo_devedor_gerado"
+        SELECT DISTINCT ON ("locacaoId") "saldoDevedorGerado"
         FROM cobrancas
-        WHERE "deleted_at" IS NULL
+        WHERE "deletedAt" IS NULL
           AND status IN ('Parcial', 'Pendente', 'Atrasado')
-          AND "saldo_devedor_gerado" > 0
-        ORDER BY "locacao_id", "updated_at" DESC, "created_at" DESC
+          AND "saldoDevedorGerado" > 0
+        ORDER BY "locacaoId", "updatedAt" DESC, "createdAt" DESC
       ) latest
     `,
   ])

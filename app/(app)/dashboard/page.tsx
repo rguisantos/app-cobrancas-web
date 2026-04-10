@@ -35,14 +35,14 @@ async function getDashboardData() {
     }),
     // Saldo correto: somente a última cobrança por locação (evita duplicação)
     prisma.$queryRaw<{ total: number }[]>`
-      SELECT COALESCE(SUM(saldo_devedor_gerado), 0)::float AS total
+      SELECT COALESCE(SUM("saldoDevedorGerado"), 0)::float AS total
       FROM (
-        SELECT DISTINCT ON (locacao_id) saldo_devedor_gerado
+        SELECT DISTINCT ON ("locacaoId") "saldoDevedorGerado"
         FROM cobrancas
-        WHERE deleted_at IS NULL
+        WHERE "deletedAt" IS NULL
           AND status IN ('Parcial', 'Pendente', 'Atrasado')
-          AND saldo_devedor_gerado > 0
-        ORDER BY locacao_id, updated_at DESC, created_at DESC
+          AND "saldoDevedorGerado" > 0
+        ORDER BY "locacaoId", "updatedAt" DESC, "createdAt" DESC
       ) latest
     `,
     prisma.cobranca.count({ where: { status: 'Atrasado', deletedAt: null } }),

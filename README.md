@@ -15,8 +15,13 @@ Sistema completo de gestão de cobranças para empresas de locação de equipame
 - [Sistema de Sincronização](#sistema-de-sincronização)
 - [Sistema de Autenticação](#sistema-de-autenticação)
 - [Permissões e Controle de Acesso](#permissões-e-controle-de-acesso)
+- [Cálculos de Cobrança](#cálculos-de-cobrança)
+- [Fluxos de Negócio](#fluxos-de-negócio)
+- [Segurança e Middleware](#segurança-e-middleware)
+- [Motor de Sincronização](#motor-de-sincronização)
 - [Estrutura de Pastas](#estrutura-de-pastas)
 - [Deploy](#deploy)
+- [Problemas Conhecidos](#problemas-conhecidos)
 
 ---
 
@@ -48,7 +53,8 @@ O **App Cobranças Web** é uma plataforma completa para:
 | **Tailwind CSS** | 3.x | Estilização |
 | **Zod** | 3.x | Validação de schemas |
 | **Lucide React** | - | Ícones |
-| **date-fns** | 3.x | Manipulação de datas |
+| **date-fns** | 4.x | Manipulação de datas |
+| **bcryptjs** | - | Hash de senhas |
 
 ---
 
@@ -91,11 +97,6 @@ REFRESH_TOKEN_EXPIRES_IN="7d"
 
 # Opcional
 ENVIRONMENT="development"
-
-# Inicialização segura (endpoint /api/admin/init)
-INIT_SECRET="chave-forte-para-bootstrap"
-INIT_ADMIN_PASSWORD="senha-inicial-do-admin"
-ALLOW_INIT_ENDPOINT="false"
 ```
 
 ### Inicialização
@@ -115,13 +116,13 @@ npm run dev
 
 - **URL:** http://localhost:3000
 - **Email:** admin@locacao.com
-- **Senha:** definida por `INIT_ADMIN_PASSWORD` (ou no corpo da requisição de init)
+- **Senha:** admin123
 
 ---
 
 ## Estrutura do Banco de Dados
 
-O sistema possui **14 tabelas** organizadas em entidades principais, tabelas de apoio e tabelas de sistema.
+O sistema possui **17 tabelas** organizadas em entidades principais, tabelas de apoio e tabelas de sistema.
 
 ### 📊 Entidades Principais
 
@@ -135,7 +136,7 @@ Rotas de visitação para organização dos clientes.
 | `descricao` | String | Nome da rota (ex: "Linha Norte", "Centro") |
 | `status` | String | 'Ativo' ou 'Inativo' |
 | `syncStatus` | String | Status de sincronização |
-| `lastSyncedAt` | DateTime? | Última sincronização |
+| `lastSyncedAt` | String? | Última sincronização |
 | `version` | Int | Versão para controle de conflitos |
 | `deletedAt` | DateTime? | Soft delete |
 
@@ -162,17 +163,15 @@ Clientes que recebem produtos em locação.
 | `rg` | String? | RG |
 | `inscricaoEstadual` | String? | Inscrição estadual (PJ) |
 | `telefonePrincipal` | String | Telefone principal |
-| `telefoneSecundario` | String? | Telefone secundário |
 | `email` | String? | Email |
 | `contatos` | Json? | Lista de contatos adicionais |
-| `cep` | String? | CEP |
-| `logradouro` | String? | Endereço |
-| `numero` | String? | Número |
+| `cep` | String | CEP |
+| `logradouro` | String | Endereço |
+| `numero` | String | Número |
 | `complemento` | String? | Complemento |
-| `bairro` | String? | Bairro |
-| `cidade` | String? | Cidade |
-| `estado` | String? | Estado (UF) |
-| `observacoes` | String? | Observações gerais |
+| `bairro` | String | Bairro |
+| `cidade` | String | Cidade |
+| `estado` | String | Estado (UF) |
 | `rotaId` | String | FK para Rota |
 | `status` | String | 'Ativo' ou 'Inativo' |
 
@@ -192,16 +191,16 @@ Equipamentos disponíveis para locação.
 | `id` | String (UUID) | Identificador único |
 | `identificador` | String (unique) | Número da placa/identificação física |
 | `numeroRelogio` | String | Contador mecânico atual |
-| `tipoId` | String? | FK para TipoProduto |
+| `tipoId` | String | FK para TipoProduto |
 | `tipoNome` | String | Nome do tipo (cache) |
-| `descricaoId` | String? | FK para DescricaoProduto |
+| `descricaoId` | String | FK para DescricaoProduto |
 | `descricaoNome` | String | Nome da descrição (cache) |
-| `tamanhoId` | String? | FK para TamanhoProduto |
+| `tamanhoId` | String | FK para TamanhoProduto |
 | `tamanhoNome` | String | Nome do tamanho (cache) |
 | `conservacao` | String | 'Ótima', 'Boa', 'Regular', 'Ruim', 'Péssima' |
 | `statusProduto` | String | 'Ativo', 'Inativo', 'Manutenção' |
 | `estabelecimento` | String? | Local quando não locado |
-| `observacoes` | String? | Observações |
+| `observacao` | String? | Observações |
 
 **Relacionamentos:**
 - `locacoes[]` - Histórico de locações
@@ -226,12 +225,14 @@ Contratos de locação de produtos para clientes.
 | `formaPagamento` | String | 'Periodo', 'PercentualPagar', 'PercentualReceber' |
 | `numeroRelogio` | String | Leitura inicial do relógio |
 | `precoFicha` | Float | Valor por ficha/partida |
-| `percentualEmpresa` | Float? | Percentual da empresa |
-| `percentualCliente` | Float? | Percentual do cliente |
+| `percentualEmpresa` | Float | Percentual da empresa |
+| `percentualCliente` | Float | Percentual do cliente |
 | `valorFixo` | Float? | Valor fixo (pagamento por período) |
 | `periodicidade` | String? | 'Semanal', 'Quinzenal', 'Mensal' |
 | `observacoes` | String? | Observações |
 | `status` | String | 'Ativa', 'Finalizada', 'Cancelada' |
+| `ultimaLeituraRelogio` | Float? | Última leitura após cobrança |
+| `trocaPano` | Boolean | Se houve troca de pano na relocação |
 
 **Formas de Pagamento:**
 
@@ -253,10 +254,10 @@ Registro de cobranças periódicas com leitura de relógio.
 | Campo | Tipo | Descrição |
 |-------|------|-----------|
 | `id` | String (UUID) | Identificador único |
-| `locacaoId` | String? | FK para Locacao |
+| `locacaoId` | String | FK para Locacao |
 | `clienteId` | String | FK para Cliente |
 | `clienteNome` | String | Nome do cliente (cache) |
-| `produtoId` | String | FK para Produto |
+| `produtoId` | String? | FK para Produto |
 | `produtoIdentificador` | String | Identificação do produto (cache) |
 | `dataInicio` | String | Início do período cobrado |
 | `dataFim` | String | Fim do período cobrado |
@@ -264,25 +265,18 @@ Registro de cobranças periódicas com leitura de relógio.
 | `relogioAnterior` | Float | Leitura anterior do relógio |
 | `relogioAtual` | Float | Leitura atual do relógio |
 | `fichasRodadas` | Float | Diferença entre leituras |
+| `valorFicha` | Float | Valor por ficha |
 | `totalBruto` | Float | Valor bruto (fichas × preço) |
 | `descontoPartidasQtd` | Float? | Quantidade de partidas de desconto |
+| `descontoPartidasValor` | Float? | Valor do desconto de partidas |
 | `descontoDinheiro` | Float? | Desconto em dinheiro |
 | `percentualEmpresa` | Float | Percentual da empresa |
+| `subtotalAposDescontos` | Float | Subtotal após descontos |
 | `valorPercentual` | Float | Valor calculado do percentual |
 | `totalClientePaga` | Float | Total que o cliente deve pagar |
-| `valorRecebido` | Float? | Valor efetivamente recebido |
-| `saldoDevedorGerado` | Float? | Saldo devedor (se pagamento parcial) |
-| `observacoes` | String? | Observações |
+| `valorRecebido` | Float | Valor efetivamente recebido |
+| `saldoDevedorGerado` | Float | Saldo devedor (se pagamento parcial) |
 | `status` | String | 'Pago', 'Parcial', 'Pendente', 'Atrasado' |
-
-**Cálculo de Valores:**
-
-```
-fichasRodadas = relogioAtual - relogioAnterior
-totalBruto = fichasRodadas × precoFicha
-valorPercentual = totalBruto × (percentualEmpresa / 100)
-totalClientePaga = valorPercentual - descontoDinheiro
-```
 
 **Relacionamentos:**
 - `locacao` - Locação relacionada
@@ -300,16 +294,16 @@ Usuários do sistema (web e mobile).
 | `id` | String (UUID) | Identificador único |
 | `nome` | String | Nome completo |
 | `email` | String (unique) | Email (login) |
-| `senha` | String | Senha hasheada (bcrypt) |
+| `senha` | String | Senha hasheada (bcrypt 12 rounds) |
 | `cpf` | String? | CPF |
 | `telefone` | String? | Telefone |
 | `tipoPermissao` | String | 'Administrador', 'Secretario', 'AcessoControlado' |
-| `permissoesWeb` | Json? | Permissões detalhadas para web |
-| `permissoesMobile` | Json? | Permissões detalhadas para mobile |
-| `rotasPermitidas` | Json? | Array de IDs de rotas permitidas |
+| `permissoesWeb` | Json | Permissões detalhadas para web |
+| `permissoesMobile` | Json | Permissões detalhadas para mobile |
+| `rotasPermitidas` | Json | Array de IDs de rotas permitidas |
 | `status` | String | 'Ativo' ou 'Inativo' |
 | `bloqueado` | Boolean | Se está bloqueado |
-| `dataUltimoAcesso` | DateTime? | Último acesso |
+| `dataUltimoAcesso` | String? | Último acesso |
 | `ultimoAcessoDispositivo` | String? | 'Web' ou nome do dispositivo |
 
 **Relacionamentos:**
@@ -338,7 +332,6 @@ Usuários do sistema (web e mobile).
 | **SyncConflict** | Conflitos de sincronização detectados |
 | **HistoricoRelogio** | Histórico de alterações de contador |
 | **Manutencao** | Histórico de manutenções de produtos |
-| **RefreshToken** | Tokens de renovação para mobile |
 
 ---
 
@@ -369,6 +362,12 @@ Usuários do sistema (web e mobile).
 }
 ```
 
+**Validações de Login:**
+- Usuário deve ter `status = 'Ativo'`
+- Usuário não pode estar `bloqueado = true`
+- Usuário não pode ter `deletedAt` (soft delete)
+- Atualiza `dataUltimoAcesso` e `ultimoAcessoDispositivo`
+
 ---
 
 ### 🔄 Sincronização
@@ -379,6 +378,19 @@ Usuários do sistema (web e mobile).
 | `/api/sync/pull` | POST | Mobile recebe alterações do servidor |
 | `/api/sync/conflicts` | GET | Lista conflitos pendentes |
 | `/api/sync/conflict/resolve` | POST | Resolve um conflito |
+
+**Autenticação de Sincronização:**
+
+A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feita via `deviceKey`:
+
+```json
+// PUSH e PULL usam deviceKey
+{
+  "deviceKey": "samsung_mobile_1234567890_abc",
+  "lastSyncAt": "2024-01-01T00:00:00Z",
+  "changes": [...]
+}
+```
 
 **PUSH - Enviar Mudanças:**
 ```json
@@ -429,7 +441,10 @@ Usuários do sistema (web e mobile).
     "cobrancas": [...],
     "rotas": [...],
     "usuarios": [...]
-  }
+  },
+  "tiposProduto": [...],
+  "descricoesProduto": [...],
+  "tamanhosProduto": [...]
 }
 ```
 
@@ -488,9 +503,24 @@ Usuários do sistema (web e mobile).
 ```json
 {
   "novoClienteId": "uuid-novo-cliente",
-  "dataRelocacao": "2024-01-15",
+  "novoClienteNome": "Nome do Cliente",
+  "formaPagamento": "PercentualReceber",
   "numeroRelogio": "12345",
-  "observacoes": "Observação opcional"
+  "precoFicha": 2.50,
+  "percentualEmpresa": 50,
+  "percentualCliente": 50,
+  "motivoRelocacao": "Cliente solicitou mudança",
+  "observacao": "Observação opcional",
+  "trocaPano": true
+}
+```
+
+**Enviar para Estoque:**
+```json
+{
+  "estabelecimento": "Barracão",
+  "motivo": "Produto precisa de manutenção",
+  "observacao": "Observação opcional"
 }
 ```
 
@@ -504,6 +534,12 @@ Usuários do sistema (web e mobile).
 | `/api/cobrancas` | POST | Criar cobrança |
 | `/api/cobrancas/[id]` | GET | Detalhes |
 | `/api/cobrancas/[id]` | PUT | Atualizar |
+
+**Query Params (GET):**
+- `clienteId` - Filtrar por cliente
+- `status` - Filtrar por status
+- `dataInicio` - Data inicial
+- `dataFim` - Data final
 
 ---
 
@@ -527,7 +563,9 @@ Usuários do sistema (web e mobile).
 | `/api/usuarios` | POST | Criar usuário |
 | `/api/usuarios/[id]` | GET | Detalhes |
 | `/api/usuarios/[id]` | PUT | Atualizar |
-| `/api/usuarios/[id]` | DELETE | Remover |
+| `/api/usuarios/[id]` | DELETE | Remover (soft delete) |
+
+**Acesso restrito:** Apenas Administradores podem criar/editar/deletar usuários.
 
 ---
 
@@ -549,6 +587,22 @@ Usuários do sistema (web e mobile).
 | `/api/dashboard/mobile` | GET | Métricas para dashboard mobile |
 | `/api/relatorios/financeiro` | GET | Relatório financeiro |
 | `/api/relatorios/produtos` | GET | Relatório de produtos |
+
+**Dashboard Web - Métricas retornadas:**
+```json
+{
+  "totalClientes": 150,
+  "totalProdutos": 80,
+  "produtosLocados": 65,
+  "produtosEstoque": 15,
+  "receitaMes": 12500.00,
+  "totalCobrancasMes": 45,
+  "saldoDevedor": 2300.00,
+  "cobrancasAtrasadas": 5,
+  "conflictsPendentes": 0,
+  "dataReferencia": "2024-01-15T10:30:00Z"
+}
+```
 
 ---
 
@@ -578,7 +632,7 @@ Usuários do sistema (web e mobile).
 
 ### 🔒 Rotas Autenticadas
 
-#### Dashboard (`/`)
+#### Dashboard (`/dashboard`)
 
 **KPIs exibidos:**
 - Total de clientes ativos
@@ -602,7 +656,7 @@ Usuários do sistema (web e mobile).
 **Funcionalidades:**
 - Cadastro de pessoa física ou jurídica
 - Validação de CPF/CNPJ
-- Busca automática de endereço por CEP
+- Busca automática de endereço por CEP (ViaCEP)
 - Vinculação a rotas
 - Histórico de locações e cobranças
 
@@ -771,6 +825,7 @@ O sistema implementa **sincronização bidirecional offline-first** entre o app 
    - 3º: Produtos
    - 4º: Locações
    - 5º: Cobranças
+   - 6º: Usuários
 5. Detecta conflitos por versão
 6. Retorna resultado
 
@@ -781,6 +836,7 @@ O sistema implementa **sincronização bidirecional offline-first** entre o app 
 2. Servidor busca entidades modificadas após essa data
 3. Filtra apenas mudanças de **outros dispositivos**
 4. Retorna todas as entidades atualizadas
+5. Inclui atributos de produto (tipos, descrições, tamanhos)
 
 ### ⚠️ Detecção de Conflitos
 
@@ -805,7 +861,7 @@ Todas as entidades têm estes campos:
 | Campo | Tipo | Função |
 |-------|------|--------|
 | `syncStatus` | String | 'pending', 'syncing', 'synced', 'conflict', 'error' |
-| `lastSyncedAt` | DateTime? | Timestamp da última sincronização |
+| `lastSyncedAt` | String? | Timestamp da última sincronização |
 | `needsSync` | Boolean | Se precisa ser sincronizado |
 | `version` | Int | Versionamento para detecção de conflitos |
 | `deviceId` | String | Dispositivo que criou/alterou |
@@ -820,21 +876,26 @@ Todas as entidades têm estes campos:
 - Estratégia: JWT
 - Sessão: 30 dias
 - Providers: Credentials (email/senha)
+- Proteção de rotas via middleware
 
 ### Mobile (JWT Customizado)
 
-- Access Token: 15 minutos (configurável)
+- Access Token: 15 minutos (configurável via `JWT_EXPIRES_IN`)
 - Refresh Token: 7 dias
-- Armazenado em PostgreSQL para revogação
+- Algoritmo: HS256
+- Hash de senha: bcrypt com 12 rounds
 
 ### Fluxo de Login Mobile
 
 ```
 1. POST /api/auth/login { email, password }
    ↓
-2. Servidor valida credenciais
+2. Servidor valida:
+   - status = 'Ativo'
+   - bloqueado = false
+   - deletedAt = null
    ↓
-3. Gera Access Token + Refresh Token
+3. Gera Access Token JWT
    ↓
 4. Retorna { token, user }
    ↓
@@ -860,15 +921,15 @@ Todas as entidades têm estes campos:
 ```typescript
 interface PermissoesUsuario {
   web: {
-    todosCadastros: boolean;
-    locacaoRelocacaoEstoque: boolean;
-    relatorios: boolean;
+    todosCadastros: boolean;          // CRUD completo
+    locacaoRelocacaoEstoque: boolean; // Gestão de locações
+    relatorios: boolean;              // Acesso a relatórios
   };
   mobile: {
-    todosCadastros: boolean;
-    alteracaoRelogio: boolean;
-    locacaoRelocacaoEstoque: boolean;
-    cobrancasFaturas: boolean;
+    todosCadastros: boolean;          // CRUD completo
+    alteracaoRelogio: boolean;        // Alterar contador
+    locacaoRelocacaoEstoque: boolean; // Gestão de locações
+    cobrancasFaturas: boolean;        // Registrar cobranças
   };
 }
 ```
@@ -876,6 +937,297 @@ interface PermissoesUsuario {
 ### Controle por Rota
 
 Para `AcessoControlado`, o campo `rotasPermitidas` contém os IDs das rotas que o usuário pode acessar. O mobile e web filtram automaticamente clientes e cobranças por essas rotas.
+
+### Middleware de Proteção
+
+```typescript
+// Rotas protegidas pelo middleware
+const config = {
+  matcher: [
+    '/dashboard/:path*',
+    '/clientes/:path*',
+    '/produtos/:path*',
+    '/cobrancas/:path*',
+    '/relatorios/:path*',
+    '/admin/:path*',  // Apenas Administrador
+  ],
+}
+```
+
+---
+
+## Cálculos de Cobrança
+
+### 📐 Fórmulas de Cálculo
+
+O sistema suporta três formas de pagamento, cada uma com sua lógica de cálculo:
+
+#### 1. PercentualReceber (Cliente recebe parte do faturamento)
+
+```
+fichasRodadas = relogioAtual - relogioAnterior
+totalBruto = fichasRodadas × precoFicha
+subtotalAposDescontos = totalBruto - (descontoPartidasValor + descontoDinheiro)
+valorPercentual = subtotalAposDescontos × (percentualEmpresa / 100)
+totalClientePaga = subtotalAposDescontos - valorPercentual
+```
+
+**Exemplo:**
+- Relógio anterior: 1000
+- Relógio atual: 1100
+- Fichas rodadas: 100
+- Preço ficha: R$ 2,50
+- Percentual empresa: 50%
+- Total bruto: R$ 250,00
+- Valor percentual: R$ 125,00
+- **Cliente paga: R$ 125,00**
+
+#### 2. PercentualPagar (Cliente paga percentual do faturamento)
+
+```
+fichasRodadas = relogioAtual - relogioAnterior
+totalBruto = fichasRodadas × precoFicha
+subtotalAposDescontos = totalBruto - descontos
+valorPercentual = subtotalAposDescontos × (percentualEmpresa / 100)
+totalClientePaga = valorPercentual
+```
+
+**Exemplo:**
+- Fichas rodadas: 100
+- Preço ficha: R$ 2,50
+- Percentual empresa: 40%
+- Total bruto: R$ 250,00
+- **Cliente paga: R$ 100,00**
+
+#### 3. Periodo (Valor fixo por período)
+
+```
+totalClientePaga = valorFixo (definido na locação)
+```
+
+**Exemplo:**
+- Valor fixo mensal: R$ 300,00
+- **Cliente paga: R$ 300,00**
+
+### 💰 Controle de Pagamento
+
+```
+saldoDevedorGerado = max(0, totalClientePaga - valorRecebido)
+troco = max(0, valorRecebido - totalClientePaga)
+```
+
+**Status de Pagamento:**
+- `Pago`: valorRecebido >= totalClientePaga
+- `Parcial`: valorRecebido > 0 e valorRecebido < totalClientePaga
+- `Pendente`: valorRecebido = 0
+- `Atrasado`: Pendente após data de vencimento
+
+---
+
+## Fluxos de Negócio
+
+### 🔄 Relocação de Produto
+
+Quando um produto precisa ser transferido de um cliente para outro:
+
+```
+1. Usuário seleciona locação ativa
+   ↓
+2. Clica em "Relocar"
+   ↓
+3. Informa:
+   - Novo cliente
+   - Novo número do relógio
+   - Nova forma de pagamento
+   - Motivo da relocação
+   - Se houve troca de pano
+   ↓
+4. Sistema executa em TRANSAÇÃO ATÔMICA:
+   a) Finaliza locação atual (status = 'Finalizada')
+   b) Cria nova locação para o novo cliente
+   c) Registra manutenção (se troca de pano)
+   d) Registra no ChangeLog
+   ↓
+5. Produto continua locado, agora para novo cliente
+```
+
+**Endpoint:** `POST /api/locacoes/[id]/relocar`
+
+**Validações:**
+- Locação deve estar ativa
+- Novo cliente deve existir e estar ativo
+- Número do relógio é obrigatório
+
+---
+
+### 📦 Envio para Estoque
+
+Quando um produto volta para o estoque:
+
+```
+1. Usuário seleciona locação ativa
+   ↓
+2. Clica em "Enviar para Estoque"
+   ↓
+3. Informa:
+   - Estabelecimento de destino
+   - Motivo do retorno
+   - Observações (opcional)
+   ↓
+4. Sistema executa em TRANSAÇÃO ATÔMICA:
+   a) Finaliza locação (status = 'Finalizada')
+   b) Atualiza produto:
+      - estabelecimento = destino
+      - statusProduto = 'Ativo'
+      - observacao = null (limpa)
+   c) Registra no ChangeLog
+   ↓
+5. Produto disponível para nova locação
+```
+
+**Endpoint:** `POST /api/locacoes/[id]/enviar-estoque`
+
+**Validações:**
+- Locação deve estar ativa
+- Estabelecimento é obrigatório
+- Motivo é obrigatório (mínimo 3 caracteres)
+
+---
+
+### 📱 Ativação de Dispositivo
+
+Fluxo para registrar um novo dispositivo móvel:
+
+```
+1. Admin cria dispositivo no web
+   - Gera senha numérica de 6 dígitos
+   ↓
+2. Usuário no mobile informa:
+   - Nome do dispositivo
+   - Senha numérica
+   ↓
+3. Mobile POST /api/dispositivos/ativar
+   ↓
+4. Servidor valida:
+   - Senha confere
+   - Dispositivo não ativado anteriormente
+   ↓
+5. Servidor gera:
+   - deviceKey único
+   - Marca dispositivo como ativo
+   ↓
+6. Mobile armazena deviceKey
+   ↓
+7. Dispositivo pronto para sincronizar
+```
+
+---
+
+## Segurança e Middleware
+
+### 🛡️ Middleware de Autenticação
+
+O middleware protege todas as rotas autenticadas:
+
+```typescript
+// Verificação em duas camadas:
+// 1. Middleware (frontend)
+// 2. Handler da API (backend)
+
+// Middleware verifica:
+- Token JWT válido (NextAuth)
+- tipoPermissao para rotas /admin
+
+// API handlers verificam:
+- getAuthSession() retorna sessão válida
+- Permissões específicas por operação
+```
+
+### 🔒 Proteções Implementadas
+
+| Proteção | Implementação |
+|----------|---------------|
+| Senha hasheada | bcrypt com 12 rounds |
+| Senha removida do retorno | `senha` nunca retornado nas APIs |
+| Soft delete | `deletedAt` em todas as entidades |
+| Validação de input | Zod schemas nas APIs |
+| Transações atômicas | Prisma `$transaction()` |
+| Verificação de FK | Antes de inserir no sync |
+
+### ⚠️ Rate Limiting
+
+**Atenção:** O sistema atualmente não implementa rate limiting nas seguintes APIs:
+
+- `/api/auth/login` - Vulnerável a força bruta
+- `/api/sync/push` - Vulnerável a flood
+- `/api/sync/pull` - Vulnerável a flood
+
+**Recomendação:** Implementar rate limiting em produção.
+
+---
+
+## Motor de Sincronização
+
+### 📋 Arquivo: `lib/sync-engine.ts`
+
+O motor de sincronização é responsável por processar as mudanças enviadas pelo mobile e retornar as mudanças do servidor.
+
+### 🔧 Funções Principais
+
+#### `processPush(deviceId, changes)`
+
+Processa mudanças enviadas pelo mobile:
+
+```typescript
+// 1. Ordena mudanças por dependência
+const PROCESSING_ORDER = ['rota', 'cliente', 'produto', 'locacao', 'cobranca', 'usuario']
+
+// 2. Para cada mudança:
+//    - Filtra campos permitidos
+//    - Converte tipos (SQLite → Prisma)
+//    - Valida foreign keys
+//    - Detecta conflitos por versão
+//    - Registra no ChangeLog
+
+// 3. Retorna conflitos e erros
+```
+
+#### `processPull(deviceId, lastSyncAt)`
+
+Retorna mudanças do servidor:
+
+```typescript
+// 1. Busca entidades modificadas após lastSyncAt
+// 2. Filtra mudanças de outros dispositivos
+// 3. Exclui registros com deletedAt
+// 4. Retorna todas as entidades + atributos de produto
+```
+
+### 📊 Campos Permitidos por Entidade
+
+O sync engine filtra apenas campos conhecidos:
+
+```typescript
+const ALLOWED_FIELDS = {
+  cliente: ['tipoPessoa', 'identificador', 'nomeExibicao', ...],
+  produto: ['identificador', 'numeroRelogio', 'tipoId', ...],
+  locacao: ['clienteId', 'produtoId', 'formaPagamento', ...],
+  cobranca: ['locacaoId', 'relogioAnterior', 'relogioAtual', ...],
+  rota: ['descricao', 'status'],
+  usuario: ['nome', 'email', 'tipoPermissao', 'senha', ...], // ⚠️ Ver problemas conhecidos
+}
+```
+
+### ⚠️ Validação de Foreign Keys
+
+Antes de inserir, o motor valida referências:
+
+```typescript
+// Remove referências inválidas em vez de falhar
+if (!await prisma.rota.findUnique({ where: { id: rotaId } })) {
+  delete data.rotaId  // Remove referência inválida
+}
+```
 
 ---
 
@@ -902,10 +1254,22 @@ app-cobrancas-web/
 │   │   └── login/                # Login web
 │   ├── api/                      # API Routes
 │   │   ├── auth/                 # Autenticação
+│   │   │   ├── login/            # Login mobile
+│   │   │   ├── me/               # Dados do usuário
+│   │   │   ├── logout/           # Logout
+│   │   │   ├── change-password/  # Alterar senha
+│   │   │   └── [...nextauth]/    # NextAuth
 │   │   ├── sync/                 # Sincronização
+│   │   │   ├── push/             # Enviar mudanças
+│   │   │   ├── pull/             # Receber mudanças
+│   │   │   ├── conflicts/        # Listar conflitos
+│   │   │   └── conflict/resolve/ # Resolver conflito
 │   │   ├── clientes/             # CRUD clientes
 │   │   ├── produtos/             # CRUD produtos
 │   │   ├── locacoes/             # CRUD locações
+│   │   │   └── [id]/
+│   │   │       ├── relocar/      # Relocar produto
+│   │   │       └── enviar-estoque/ # Enviar para estoque
 │   │   ├── cobrancas/            # CRUD cobranças
 │   │   ├── rotas/                # CRUD rotas
 │   │   ├── usuarios/             # CRUD usuários
@@ -919,15 +1283,19 @@ app-cobrancas-web/
 │   └── page.tsx                  # Página inicial
 ├── components/                   # Componentes React
 │   ├── layout/                   # Componentes de layout
-│   │   ├── AppSidebar.tsx        # Menu lateral
-│   │   └── Header.tsx            # Cabeçalho
+│   │   ├── header.tsx            # Cabeçalho
+│   │   └── sidebar.tsx           # Menu lateral
+│   ├── providers/                # Providers
+│   │   └── session-provider.tsx  # NextAuth provider
 │   └── ui/                       # Componentes UI
 │       ├── badge.tsx             # Badge de status
 │       ├── button.tsx            # Botão
 │       ├── card.tsx              # Card
 │       ├── input.tsx             # Input
 │       ├── pagination.tsx        # Paginação
-│       └── ...                   # Outros componentes
+│       ├── empty-state.tsx       # Estado vazio
+│       ├── loading.tsx           # Loading
+│       └── stat-card.tsx         # Card de estatística
 ├── lib/                          # Bibliotecas e utilitários
 │   ├── prisma.ts                 # Singleton Prisma Client
 │   ├── auth.ts                   # Configuração NextAuth
@@ -941,6 +1309,7 @@ app-cobrancas-web/
 │   ├── schema.prisma             # Schema do banco
 │   └── seed.ts                   # Dados iniciais
 ├── types/                        # Tipos TypeScript
+│   └── next-auth.d.ts            # Extensão NextAuth
 ├── middleware.ts                 # Middleware de auth
 ├── next.config.ts                # Configuração Next.js
 ├── tailwind.config.ts            # Configuração Tailwind
@@ -1007,6 +1376,72 @@ Configurar no app mobile (`app.json` ou `.env`):
 | `/api/sync/pull` | Receber mudanças |
 | `/api/dispositivos/ativar` | Ativar dispositivo |
 | `/api/dispositivos/status` | Verificar ativação |
+
+---
+
+## Problemas Conhecidos
+
+### 🔴 Bugs Críticos Identificados
+
+#### 1. Senha em Texto Plano no Mobile
+
+**Problema:** O mobile salva senhas em texto plano no SQLite local.
+
+**Impacto:** Qualquer acesso ao arquivo de banco expõe senhas.
+
+**Solução Recomendada:** Implementar hash bcrypt no mobile antes de salvar.
+
+---
+
+#### 2. Senha Apagada na Sincronização
+
+**Problema:** `upsertUsuarioFromSync` no mobile usa `INSERT OR REPLACE` que apaga campos não enviados pelo servidor (incluindo senha).
+
+**Impacto:** Após qualquer sync, o login offline quebra.
+
+**Solução Recomendada:** Usar `INSERT OR IGNORE` + `UPDATE` seletivo.
+
+---
+
+#### 3. Campo `senha` no ALLOWED_FIELDS do Sync
+
+**Problema:** O campo `senha` está permitido no PUSH de sincronização.
+
+**Impacto:** Senha em texto plano pode ser enviada ao servidor.
+
+**Solução Recomendada:** Remover `senha` de `ALLOWED_FIELDS.usuario`.
+
+---
+
+#### 4. POST de Cobrança sem Validação
+
+**Problema:** `/api/cobrancas` (POST) não valida schema com Zod.
+
+**Impacto:** Dados inválidos podem ser inseridos diretamente.
+
+**Solução Recomendada:** Adicionar validação Zod similar ao relocar/enviar-estoque.
+
+---
+
+#### 5. Atualização de UsuarioRota sem Transação
+
+**Problema:** `deleteMany` + `createMany` em operações separadas.
+
+**Impacto:** Falha parcial deixa usuário sem rotas.
+
+**Solução Recomendada:** Envolver em `$transaction()`.
+
+---
+
+### ⚠️ Melhorias Recomendadas
+
+| Item | Prioridade | Descrição |
+|------|------------|-----------|
+| Rate Limiting | Alta | Implementar em `/api/auth/login` e `/api/sync/*` |
+| Paginação no PULL | Média | Limitar registros por sincronização |
+| Validação no PUT de Locação | Alta | Adicionar schema Zod |
+| Campos de data como DateTime | Média | Migrar campos String para DateTime |
+| PRAGMA journal_mode=WAL | Baixa | Melhorar performance SQLite no mobile |
 
 ---
 

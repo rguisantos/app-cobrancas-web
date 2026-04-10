@@ -90,9 +90,26 @@ export async function POST(req: NextRequest) {
     const data = schema.parse(body)
     console.log(`[DISPOSITIVOS/ATIVAR:${requestId}] DispositivoId: ${data.dispositivoId}`)
 
-    const dispositivo = await prisma.dispositivo.findUnique({
+    // Buscar por ID (UUID) ou por chave (DEV-XXXXXX)
+    let dispositivo = await prisma.dispositivo.findUnique({
       where: { id: data.dispositivoId },
     })
+
+    // Se não encontrou por ID, tentar buscar por chave
+    if (!dispositivo) {
+      // Tentar com a chave exata ou com prefixo DEV-
+      const chaveBusca = data.dispositivoId.startsWith('DEV-') 
+        ? data.dispositivoId 
+        : `DEV-${data.dispositivoId}`
+      
+      dispositivo = await prisma.dispositivo.findFirst({
+        where: { chave: chaveBusca },
+      })
+      
+      if (dispositivo) {
+        console.log(`[DISPOSITIVOS/ATIVAR:${requestId}] Dispositivo encontrado pela chave: ${chaveBusca}`)
+      }
+    }
 
     if (!dispositivo) {
       registerFailure(ip)
@@ -118,7 +135,7 @@ export async function POST(req: NextRequest) {
 
     // Ativar dispositivo: atualizar chave, nome, status e INVALIDAR o PIN
     const dispositivoAtualizado = await prisma.dispositivo.update({
-      where: { id: data.dispositivoId },
+      where: { id: dispositivo.id },
       data: {
         chave: data.deviceKey,
         nome: data.deviceName,

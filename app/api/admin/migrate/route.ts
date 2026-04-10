@@ -14,64 +14,111 @@ export async function POST(request: Request) {
 
     const results: string[] = [];
 
-    // Lista de colunas a verificar/adicionar
+    // Garantir que as colunas existam com os nomes corretos (camelCase como o Prisma espera)
     const migrations = [
+      // Cobrancas - colunas que podem estar faltando
       {
-        table: 'cobrancas',
-        column: 'saldo_devedor_gerado',
-        sql: `ALTER TABLE "cobrancas" ADD COLUMN IF NOT EXISTS "saldo_devedor_gerado" DOUBLE PRECISION NOT NULL DEFAULT 0`
+        sql: `ALTER TABLE "cobrancas" ADD COLUMN IF NOT EXISTS "locacaoId" TEXT`,
+        desc: 'locacaoId em cobrancas'
       },
       {
-        table: 'cobrancas',
-        column: 'deleted_at',
-        sql: `ALTER TABLE "cobrancas" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP(3)`
+        sql: `ALTER TABLE "cobrancas" ADD COLUMN IF NOT EXISTS "clienteId" TEXT`,
+        desc: 'clienteId em cobrancas'
       },
       {
-        table: 'clientes',
-        column: 'deleted_at',
-        sql: `ALTER TABLE "clientes" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP(3)`
+        sql: `ALTER TABLE "cobrancas" ADD COLUMN IF NOT EXISTS "produtoId" TEXT`,
+        desc: 'produtoId em cobrancas'
       },
       {
-        table: 'produtos',
-        column: 'deleted_at',
-        sql: `ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP(3)`
+        sql: `ALTER TABLE "cobrancas" ADD COLUMN IF NOT EXISTS "saldoDevedorGerado" DOUBLE PRECISION NOT NULL DEFAULT 0`,
+        desc: 'saldoDevedorGerado em cobrancas'
       },
       {
-        table: 'locacoes',
-        column: 'deleted_at',
-        sql: `ALTER TABLE "locacoes" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP(3)`
+        sql: `ALTER TABLE "cobrancas" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3)`,
+        desc: 'deletedAt em cobrancas'
+      },
+      // Clientes
+      {
+        sql: `ALTER TABLE "clientes" ADD COLUMN IF NOT EXISTS "rotaId" TEXT`,
+        desc: 'rotaId em clientes'
       },
       {
-        table: 'rotas',
-        column: 'deleted_at',
-        sql: `ALTER TABLE "rotas" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP(3)`
+        sql: `ALTER TABLE "clientes" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3)`,
+        desc: 'deletedAt em clientes'
+      },
+      // Produtos
+      {
+        sql: `ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "tipoId" TEXT`,
+        desc: 'tipoId em produtos'
       },
       {
-        table: 'usuarios',
-        column: 'deleted_at',
-        sql: `ALTER TABLE "usuarios" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP(3)`
+        sql: `ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "descricaoId" TEXT`,
+        desc: 'descricaoId em produtos'
+      },
+      {
+        sql: `ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "tamanhoId" TEXT`,
+        desc: 'tamanhoId em produtos'
+      },
+      {
+        sql: `ALTER TABLE "produtos" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3)`,
+        desc: 'deletedAt em produtos'
+      },
+      // Locacoes
+      {
+        sql: `ALTER TABLE "locacoes" ADD COLUMN IF NOT EXISTS "clienteId" TEXT`,
+        desc: 'clienteId em locacoes'
+      },
+      {
+        sql: `ALTER TABLE "locacoes" ADD COLUMN IF NOT EXISTS "produtoId" TEXT`,
+        desc: 'produtoId em locacoes'
+      },
+      {
+        sql: `ALTER TABLE "locacoes" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3)`,
+        desc: 'deletedAt em locacoes'
+      },
+      // Rotas
+      {
+        sql: `ALTER TABLE "rotas" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3)`,
+        desc: 'deletedAt em rotas'
+      },
+      // Usuarios
+      {
+        sql: `ALTER TABLE "usuarios" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3)`,
+        desc: 'deletedAt em usuarios'
       }
     ];
 
     for (const migration of migrations) {
-      const checkColumn = await prisma.$queryRaw`
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = ${migration.table}
-        AND column_name = ${migration.column}
-      `;
-
-      if (Array.isArray(checkColumn) && checkColumn.length === 0) {
+      try {
         await prisma.$executeRawUnsafe(migration.sql);
-        results.push(`Coluna ${migration.column} adicionada em ${migration.table}`);
-      } else {
-        results.push(`Coluna ${migration.column} já existe em ${migration.table}`);
+        results.push(`Adicionado: ${migration.desc}`);
+      } catch (error: any) {
+        if (error.message.includes('already exists') || error.message.includes('duplicate')) {
+          results.push(`Já existe: ${migration.desc}`);
+        } else {
+          results.push(`Erro em ${migration.desc}: ${error.message}`);
+        }
       }
+    }
+
+    // Verificar estrutura atual
+    const tabelas = ['cobrancas', 'clientes', 'produtos', 'locacoes'];
+    const estrutura: Record<string, string[]> = {};
+    
+    for (const tabela of tabelas) {
+      const cols = await prisma.$queryRaw`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = ${tabela}
+        ORDER BY ordinal_position
+      `;
+      estrutura[tabela] = (cols as any[]).map(c => c.column_name);
     }
 
     return NextResponse.json({
       success: true,
-      results
+      results,
+      estrutura
     });
   } catch (error: any) {
     console.error('Erro na migration:', error);

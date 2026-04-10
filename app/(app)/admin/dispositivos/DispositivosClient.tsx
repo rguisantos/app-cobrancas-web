@@ -350,7 +350,7 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
         <h3 className="font-medium text-blue-900 mb-2">📱 Como ativar o aplicativo mobile?</h3>
         <ol className="text-sm text-blue-700 space-y-2">
           <li>1. Crie um novo dispositivo acima e anote a <strong>senha de 6 dígitos</strong></li>
-          <li>2. No app mobile, na tela de login, toque em "Novo Dispositivo"</li>
+          <li>2. No app mobile, na tela de login, toque em &quot;Novo Dispositivo&quot;</li>
           <li>3. Digite a senha de 6 dígitos para vincular o aparelho</li>
           <li>4. Pronto! O dispositivo está ativo e pode sincronizar dados</li>
         </ol>

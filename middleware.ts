@@ -30,8 +30,9 @@ export const config = {
     '/cobrancas/:path*',
     '/relatorios/:path*',
     '/admin/:path*',
-    // APIs protegidas — exceto rotas públicas necessárias (auth, mobile auth, health, equipamentos)
+    // APIs protegidas — exceto rotas públicas necessárias (auth, mobile auth, health, equipamentos, sync)
     // Nota: equipamentos/POST é público (mobile registra sem login); GET requer sessão (tratado no handler)
+    // Nota: sync usa JWT próprio do mobile, não next-auth
     '/api/clientes/:path*',
     '/api/produtos/:path*',
     '/api/locacoes/:path*',
@@ -40,7 +41,7 @@ export const config = {
     '/api/relatorios/:path*',
     '/api/usuarios/:path*',
     '/api/dashboard/:path*',
-    '/api/sync/:path*',
+    // '/api/sync/:path*' - removido: mobile usa JWT próprio
     // '/api/admin/:path*' - removido para permitir migrate com token próprio
     '/api/localizacao/:path*',
     '/api/estabelecimentos/:path*',

@@ -31,8 +31,8 @@ interface Cobranca {
   clienteNome: string
   produtoIdentificador: string
   locacaoId: string
-  dataInicio: Date
-  dataFim: Date
+  dataInicio: string | Date
+  dataFim: string | Date
   relogioAnterior: number
   relogioAtual: number
   fichasRodadas: number
@@ -40,8 +40,8 @@ interface Cobranca {
   valorRecebido: number
   saldoDevedorGerado: number
   status: string
-  createdAt: Date
-  podeEditar: boolean
+  createdAt: string | Date
+  podeEditar?: boolean
 }
 
 interface CobrancasClientProps {

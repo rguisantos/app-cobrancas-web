@@ -2,28 +2,31 @@ import { Metadata } from 'next'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Header from '@/components/layout/header'
-import StatCard from '@/components/ui/stat-card'
 import { formatarMoeda } from '@/shared/types'
-import CobrancasRecentesTable from './cobrancas-recentes'
-import AlertasCard from './alertas-card'
-import Link from 'next/link'
+import { DashboardClient } from './dashboard-client'
 
 export const metadata: Metadata = { title: 'Dashboard' }
-// revalidate removido — dados financeiros não devem ser cacheados entre usuários
 
 async function getDashboardData() {
   const hoje = new Date()
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+  const inicioMesPassado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1)
+  const fimMesPassado = new Date(hoje.getFullYear(), hoje.getMonth(), 0)
+  const seisMesesAtras = new Date(hoje.getFullYear(), hoje.getMonth() - 5, 1)
 
   const [
     totalClientes,
     totalProdutos,
     produtosLocados,
     cobrancasMes,
+    cobrancasMesPassado,
     saldoDevedor,
     cobrancasAtrasadas,
     cobrancasRecentes,
     conflictsPendentes,
+    cobrancasPorStatus,
+    receitaUltimos6Meses,
+    topClientes,
   ] = await Promise.all([
     prisma.cliente.count({ where: { status: 'Ativo', deletedAt: null } }),
     prisma.produto.count({ where: { deletedAt: null } }),
@@ -33,7 +36,10 @@ async function getDashboardData() {
       _sum: { valorRecebido: true },
       _count: true,
     }),
-    // Saldo correto: somente a última cobrança por locação (evita duplicação)
+    prisma.cobranca.aggregate({
+      where: { deletedAt: null, createdAt: { gte: inicioMesPassado, lt: inicioMes } },
+      _sum: { valorRecebido: true },
+    }),
     prisma.$queryRaw<{ total: number }[]>`
       SELECT COALESCE(SUM("saldoDevedorGerado"), 0)::float AS total
       FROM (
@@ -48,24 +54,99 @@ async function getDashboardData() {
     prisma.cobranca.count({ where: { status: 'Atrasado', deletedAt: null } }),
     prisma.cobranca.findMany({
       where: { deletedAt: null },
-      include: { cliente: { select: { nomeExibicao: true } } },
+      include: { cliente: { select: { nomeExibicao: true, id: true } } },
       orderBy: { createdAt: 'desc' },
       take: 8,
     }),
     prisma.syncConflict.count({ where: { resolution: null } }),
+    prisma.cobranca.groupBy({
+      by: ['status'],
+      where: { deletedAt: null },
+      _count: true,
+      _sum: { valorRecebido: true },
+    }),
+    // Receita dos últimos 6 meses
+    prisma.$queryRaw<{ mes: Date; total: number }[]>`
+      SELECT 
+        DATE_TRUNC('month', "createdAt") as mes,
+        COALESCE(SUM("valorRecebido"), 0)::float as total
+      FROM cobrancas
+      WHERE "deletedAt" IS NULL
+        AND "createdAt" >= ${seisMesesAtras}
+      GROUP BY DATE_TRUNC('month', "createdAt")
+      ORDER BY mes ASC
+    `,
+    // Top clientes por valor cobrado
+    prisma.$queryRaw<{ clienteId: string; clienteNome: string; total: number; count: number }[]>`
+      SELECT 
+        c."clienteId",
+        c."clienteNome",
+        SUM(c."valorRecebido")::float as total,
+        COUNT(*)::int as count
+      FROM cobrancas c
+      WHERE c."deletedAt" IS NULL
+        AND c."createdAt" >= ${inicioMes}
+      GROUP BY c."clienteId", c."clienteNome"
+      ORDER BY total DESC
+      LIMIT 5
+    `,
   ])
+
+  // Calcular variação percentual da receita
+  const receitaMesAtual = cobrancasMes._sum.valorRecebido ?? 0
+  const receitaMesPassado = cobrancasMesPassado._sum.valorRecebido ?? 0
+  const variacaoReceita = receitaMesPassado > 0 
+    ? ((receitaMesAtual - receitaMesPassado) / receitaMesPassado) * 100 
+    : 0
+
+  // Dados para o gráfico de receita mensal
+  const mesesLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+  const receitaMensal = Array.from({ length: 6 }, (_, i) => {
+    const data = new Date(hoje.getFullYear(), hoje.getMonth() - (5 - i), 1)
+    const mesIndex = data.getMonth()
+    const receita = receitaUltimos6Meses.find(r => {
+      const rDate = new Date(r.mes)
+      return rDate.getMonth() === mesIndex && rDate.getFullYear() === data.getFullYear()
+    })
+    return {
+      mes: mesesLabels[mesIndex],
+      valor: receita?.total ?? 0,
+    }
+  })
+
+  // Dados para o gráfico de distribuição por status
+  const statusColors: Record<string, string> = {
+    Pago: '#16A34A',
+    Parcial: '#F59E0B',
+    Pendente: '#2563EB',
+    Atrasado: '#DC2626',
+  }
+  
+  const distribuicaoStatus = cobrancasPorStatus.map(s => ({
+    name: s.status,
+    value: s._count,
+    color: statusColors[s.status] || '#94A3B8',
+  }))
+
+  // Mini chart data para KPIs (últimos 6 meses)
+  const miniChartData = receitaMensal.map(r => r.valor)
 
   return {
     totalClientes,
     totalProdutos,
     produtosLocados,
     produtosEstoque: totalProdutos - produtosLocados,
-    receitaMes: cobrancasMes._sum.valorRecebido ?? 0,
+    receitaMes: receitaMesAtual,
     totalCobrancasMes: cobrancasMes._count,
+    variacaoReceita: Math.round(variacaoReceita),
     saldoDevedor: saldoDevedor[0]?.total ?? 0,
     cobrancasAtrasadas,
     cobrancasRecentes,
     conflictsPendentes,
+    distribuicaoStatus,
+    receitaMensal,
+    miniChartData,
+    topClientes,
   }
 }
 
@@ -83,130 +164,7 @@ export default async function DashboardPage() {
         subtitle="Veja o resumo completo do seu negócio"
       />
 
-      {/* Main KPIs - First Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          title="Clientes Ativos" 
-          value={data.totalClientes} 
-          iconName="users" 
-          color="blue"
-          subtitle="Total de clientes cadastrados"
-        />
-        <StatCard 
-          title="Produtos Locados" 
-          value={data.produtosLocados} 
-          iconName="package" 
-          color="green"
-          subtitle="Em locação no momento"
-        />
-        <StatCard 
-          title="Receita do Mês" 
-          value={formatarMoeda(data.receitaMes)} 
-          iconName="dollar" 
-          color="green"
-          subtitle={`${data.totalCobrancasMes} cobranças processadas`}
-          trend="up"
-        />
-        <StatCard 
-          title="Saldo Devedor" 
-          value={formatarMoeda(data.saldoDevedor)} 
-          iconName="alert" 
-          color={data.saldoDevedor > 0 ? 'red' : 'green'}
-          subtitle={data.saldoDevedor > 0 ? 'Valores pendentes' : 'Sem pendências'}
-        />
-      </div>
-
-      {/* Secondary KPIs - Second Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          title="Total Produtos" 
-          value={data.totalProdutos} 
-          iconName="package" 
-          color="slate"
-          subtitle="Catálogo completo"
-        />
-        <StatCard 
-          title="Em Estoque" 
-          value={data.produtosEstoque} 
-          iconName="packageCheck" 
-          color="yellow"
-          subtitle="Disponíveis para locação"
-        />
-        <StatCard 
-          title="Cobranças Atrasadas" 
-          value={data.cobrancasAtrasadas} 
-          iconName="clock" 
-          color={data.cobrancasAtrasadas > 0 ? 'red' : 'green'}
-          subtitle={data.cobrancasAtrasadas > 0 ? 'Requer atenção' : 'Em dia'}
-        />
-        <StatCard 
-          title="Conflitos de Sync" 
-          value={data.conflictsPendentes} 
-          iconName="refresh" 
-          color={data.conflictsPendentes > 0 ? 'yellow' : 'green'}
-          subtitle={data.conflictsPendentes > 0 ? 'Resolução pendente' : 'Sincronizado'}
-        />
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Cobranças Recentes - Takes 2 columns */}
-        <div className="lg:col-span-2">
-          <div className="card p-6">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">Cobranças Recentes</h2>
-                <p className="text-sm text-slate-500 mt-0.5">Últimas transações registradas</p>
-              </div>
-              <Link
-                href="/cobrancas"
-                className="text-sm font-medium text-primary-600 hover:text-primary-700 transition-colors"
-              >
-                Ver todas →
-              </Link>
-            </div>
-            <CobrancasRecentesTable cobrancas={data.cobrancasRecentes} />
-          </div>
-        </div>
-
-        {/* Alertas - Takes 1 column */}
-        <div className="lg:col-span-1">
-          <div className="card p-6 h-full">
-            <div className="mb-5">
-              <h2 className="text-lg font-semibold text-slate-900">Alertas</h2>
-              <p className="text-sm text-slate-500 mt-0.5">Itens que precisam de atenção</p>
-            </div>
-            <AlertasCard
-              atrasadas={data.cobrancasAtrasadas}
-              saldoDevedor={data.saldoDevedor}
-              conflictos={data.conflictsPendentes}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Stats Footer */}
-      <div className="bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl p-5 border border-slate-200">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center">
-              <span className="text-lg">📊</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-900">Resumo do Sistema</p>
-              <p className="text-xs text-slate-500">
-                {data.totalClientes} clientes • {data.totalProdutos} produtos • Última atualização: agora
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              Sistema Online
-            </span>
-          </div>
-        </div>
-      </div>
+      <DashboardClient data={data} />
     </div>
   )
 }

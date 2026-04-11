@@ -2,20 +2,39 @@ import { Metadata } from 'next'
 import { prisma } from '@/lib/prisma'
 import Header from '@/components/layout/header'
 import { formatarMoeda } from '@/shared/types'
+import { RelatoriosClient } from './relatorios-client'
 
 export const metadata: Metadata = { title: 'Relatórios' }
-// revalidate removido — página com dados financeiros sensíveis não deve ser cacheada
 
-export default async function RelatoriosPage() {
+async function getRelatoriosData(dataInicio?: Date, dataFim?: Date) {
   const hoje = new Date()
-  const inicioMes  = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-  const inicioAno  = new Date(hoje.getFullYear(), 0, 1)
+  const inicio = dataInicio || new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+  const fim = dataFim || hoje
 
-  const [receitaMes, receitaAno, saldoDevedor, porStatus, porRota] = await Promise.all([
-    prisma.cobranca.aggregate({ where: { deletedAt: null, createdAt: { gte: inicioMes } }, _sum: { valorRecebido: true }, _count: true }),
-    prisma.cobranca.aggregate({ where: { deletedAt: null, createdAt: { gte: inicioAno  } }, _sum: { valorRecebido: true }, _count: true }),
-    // Saldo devedor correto: somente a última cobrança por locação
-    // (cada cobrança carrega o saldo acumulado — somar todas duplicaria o valor)
+  const [
+    receitaTotal,
+    cobrancasTotal,
+    cobrancasPagas,
+    saldoDevedor,
+    receitaPorRota,
+    evolucaoMensal,
+    topClientes,
+    porStatus,
+  ] = await Promise.all([
+    // Receita total no período
+    prisma.cobranca.aggregate({
+      where: { deletedAt: null, createdAt: { gte: inicio, lte: fim } },
+      _sum: { valorRecebido: true },
+    }),
+    // Total de cobranças no período
+    prisma.cobranca.count({
+      where: { deletedAt: null, createdAt: { gte: inicio, lte: fim } },
+    }),
+    // Cobranças pagas
+    prisma.cobranca.count({
+      where: { deletedAt: null, status: 'Pago', createdAt: { gte: inicio, lte: fim } },
+    }),
+    // Saldo devedor total
     prisma.$queryRaw<{ total: number; count: number }[]>`
       SELECT
         COALESCE(SUM("saldoDevedorGerado"), 0)::float AS total,
@@ -29,85 +48,156 @@ export default async function RelatoriosPage() {
         ORDER BY "locacaoId", "updatedAt" DESC, "createdAt" DESC
       ) latest
     `,
-    prisma.cobranca.groupBy({ by: ['status'], where: { deletedAt: null }, _count: true, _sum: { valorRecebido: true } }),
-    prisma.cliente.groupBy({
-      by: ['rotaId'],
-      where: { deletedAt: null, status: 'Ativo' },
+    // Receita por rota
+    prisma.$queryRaw<{ rotaId: string; rotaDescricao: string; total: number; count: number }[]>`
+      SELECT 
+        COALESCE(c."rotaId", 'sem-rota') as "rotaId",
+        COALESCE(r.descricao, 'Sem Rota') as "rotaDescricao",
+        SUM(cb."valorRecebido")::float as total,
+        COUNT(*)::int as count
+      FROM cobrancas cb
+      LEFT JOIN clientes c ON cb."clienteId" = c.id
+      LEFT JOIN rotas r ON c."rotaId" = r.id
+      WHERE cb."deletedAt" IS NULL
+        AND cb."createdAt" >= ${inicio}
+        AND cb."createdAt" <= ${fim}
+      GROUP BY c."rotaId", r.descricao
+      ORDER BY total DESC
+      LIMIT 10
+    `,
+    // Evolução mensal (últimos 12 meses)
+    prisma.$queryRaw<{ mes: Date; total: number; count: number }[]>`
+      SELECT 
+        DATE_TRUNC('month', "createdAt") as mes,
+        COALESCE(SUM("valorRecebido"), 0)::float as total,
+        COUNT(*)::int as count
+      FROM cobrancas
+      WHERE "deletedAt" IS NULL
+        AND "createdAt" >= ${new Date(hoje.getFullYear(), hoje.getMonth() - 11, 1)}
+      GROUP BY DATE_TRUNC('month', "createdAt")
+      ORDER BY mes ASC
+    `,
+    // Top clientes
+    prisma.$queryRaw<{ clienteId: string; clienteNome: string; total: number; count: number }[]>`
+      SELECT 
+        c."clienteId",
+        c."clienteNome",
+        SUM(c."valorRecebido")::float as total,
+        COUNT(*)::int as count
+      FROM cobrancas c
+      WHERE c."deletedAt" IS NULL
+        AND c."createdAt" >= ${inicio}
+        AND c."createdAt" <= ${fim}
+      GROUP BY c."clienteId", c."clienteNome"
+      ORDER BY total DESC
+      LIMIT 10
+    `,
+    // Por status
+    prisma.cobranca.groupBy({
+      by: ['status'],
+      where: { deletedAt: null, createdAt: { gte: inicio, lte: fim } },
       _count: true,
+      _sum: { valorRecebido: true },
     }),
   ])
 
-  const statusColors: Record<string, string> = {
-    Pago: 'text-green-600', Parcial: 'text-yellow-600', Pendente: 'text-blue-600', Atrasado: 'text-red-600',
+  // Calcular indicadores
+  const ticketMedio = cobrancasTotal > 0 
+    ? (receitaTotal._sum.valorRecebido ?? 0) / cobrancasTotal 
+    : 0
+  const percentualPago = cobrancasTotal > 0 
+    ? (cobrancasPagas / cobrancasTotal) * 100 
+    : 0
+
+  // Formatar evolução mensal
+  const mesesLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+  const evolucaoFormatada = evolucaoMensal.map(e => ({
+    mes: mesesLabels[new Date(e.mes).getMonth()],
+    valor: e.total,
+    count: e.count,
+  }))
+
+  // Preencher meses faltantes
+  const evolucaoCompleta = Array.from({ length: 12 }, (_, i) => {
+    const data = new Date(hoje.getFullYear(), hoje.getMonth() - (11 - i), 1)
+    const mesIndex = data.getMonth()
+    const existente = evolucaoMensal.find(e => {
+      const eDate = new Date(e.mes)
+      return eDate.getMonth() === mesIndex && eDate.getFullYear() === data.getFullYear()
+    })
+    return {
+      mes: mesesLabels[mesIndex],
+      valor: existente?.total ?? 0,
+      count: existente?.count ?? 0,
+    }
+  }).slice(-6) // Últimos 6 meses
+
+  return {
+    receitaTotal: receitaTotal._sum.valorRecebido ?? 0,
+    cobrancasTotal,
+    cobrancasPagas,
+    saldoDevedor: saldoDevedor[0]?.total ?? 0,
+    locacoesComSaldo: saldoDevedor[0]?.count ?? 0,
+    ticketMedio,
+    percentualPago,
+    receitaPorRota: receitaPorRota.map(r => ({
+      rotaId: r.rotaId,
+      rotaDescricao: r.rotaDescricao,
+      total: r.total,
+      count: r.count,
+    })),
+    evolucaoMensal: evolucaoCompleta,
+    topClientes: topClientes.map(c => ({
+      clienteId: c.clienteId,
+      clienteNome: c.clienteNome,
+      total: c.total,
+      count: c.count,
+    })),
+    porStatus: porStatus.map(s => ({
+      status: s.status,
+      count: s._count,
+      valor: s._sum.valorRecebido ?? 0,
+    })),
+  }
+}
+
+export default async function RelatoriosPage({
+  searchParams,
+}: { searchParams: Promise<{ periodo?: string; dataInicio?: string; dataFim?: string }> }) {
+  const params = await searchParams
+  
+  // Calcular datas baseado no período
+  let dataInicio: Date | undefined
+  let dataFim: Date | undefined
+  const hoje = new Date()
+
+  switch (params.periodo) {
+    case 'mes':
+      dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+      break
+    case 'trimestre':
+      dataInicio = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1)
+      break
+    case 'ano':
+      dataInicio = new Date(hoje.getFullYear(), 0, 1)
+      break
+    case 'personalizado':
+      if (params.dataInicio) dataInicio = new Date(params.dataInicio)
+      if (params.dataFim) dataFim = new Date(params.dataFim)
+      break
+    default:
+      dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
   }
 
+  const data = await getRelatoriosData(dataInicio, dataFim)
+
   return (
-    <div>
-      <Header title="Relatórios" subtitle="Visão financeira e operacional do sistema" />
-
-      {/* Receita */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="card p-5 bg-green-50">
-          <p className="text-sm font-medium text-green-700">Receita do Mês</p>
-          <p className="text-3xl font-bold text-green-800 mt-1">{formatarMoeda(receitaMes._sum.valorRecebido ?? 0)}</p>
-          <p className="text-xs text-green-600 mt-1">{receitaMes._count} cobranças</p>
-        </div>
-        <div className="card p-5 bg-blue-50">
-          <p className="text-sm font-medium text-blue-700">Receita do Ano</p>
-          <p className="text-3xl font-bold text-blue-800 mt-1">{formatarMoeda(receitaAno._sum.valorRecebido ?? 0)}</p>
-          <p className="text-xs text-blue-600 mt-1">{receitaAno._count} cobranças</p>
-        </div>
-        <div className="card p-5 bg-red-50">
-          <p className="text-sm font-medium text-red-700">Saldo Devedor Total</p>
-          <p className="text-3xl font-bold text-red-800 mt-1">{formatarMoeda(saldoDevedor[0]?.total ?? 0)}</p>
-          <p className="text-xs text-red-600 mt-1">{saldoDevedor[0]?.count ?? 0} locações em aberto</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cobranças por status */}
-        <div className="card p-6">
-          <h2 className="font-semibold text-slate-900 mb-4">💰 Cobranças por Status</h2>
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-slate-100">
-              <th className="text-left font-medium text-slate-500 pb-2">Status</th>
-              <th className="text-right font-medium text-slate-500 pb-2">Qtd</th>
-              <th className="text-right font-medium text-slate-500 pb-2">Valor</th>
-            </tr></thead>
-            <tbody className="divide-y divide-slate-50">
-              {porStatus.map(s => (
-                <tr key={s.status}>
-                  <td className={`py-2.5 font-medium ${statusColors[s.status] ?? 'text-slate-900'}`}>{s.status}</td>
-                  <td className="py-2.5 text-right text-slate-600">{s._count}</td>
-                  <td className="py-2.5 text-right font-medium">{formatarMoeda(s._sum.valorRecebido ?? 0)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Clientes por rota */}
-        <div className="card p-6">
-          <h2 className="font-semibold text-slate-900 mb-4">🗺️ Clientes por Rota</h2>
-          {porRota.length === 0 ? (
-            <p className="text-sm text-slate-400">Nenhuma rota configurada</p>
-          ) : (
-            <div className="space-y-3">
-              {porRota.map(r => (
-                <div key={r.rotaId} className="flex items-center justify-between">
-                  <span className="text-sm text-slate-700 truncate">{r.rotaId}</span>
-                  <div className="flex items-center gap-3">
-                    <div className="w-24 bg-slate-100 rounded-full h-2">
-                      <div className="bg-primary-600 h-2 rounded-full" style={{ width: `${Math.min(100, (r._count / Math.max(...porRota.map(x => x._count))) * 100)}%` }} />
-                    </div>
-                    <span className="text-sm font-semibold w-8 text-right text-slate-900">{r._count}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+    <div className="space-y-6">
+      <Header
+        title="Relatórios"
+        subtitle="Análise financeira e operacional do sistema"
+      />
+      <RelatoriosClient data={data} periodoAtual={params.periodo || 'mes'} />
     </div>
   )
 }

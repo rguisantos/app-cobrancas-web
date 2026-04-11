@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth'
 import Header from '@/components/layout/header'
 import { StatusClienteBadge } from '@/components/ui/badge'
 import EmptyState from '@/components/ui/empty-state'
-import { MapPin, Users } from 'lucide-react'
+import { MapPin, Users, Edit } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Rotas' }
 
@@ -29,44 +29,64 @@ export default async function RotasPage() {
       <Header
         title="Rotas"
         subtitle={`${rotas.length} rota${rotas.length !== 1 ? 's' : ''} cadastrada${rotas.length !== 1 ? 's' : ''}`}
-        actions={podeEditar && <Link href="/admin/rotas/novo" className="btn-primary">+ Nova Rota</Link>}
+        actions={podeEditar && (
+          <Link href="/admin/rotas/novo" className="btn-primary">
+            <MapPin className="w-4 h-4" />
+            <span className="hidden sm:inline">Nova Rota</span>
+          </Link>
+        )}
       />
 
       {rotas.length === 0 ? (
-        <div className="card">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
           <EmptyState 
             icon="🗺️" 
             title="Nenhuma rota cadastrada" 
             description="As rotas são usadas para organizar clientes por região."
-            action={podeEditar && <Link href="/admin/rotas/novo" className="btn-primary">Criar primeira rota</Link>}
+            action={podeEditar && (
+              <Link href="/admin/rotas/novo" className="btn-primary">
+                Criar primeira rota
+              </Link>
+            )}
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {rotas.map(rota => (
             <Link
               key={rota.id}
               href={`/admin/rotas/${rota.id}`}
-              className="card p-5 hover:shadow-md transition-all group"
+              className="group bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md hover:border-blue-300 transition-all"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center group-hover:bg-primary-200 transition-colors">
-                    <MapPin className="w-5 h-5 text-primary-600" />
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/30 group-hover:shadow-md transition-shadow">
+                      <MapPin className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
+                        {rota.descricao}
+                      </h3>
+                      <StatusClienteBadge status={rota.status} />
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-slate-900 group-hover:text-primary-600 transition-colors">
-                      {rota.descricao}
-                    </h3>
-                    <StatusClienteBadge status={rota.status} />
-                  </div>
+                  {podeEditar && (
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="p-2 rounded-lg bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600">
+                        <Edit className="w-4 h-4" />
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-              
-              <div className="mt-4 flex items-center gap-4 text-sm text-slate-500">
-                <div className="flex items-center gap-1">
-                  <Users className="w-4 h-4" />
-                  <span>{rota._count.clientes} cliente{rota._count.clientes !== 1 ? 's' : ''}</span>
+                
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-1.5 text-slate-500">
+                    <Users className="w-4 h-4" />
+                    <span>
+                      <strong className="text-slate-900">{rota._count.clientes}</strong> cliente{rota._count.clientes !== 1 ? 's' : ''}
+                    </span>
+                  </div>
                 </div>
               </div>
             </Link>

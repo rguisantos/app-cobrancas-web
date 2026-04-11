@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Loader2 } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, Package, User, DollarSign, Wrench, FileText, Calendar, TrendingUp, TrendingDown, Clock } from 'lucide-react'
 import Header from '@/components/layout/header'
 
 interface Cliente { 
@@ -20,9 +20,9 @@ interface Produto {
 }
 
 const FORMA_OPTS = [
-  { value: 'PercentualReceber', label: '% Receber', icon: '📈' },
-  { value: 'PercentualPagar', label: '% Pagar', icon: '📉' },
-  { value: 'Periodo', label: 'Período', icon: '📅' },
+  { value: 'PercentualReceber', label: '% Receber', icon: TrendingUp, color: 'emerald' },
+  { value: 'PercentualPagar', label: '% Pagar', icon: TrendingDown, color: 'rose' },
+  { value: 'Periodo', label: 'Período', icon: Clock, color: 'blue' },
 ]
 
 const PERIODICIDADES = ['Mensal', 'Semanal', 'Quinzenal', 'Diária']
@@ -54,7 +54,6 @@ export default function NovaLocacaoPage() {
     observacao: ''
   })
 
-  // Carregar dados iniciais
   useEffect(() => {
     Promise.all([
       fetch('/api/clientes?limit=1000&status=Ativo').then(res => res.json()),
@@ -68,10 +67,8 @@ export default function NovaLocacaoPage() {
       .catch(console.error)
   }, [])
 
-  // Calcula percentual do cliente automaticamente
   const percentualCliente = Math.max(0, 100 - (parseFloat(formData.percentualEmpresa) || 0))
 
-  // Quando selecionar um produto, pré-preenche o número do relógio
   const handleProdutoChange = useCallback((produtoId: string) => {
     const produto = produtos.find(p => p.id === produtoId)
     if (produto) {
@@ -187,188 +184,254 @@ export default function NovaLocacaoPage() {
   if (loadingData) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-6 h-6 animate-spin text-primary-500" />
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
+          <p className="text-slate-500">Carregando dados...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div>
+    <div className="pb-24 lg:pb-8">
       <Header
         title="Nova Locação"
         subtitle="Registrar uma nova locação"
         actions={
           <Link href="/locacoes" className="btn-secondary">
             <ArrowLeft className="w-4 h-4" />
-            Voltar
+            <span className="hidden sm:inline">Voltar</span>
           </Link>
         }
       />
 
-      <form onSubmit={handleSubmit} className="max-w-4xl">
+      <form onSubmit={handleSubmit} className="space-y-6">
         {/* Produto */}
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">🎱 Produto</h2>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Produto Disponível *</label>
-              <select
-                name="produtoId"
-                value={formData.produtoId}
-                onChange={handleChange}
-                className="input"
-                required
-              >
-                <option value="">Selecione um produto disponível</option>
-                {produtos.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.tipoNome} N° {p.identificador} - {p.descricaoNome}
-                  </option>
-                ))}
-              </select>
-              {produtos.length === 0 && (
-                <p className="text-xs text-amber-600 mt-1">
-                  Nenhum produto disponível para locação
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="label">Número do Relógio *</label>
-              <input
-                name="numeroRelogio"
-                value={formData.numeroRelogio}
-                onChange={handleChange}
-                className="input"
-                placeholder="Leitura inicial do relógio"
-                required
-              />
-            </div>
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <Package className="w-5 h-5 text-blue-600" />
+              Produto
+            </h2>
           </div>
-        </div>
+          <div className="p-4 md:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Produto Disponível <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="produtoId"
+                  value={formData.produtoId}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all bg-white"
+                  required
+                >
+                  <option value="">Selecione um produto disponível</option>
+                  {produtos.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.tipoNome} N° {p.identificador} - {p.descricaoNome}
+                    </option>
+                  ))}
+                </select>
+                {produtos.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
+                    <span>⚠️</span>
+                    Nenhum produto disponível para locação
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Número do Relógio <span className="text-red-500">*</span>
+                </label>
+                <input
+                  name="numeroRelogio"
+                  value={formData.numeroRelogio}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all font-mono"
+                  placeholder="Leitura inicial do relógio"
+                  required
+                />
+              </div>
+            </div>
+
+            {formData.produtoId && (
+              <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                <p className="text-sm text-blue-700">
+                  <span className="font-medium">Produto selecionado:</span>{' '}
+                  {formData.produtoTipo} N° {formData.produtoIdentificador}
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
 
         {/* Cliente */}
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">👤 Cliente</h2>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Cliente *</label>
-              <select
-                name="clienteId"
-                value={formData.clienteId}
-                onChange={handleChange}
-                className="input"
-                required
-              >
-                <option value="">Selecione um cliente</option>
-                {clientes.map(c => (
-                  <option key={c.id} value={c.id}>{c.nomeExibicao}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Data da Locação *</label>
-              <input
-                type="date"
-                name="dataLocacao"
-                value={formData.dataLocacao}
-                onChange={handleChange}
-                className="input"
-                required
-              />
-            </div>
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <User className="w-5 h-5 text-emerald-600" />
+              Cliente
+            </h2>
           </div>
-        </div>
-
-        {/* Forma de Pagamento */}
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">💰 Forma de Pagamento</h2>
-          
-          <div className="flex gap-3 mb-4">
-            {FORMA_OPTS.map(opt => (
-              <label
-                key={opt.value}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border cursor-pointer transition-all ${
-                  formData.formaPagamento === opt.value
-                    ? 'border-primary-500 bg-primary-50 text-primary-700'
-                    : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="formaPagamento"
-                  value={opt.value}
-                  checked={formData.formaPagamento === opt.value}
+          <div className="p-4 md:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Cliente <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="clienteId"
+                  value={formData.clienteId}
                   onChange={handleChange}
-                  className="sr-only"
-                />
-                <span>{opt.icon}</span>
-                <span className="font-medium">{opt.label}</span>
-              </label>
-            ))}
-          </div>
-
-          {formData.formaPagamento !== 'Periodo' ? (
-            <>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="label">Preço da Ficha (R$) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    name="precoFicha"
-                    value={formData.precoFicha}
-                    onChange={handleChange}
-                    className="input"
-                    placeholder="3,00"
-                  />
-                </div>
-                <div>
-                  <label className="label">% Empresa *</label>
-                  <input
-                    type="number"
-                    name="percentualEmpresa"
-                    value={formData.percentualEmpresa}
-                    onChange={handleChange}
-                    className="input"
-                    placeholder="50"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                <div>
-                  <label className="label">% Cliente (automático)</label>
-                  <input
-                    value={`${percentualCliente}%`}
-                    className="input bg-slate-50"
-                    disabled
-                  />
-                </div>
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all bg-white"
+                  required
+                >
+                  <option value="">Selecione um cliente</option>
+                  {clientes.map(c => (
+                    <option key={c.id} value={c.id}>{c.nomeExibicao}</option>
+                  ))}
+                </select>
               </div>
-              <div className="grid grid-cols-2 gap-4 mt-4">
-                <div>
-                  <label className="label">Data Primeira Cobrança</label>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Data da Locação <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="date"
-                    name="dataPrimeiraCobranca"
-                    value={formData.dataPrimeiraCobranca}
+                    name="dataLocacao"
+                    value={formData.dataLocacao}
                     onChange={handleChange}
-                    className="input"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all"
+                    required
                   />
                 </div>
               </div>
-            </>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-4">
+            </div>
+          </div>
+        </section>
+
+        {/* Forma de Pagamento */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-amber-600" />
+              Forma de Pagamento
+            </h2>
+          </div>
+          <div className="p-4 md:p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+              {FORMA_OPTS.map(opt => {
+                const Icon = opt.icon
+                const isSelected = formData.formaPagamento === opt.value
+                const colorClasses = {
+                  emerald: 'border-emerald-500 bg-emerald-50 text-emerald-700',
+                  rose: 'border-rose-500 bg-rose-50 text-rose-700',
+                  blue: 'border-blue-500 bg-blue-50 text-blue-700',
+                }
+                return (
+                  <label
+                    key={opt.value}
+                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                      isSelected 
+                        ? colorClasses[opt.color as keyof typeof colorClasses]
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="formaPagamento"
+                      value={opt.value}
+                      checked={isSelected}
+                      onChange={handleChange}
+                      className="sr-only"
+                    />
+                    <Icon className="w-5 h-5" />
+                    <span className="font-medium text-sm">{opt.label}</span>
+                  </label>
+                )
+              })}
+            </div>
+
+            {formData.formaPagamento !== 'Periodo' ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Preço da Ficha (R$) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        name="precoFicha"
+                        value={formData.precoFicha}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                        placeholder="3,00"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      % Empresa <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        name="percentualEmpresa"
+                        value={formData.percentualEmpresa}
+                        onChange={handleChange}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                        placeholder="50"
+                        min="0"
+                        max="100"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">% Cliente (automático)</label>
+                    <div className="relative">
+                      <input
+                        value={`${percentualCliente}%`}
+                        className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600"
+                        disabled
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Data Primeira Cobrança</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="date"
+                        name="dataPrimeiraCobranca"
+                        value={formData.dataPrimeiraCobranca}
+                        onChange={handleChange}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="label">Periodicidade *</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Periodicidade <span className="text-red-500">*</span>
+                  </label>
                   <select
                     name="periodicidade"
                     value={formData.periodicidade}
                     onChange={handleChange}
-                    className="input"
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all bg-white"
                   >
                     <option value="">Selecione</option>
                     {PERIODICIDADES.map(p => (
@@ -377,78 +440,109 @@ export default function NovaLocacaoPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="label">Valor Fixo (R$) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    name="valorFixo"
-                    value={formData.valorFixo}
-                    onChange={handleChange}
-                    className="input"
-                    placeholder="150,00"
-                  />
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                    Valor Fixo (R$) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">R$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      name="valorFixo"
+                      value={formData.valorFixo}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                      placeholder="150,00"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="label">Data Primeira Cobrança</label>
-                  <input
-                    type="date"
-                    name="dataPrimeiraCobranca"
-                    value={formData.dataPrimeiraCobranca}
-                    onChange={handleChange}
-                    className="input"
-                  />
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">Data Primeira Cobrança</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="date"
+                      name="dataPrimeiraCobranca"
+                      value={formData.dataPrimeiraCobranca}
+                      onChange={handleChange}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    />
+                  </div>
                 </div>
               </div>
-            </>
-          )}
-        </div>
+            )}
+          </div>
+        </section>
 
         {/* Manutenção */}
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">🔧 Manutenção</h2>
-          
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              name="trocaPano"
-              checked={formData.trocaPano}
-              onChange={handleChange}
-              className="w-5 h-5 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
-            />
-            <div>
-              <span className="font-medium text-slate-700">Troca de Pano / Manutenção Realizada</span>
-              <p className="text-sm text-slate-500">Marque se foi realizada manutenção no momento da locação</p>
-            </div>
-          </label>
-        </div>
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <Wrench className="w-5 h-5 text-purple-600" />
+              Manutenção
+            </h2>
+          </div>
+          <div className="p-4 md:p-6">
+            <label className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+              formData.trocaPano 
+                ? 'border-purple-500 bg-purple-50' 
+                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+            }`}>
+              <input
+                type="checkbox"
+                name="trocaPano"
+                checked={formData.trocaPano}
+                onChange={handleChange}
+                className="w-5 h-5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 mt-0.5"
+              />
+              <div>
+                <span className="font-medium text-slate-900">Troca de Pano / Manutenção Realizada</span>
+                <p className="text-sm text-slate-500 mt-1">Marque se foi realizada manutenção no momento da locação</p>
+              </div>
+            </label>
+          </div>
+        </section>
 
         {/* Observações */}
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">📝 Observações</h2>
-          <textarea
-            name="observacao"
-            value={formData.observacao}
-            onChange={handleChange}
-            className="input min-h-[100px]"
-            placeholder="Observações sobre a locação..."
-          />
-        </div>
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-slate-600" />
+              Observações
+            </h2>
+          </div>
+          <div className="p-4 md:p-6">
+            <textarea
+              name="observacao"
+              value={formData.observacao}
+              onChange={handleChange}
+              rows={3}
+              className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20 outline-none transition-all resize-none"
+              placeholder="Observações sobre a locação..."
+            />
+          </div>
+        </section>
 
-        <div className="flex gap-3">
-          <button type="submit" disabled={loading || !formData.produtoId} className="btn-primary">
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Salvando...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Salvar Locação
-              </>
-            )}
-          </button>
-          <Link href="/locacoes" className="btn-secondary">Cancelar</Link>
+        {/* Botões de Ação - Sticky em Mobile */}
+        <div className="fixed bottom-0 left-0 right-0 lg:static lg:mt-0 bg-white border-t border-slate-200 p-4 lg:bg-transparent lg:border-0 lg:p-0 z-10">
+          <div className="max-w-7xl mx-auto flex gap-3">
+            <button type="submit" disabled={loading || !formData.produtoId} className="flex-1 lg:flex-none btn-primary justify-center">
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Salvar Locação
+                </>
+              )}
+            </button>
+            <Link href="/locacoes" className="btn-secondary hidden lg:inline-flex">
+              Cancelar
+            </Link>
+          </div>
         </div>
       </form>
     </div>

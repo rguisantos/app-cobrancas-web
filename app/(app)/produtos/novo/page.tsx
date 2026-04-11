@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, Hash, Settings, Wrench, FileText, Loader2, Calendar, Tag, Package } from 'lucide-react'
 import Header from '@/components/layout/header'
 
 interface TipoProduto { id: string; nome: string }
@@ -13,6 +13,7 @@ interface TamanhoProduto { id: string; nome: string }
 export default function NovoProdutoPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
   const [tipos, setTipos] = useState<TipoProduto[]>([])
   const [descricoes, setDescricoes] = useState<DescricaoProduto[]>([])
   const [tamanhos, setTamanhos] = useState<TamanhoProduto[]>([])
@@ -55,7 +56,6 @@ export default function NovoProdutoPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     
-    // Handle dropdown changes that need to update both ID and name
     if (name === 'tipoId') {
       const selectedTipo = tipos.find(t => t.id === value)
       setFormData(prev => ({ 
@@ -80,13 +80,27 @@ export default function NovoProdutoPage() {
     } else {
       setFormData(prev => ({ ...prev, [name]: value }))
     }
+    setErrors(prev => ({ ...prev, [name]: '' }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.tipoId || !formData.descricaoId || !formData.tamanhoId) {
-      alert('Selecione o tipo, descrição e tamanho do produto')
+    const newErrors: Record<string, string> = {}
+    if (!formData.identificador?.trim()) {
+      newErrors.identificador = 'Identificador é obrigatório'
+    }
+    if (!formData.tipoId) {
+      newErrors.tipoId = 'Selecione o tipo do produto'
+    }
+    if (!formData.descricaoId) {
+      newErrors.descricaoId = 'Selecione a descrição do produto'
+    }
+    if (!formData.tamanhoId) {
+      newErrors.tamanhoId = 'Selecione o tamanho do produto'
+    }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
       return
     }
 
@@ -114,252 +128,325 @@ export default function NovoProdutoPage() {
   }
 
   return (
-    <div>
+    <div className="pb-24 lg:pb-8">
       <Header
         title="Novo Produto"
-        subtitle="Cadastrar um novo produto"
+        subtitle="Cadastrar um novo produto no sistema"
         actions={
           <Link href="/produtos" className="btn-secondary">
             <ArrowLeft className="w-4 h-4" />
-            Voltar
+            <span className="hidden sm:inline">Voltar</span>
           </Link>
         }
       />
 
-      <form onSubmit={handleSubmit} className="max-w-4xl">
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">🎱 Identificação</h2>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Número/Identificador *</label>
-              <input
-                name="identificador"
-                value={formData.identificador}
-                onChange={handleChange}
-                className="input"
-                placeholder="Ex: 515"
-                required
-              />
-            </div>
-            <div>
-              <label className="label">Número do Relógio *</label>
-              <input
-                name="numeroRelogio"
-                value={formData.numeroRelogio}
-                onChange={handleChange}
-                className="input"
-                placeholder="Ex: 8070"
-                required
-              />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Identificação */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <Hash className="w-5 h-5 text-blue-600" />
+              Identificação
+            </h2>
+          </div>
+          <div className="p-4 md:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Número/Identificador <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    name="identificador"
+                    value={formData.identificador}
+                    onChange={handleChange}
+                    className={`w-full pl-10 pr-4 py-2.5 rounded-lg border outline-none transition-all ${
+                      errors.identificador ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+                    }`}
+                    placeholder="Ex: 515"
+                    required
+                  />
+                </div>
+                {errors.identificador && <p className="text-red-500 text-xs mt-1">{errors.identificador}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Número do Relógio <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    name="numeroRelogio"
+                    value={formData.numeroRelogio}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                    placeholder="Ex: 8070"
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Código CH</label>
+                <input
+                  name="codigoCH"
+                  value={formData.codigoCH}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  placeholder="Código interno CH"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Código ABLF</label>
+                <input
+                  name="codigoABLF"
+                  value={formData.codigoABLF}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  placeholder="Código interno ABLF"
+                />
+              </div>
             </div>
           </div>
+        </section>
 
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="label">Código CH</label>
-              <input
-                name="codigoCH"
-                value={formData.codigoCH}
-                onChange={handleChange}
-                className="input"
-                placeholder="Código interno CH"
-              />
+        {/* Características */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <Settings className="w-5 h-5 text-purple-600" />
+              Características
+            </h2>
+          </div>
+          <div className="p-4 md:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Tipo <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="tipoId"
+                  value={formData.tipoId}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2.5 rounded-lg border outline-none transition-all bg-white ${
+                    errors.tipoId ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20'
+                  }`}
+                  required
+                >
+                  <option value="">Selecione o tipo</option>
+                  {tipos.map(t => (
+                    <option key={t.id} value={t.id}>{t.nome}</option>
+                  ))}
+                </select>
+                {errors.tipoId && <p className="text-red-500 text-xs mt-1">{errors.tipoId}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Descrição <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="descricaoId"
+                  value={formData.descricaoId}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2.5 rounded-lg border outline-none transition-all bg-white ${
+                    errors.descricaoId ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20'
+                  }`}
+                  required
+                >
+                  <option value="">Selecione a descrição</option>
+                  {descricoes.map(d => (
+                    <option key={d.id} value={d.id}>{d.nome}</option>
+                  ))}
+                </select>
+                {errors.descricaoId && <p className="text-red-500 text-xs mt-1">{errors.descricaoId}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  Tamanho <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="tamanhoId"
+                  value={formData.tamanhoId}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2.5 rounded-lg border outline-none transition-all bg-white ${
+                    errors.tamanhoId ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20'
+                  }`}
+                  required
+                >
+                  <option value="">Selecione o tamanho</option>
+                  {tamanhos.map(t => (
+                    <option key={t.id} value={t.id}>{t.nome}</option>
+                  ))}
+                </select>
+                {errors.tamanhoId && <p className="text-red-500 text-xs mt-1">{errors.tamanhoId}</p>}
+              </div>
             </div>
-            <div>
-              <label className="label">Código ABLF</label>
-              <input
-                name="codigoABLF"
-                value={formData.codigoABLF}
-                onChange={handleChange}
-                className="input"
-                placeholder="Código interno ABLF"
-              />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Conservação</label>
+                <select
+                  name="conservacao"
+                  value={formData.conservacao}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all bg-white"
+                >
+                  <option value="Ótima">Ótima</option>
+                  <option value="Boa">Boa</option>
+                  <option value="Regular">Regular</option>
+                  <option value="Ruim">Ruim</option>
+                  <option value="Péssima">Péssima</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Status</label>
+                <select
+                  name="statusProduto"
+                  value={formData.statusProduto}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all bg-white"
+                >
+                  <option value="Ativo">Ativo</option>
+                  <option value="Inativo">Inativo</option>
+                  <option value="Manutenção">Manutenção</option>
+                </select>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">📋 Características</h2>
-          
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="label">Tipo *</label>
-              <select
-                name="tipoId"
-                value={formData.tipoId}
-                onChange={handleChange}
-                className="input"
-                required
-              >
-                <option value="">Selecione o tipo</option>
-                {tipos.map(t => (
-                  <option key={t.id} value={t.id}>{t.nome}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Descrição *</label>
-              <select
-                name="descricaoId"
-                value={formData.descricaoId}
-                onChange={handleChange}
-                className="input"
-                required
-              >
-                <option value="">Selecione a descrição</option>
-                {descricoes.map(d => (
-                  <option key={d.id} value={d.id}>{d.nome}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="label">Tamanho *</label>
-              <select
-                name="tamanhoId"
-                value={formData.tamanhoId}
-                onChange={handleChange}
-                className="input"
-                required
-              >
-                <option value="">Selecione o tamanho</option>
-                {tamanhos.map(t => (
-                  <option key={t.id} value={t.id}>{t.nome}</option>
-                ))}
-              </select>
-            </div>
+        {/* Manutenção */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <Wrench className="w-5 h-5 text-amber-600" />
+              Manutenção
+            </h2>
           </div>
-
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="label">Conservação</label>
-              <select
-                name="conservacao"
-                value={formData.conservacao}
-                onChange={handleChange}
-                className="input"
-              >
-                <option value="Ótima">Ótima</option>
-                <option value="Boa">Boa</option>
-                <option value="Regular">Regular</option>
-                <option value="Ruim">Ruim</option>
-                <option value="Péssima">Péssima</option>
-              </select>
+          <div className="p-4 md:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Data de Fabricação</label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="date"
+                    name="dataFabricacao"
+                    value={formData.dataFabricacao}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Data da Última Manutenção</label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="date"
+                    name="dataUltimaManutencao"
+                    value={formData.dataUltimaManutencao}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                  />
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="label">Status</label>
-              <select
-                name="statusProduto"
-                value={formData.statusProduto}
-                onChange={handleChange}
-                className="input"
-              >
-                <option value="Ativo">Ativo</option>
-                <option value="Inativo">Inativo</option>
-                <option value="Manutenção">Manutenção</option>
-              </select>
-            </div>
-          </div>
-        </div>
 
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">🔧 Manutenção</h2>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Data de Fabricação</label>
-              <input
-                type="date"
-                name="dataFabricacao"
-                value={formData.dataFabricacao}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Relatório da Última Manutenção</label>
+              <textarea
+                name="relatorioUltimaManutencao"
+                value={formData.relatorioUltimaManutencao}
                 onChange={handleChange}
-                className="input"
+                rows={3}
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all resize-none"
+                placeholder="Descreva a manutenção realizada..."
               />
             </div>
-            <div>
-              <label className="label">Data da Última Manutenção</label>
-              <input
-                type="date"
-                name="dataUltimaManutencao"
-                value={formData.dataUltimaManutencao}
-                onChange={handleChange}
-                className="input"
-              />
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Data de Avaliação</label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="date"
+                    name="dataAvaliacao"
+                    value={formData.dataAvaliacao}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Aprovação</label>
+                <input
+                  name="aprovacao"
+                  value={formData.aprovacao}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                  placeholder="Status de aprovação"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Estabelecimento</label>
+              <div className="relative">
+                <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  name="estabelecimento"
+                  value={formData.estabelecimento}
+                  onChange={handleChange}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                  placeholder="Local onde o produto está (ex: Barracão)"
+                />
+              </div>
             </div>
           </div>
+        </section>
 
-          <div className="mt-4">
-            <label className="label">Relatório da Última Manutenção</label>
+        {/* Observações */}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-slate-600" />
+              Observações
+            </h2>
+          </div>
+          <div className="p-4 md:p-6">
             <textarea
-              name="relatorioUltimaManutencao"
-              value={formData.relatorioUltimaManutencao}
+              name="observacao"
+              value={formData.observacao}
               onChange={handleChange}
-              className="input min-h-[80px]"
-              placeholder="Descreva a manutenção realizada..."
+              rows={3}
+              className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20 outline-none transition-all resize-none"
+              placeholder="Observações sobre o produto..."
             />
           </div>
+        </section>
 
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="label">Data de Avaliação</label>
-              <input
-                type="date"
-                name="dataAvaliacao"
-                value={formData.dataAvaliacao}
-                onChange={handleChange}
-                className="input"
-              />
-            </div>
-            <div>
-              <label className="label">Aprovação</label>
-              <input
-                name="aprovacao"
-                value={formData.aprovacao}
-                onChange={handleChange}
-                className="input"
-                placeholder="Status de aprovação"
-              />
-            </div>
+        {/* Botões de Ação - Sticky em Mobile */}
+        <div className="fixed bottom-0 left-0 right-0 lg:static lg:mt-0 bg-white border-t border-slate-200 p-4 lg:bg-transparent lg:border-0 lg:p-0 z-10">
+          <div className="max-w-7xl mx-auto flex gap-3">
+            <button type="submit" disabled={loading} className="flex-1 lg:flex-none btn-primary justify-center">
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Salvar Produto
+                </>
+              )}
+            </button>
+            <Link href="/produtos" className="btn-secondary hidden lg:inline-flex">
+              Cancelar
+            </Link>
           </div>
-
-          <div className="mt-4">
-            <label className="label">Estabelecimento</label>
-            <input
-              name="estabelecimento"
-              value={formData.estabelecimento}
-              onChange={handleChange}
-              className="input"
-              placeholder="Local onde o produto está (ex: Barracão)"
-            />
-          </div>
-        </div>
-
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">📝 Observações</h2>
-          <textarea
-            name="observacao"
-            value={formData.observacao}
-            onChange={handleChange}
-            className="input min-h-[100px]"
-            placeholder="Observações sobre o produto..."
-          />
-        </div>
-
-        <div className="flex gap-3">
-          <button type="submit" disabled={loading} className="btn-primary">
-            {loading ? (
-              <>
-                <span className="animate-spin">⏳</span>
-                Salvando...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Salvar Produto
-              </>
-            )}
-          </button>
-          <Link href="/produtos" className="btn-secondary">Cancelar</Link>
         </div>
       </form>
     </div>

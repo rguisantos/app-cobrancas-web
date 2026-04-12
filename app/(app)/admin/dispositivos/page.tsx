@@ -31,6 +31,8 @@ export default async function DispositivosPage() {
   const totalInativos = dispositivos.filter(d => d.status !== 'ativo').length
   
   // Online = última sincronização nos últimos 30 minutos
+  // Server Component: executado apenas uma vez no servidor
+  // eslint-disable-next-line react-hooks/purity
   const now = Date.now()
   const ONLINE_THRESHOLD = 1000 * 60 * 30
   const totalOnline = dispositivos.filter(d => 

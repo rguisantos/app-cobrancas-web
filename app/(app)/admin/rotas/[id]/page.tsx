@@ -40,20 +40,33 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
   if (!rota) notFound()
 
   // Buscar usuários com acesso a esta rota
-  const usuariosComAcesso = await prisma.usuario.findMany({
-    where: {
-      deletedAt: null,
-      status: 'Ativo',
-      OR: [
-        { tipoPermissao: 'Administrador' },
-        { 
-          tipoPermissao: 'AcessoControlado',
-          rotasPermitidas: { has: id }
-        }
-      ]
-    },
-    select: { id: true, nome: true, email: true, tipoPermissao: true }
+  // Administradores têm acesso total + usuários com acesso controlado
+  const [adminUsers, controlledUsers] = await Promise.all([
+    prisma.usuario.findMany({
+      where: {
+        deletedAt: null,
+        status: 'Ativo',
+        tipoPermissao: 'Administrador'
+      },
+      select: { id: true, nome: true, email: true, tipoPermissao: true }
+    }),
+    prisma.usuario.findMany({
+      where: {
+        deletedAt: null,
+        status: 'Ativo',
+        tipoPermissao: 'AcessoControlado'
+      },
+      select: { id: true, nome: true, email: true, tipoPermissao: true, rotasPermitidas: true }
+    })
+  ])
+  
+  // Filtrar usuários com acesso controlado que têm esta rota (campo JSON)
+  const usuariosComAcessoControlado = controlledUsers.filter(u => {
+    const rotas = u.rotasPermitidas as string[] | null
+    return rotas?.includes(id)
   })
+  
+  const usuariosComAcesso = [...adminUsers, ...usuariosComAcessoControlado]
 
   const podeEditar = session?.user.tipoPermissao === 'Administrador'
   const clientesAtivos = rota.clientes.filter(c => c.status === 'Ativo')

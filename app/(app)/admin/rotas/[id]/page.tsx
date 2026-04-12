@@ -29,7 +29,7 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
           cidade: true,
           locacoes: {
             where: { status: 'Ativa' },
-            select: { id: true, valorAluguel: true }
+            select: { id: true, precoFicha: true }
           }
         },
         orderBy: { nomeExibicao: 'asc' }
@@ -61,7 +61,7 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
   // Calcular métricas
   const totalLocacoesAtivas = rota.clientes.reduce((acc, c) => acc + c.locacoes.length, 0)
   const valorTotalLocacoes = rota.clientes.reduce((acc, c) => 
-    acc + c.locacoes.reduce((sum, l) => sum + (l.valorAluguel || 0), 0), 0
+    acc + c.locacoes.reduce((sum, l) => sum + (l.precoFicha || 0), 0), 0
   )
 
   return (

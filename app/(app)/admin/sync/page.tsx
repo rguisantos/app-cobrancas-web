@@ -4,8 +4,9 @@ import { getSession } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import Header from '@/components/layout/header'
 import Badge from '@/components/ui/badge'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { Smartphone, Wifi, WifiOff, AlertTriangle, CheckCircle2, Clock, Activity, RefreshCw, Database, Users, Package, FileText, DollarSign } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Monitor de Sincronização' }
 
@@ -14,13 +15,55 @@ export default async function SyncPage() {
   if (!session?.user || session.user.tipoPermissao !== 'Administrador') redirect('/dashboard')
 
   const [conflitos, changelogs, dispositivos] = await Promise.all([
-    prisma.syncConflict.findMany({ where: { resolution: null }, orderBy: { createdAt: 'desc' }, take: 20 }),
-    prisma.changeLog.findMany({ orderBy: { timestamp: 'desc' }, take: 30 }),
-    prisma.dispositivo.findMany({ orderBy: { ultimaSincronizacao: 'desc' } }),
+    prisma.syncConflict.findMany({ 
+      where: { resolution: null }, 
+      orderBy: { createdAt: 'desc' }, 
+      take: 20 
+    }),
+    prisma.changeLog.findMany({ 
+      orderBy: { timestamp: 'desc' }, 
+      take: 50,
+      include: {
+        dispositivo: {
+          select: { nome: true }
+        }
+      }
+    }),
+    prisma.dispositivo.findMany({ 
+      orderBy: { ultimaSincronizacao: 'desc' },
+      include: {
+        _count: {
+          select: { changeLogs: true }
+        }
+      }
+    }),
   ])
 
-  const entityLabel: Record<string, string> = {
-    cliente: '👥', produto: '🎱', locacao: '📋', cobranca: '💰', rota: '🗺️', usuario: '👤',
+  // Estatísticas
+  const totalOperacoes = changelogs.length
+  const operacoesSynced = changelogs.filter(l => l.synced).length
+  const operacoesPendentes = totalOperacoes - operacoesSynced
+  const operacoesPorTipo = {
+    cliente: changelogs.filter(l => l.entityType === 'cliente').length,
+    produto: changelogs.filter(l => l.entityType === 'produto').length,
+    locacao: changelogs.filter(l => l.entityType === 'locacao').length,
+    cobranca: changelogs.filter(l => l.entityType === 'cobranca').length,
+  }
+
+  // Labels amigáveis
+  const entityLabels: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+    cliente: { label: 'Cliente', icon: <Users className="w-4 h-4" />, color: 'bg-blue-100 text-blue-700' },
+    produto: { label: 'Produto', icon: <Package className="w-4 h-4" />, color: 'bg-purple-100 text-purple-700' },
+    locacao: { label: 'Locação', icon: <FileText className="w-4 h-4" />, color: 'bg-green-100 text-green-700' },
+    cobranca: { label: 'Cobrança', icon: <DollarSign className="w-4 h-4" />, color: 'bg-amber-100 text-amber-700' },
+    usuario: { label: 'Usuário', icon: <Users className="w-4 h-4" />, color: 'bg-pink-100 text-pink-700' },
+    rota: { label: 'Rota', icon: <Database className="w-4 h-4" />, color: 'bg-cyan-100 text-cyan-700' },
+  }
+
+  const operationLabels: Record<string, { label: string; color: string }> = {
+    create: { label: 'Criado', color: 'text-green-600 bg-green-50' },
+    update: { label: 'Atualizado', color: 'text-blue-600 bg-blue-50' },
+    delete: { label: 'Excluído', color: 'text-red-600 bg-red-50' },
   }
 
   return (
@@ -30,77 +73,234 @@ export default async function SyncPage() {
         subtitle="Monitor de sincronização bidirecional com o mobile"
       />
 
-      {/* Status dispositivos */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        {dispositivos.map(d => (
-          <div key={d.id} className="card p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="font-medium text-slate-900 text-sm">📱 {d.nome}</p>
-              <Badge label={d.status} variant={d.status === 'ativo' ? 'green' : 'gray'} />
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Activity className="w-5 h-5 text-blue-600" />
             </div>
-            <p className="text-xs text-slate-500">
-              {d.ultimaSincronizacao
-                ? `Último sync: ${format(d.ultimaSincronizacao, "dd/MM/yy 'às' HH:mm", { locale: ptBR })}`
-                : 'Nunca sincronizou'}
-            </p>
+            <div>
+              <p className="text-2xl font-bold text-slate-900">{totalOperacoes}</p>
+              <p className="text-xs text-slate-500">Operações Hoje</p>
+            </div>
           </div>
-        ))}
-        {dispositivos.length === 0 && (
-          <div className="card p-4 col-span-3 text-center text-slate-400 text-sm">Nenhum dispositivo registrado</div>
-        )}
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-slate-900">{operacoesSynced}</p>
+              <p className="text-xs text-slate-500">Sincronizadas</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+              <Clock className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-slate-900">{operacoesPendentes}</p>
+              <p className="text-xs text-slate-500">Pendentes</p>
+            </div>
+          </div>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-slate-900">{conflitos.length}</p>
+              <p className="text-xs text-slate-500">Conflitos</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Status dispositivos */}
+      <div className="card p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+            <Smartphone className="w-5 h-5" />
+            Dispositivos Conectados
+          </h2>
+          <span className="text-xs text-slate-500">{dispositivos.length} dispositivo(s)</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {dispositivos.map(d => {
+            const isOnline = d.ultimaSincronizacao && 
+              (Date.now() - new Date(d.ultimaSincronizacao).getTime()) < 1000 * 60 * 30 // 30 min
+            const lastSync = d.ultimaSincronizacao 
+              ? formatDistanceToNow(new Date(d.ultimaSincronizacao), { locale: ptBR, addSuffix: true })
+              : 'Nunca'
+            
+            return (
+              <div key={d.id} className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                  isOnline ? 'bg-green-100' : 'bg-slate-100'
+                }`}>
+                  {isOnline ? (
+                    <Wifi className="w-6 h-6 text-green-600" />
+                  ) : (
+                    <WifiOff className="w-6 h-6 text-slate-400" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-slate-900 truncate">{d.nome}</p>
+                    <Badge 
+                      label={d.status === 'ativo' ? 'Ativo' : 'Inativo'} 
+                      variant={d.status === 'ativo' ? 'green' : 'gray'} 
+                      size="sm"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Último sync: {lastSync}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {d._count.changeLogs} operações
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+          {dispositivos.length === 0 && (
+            <div className="col-span-full text-center py-8 text-slate-400 text-sm">
+              Nenhum dispositivo registrado
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Conflitos pendentes */}
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-slate-900">⚠️ Conflitos Pendentes ({conflitos.length})</h2>
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Conflitos Pendentes
+            </h2>
+            <Badge label={conflitos.length.toString()} variant={conflitos.length > 0 ? 'yellow' : 'green'} />
           </div>
           {conflitos.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-4xl mb-2">✅</p>
-              <p className="text-sm text-slate-500">Nenhum conflito pendente</p>
+            <div className="text-center py-12">
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="w-8 h-8 text-green-600" />
+              </div>
+              <p className="font-medium text-slate-700">Nenhum conflito pendente</p>
+              <p className="text-sm text-slate-500 mt-1">Todos os dados estão sincronizados</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {conflitos.map(c => (
-                <div key={c.id} className="border border-yellow-200 bg-yellow-50 rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-yellow-900">
-                      {entityLabel[c.entityType] ?? '📄'} {c.entityType} — {c.conflictType}
-                    </span>
-                    <Badge label="Pendente" variant="yellow" />
+              {conflitos.map(c => {
+                const entityInfo = entityLabels[c.entityType] || { label: c.entityType, color: 'bg-gray-100 text-gray-700' }
+                return (
+                  <div key={c.id} className="border border-amber-200 bg-amber-50 rounded-xl p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${entityInfo.color}`}>
+                          {entityInfo.icon}
+                          {entityInfo.label}
+                        </span>
+                        <span className="text-xs text-amber-700 font-medium">
+                          {c.conflictType === 'update_conflict' ? 'Conflito de atualização' : c.conflictType}
+                        </span>
+                      </div>
+                      <Badge label="Pendente" variant="yellow" size="sm" />
+                    </div>
+                    <p className="text-xs text-amber-600 font-mono mt-2 bg-amber-100 px-2 py-1 rounded">
+                      ID: {c.entityId}
+                    </p>
+                    <p className="text-xs text-amber-500 mt-2">
+                      {format(c.createdAt, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </p>
                   </div>
-                  <p className="text-xs text-yellow-700 font-mono">{c.entityId}</p>
-                  <p className="text-xs text-yellow-600 mt-1">{format(c.createdAt, "dd/MM/yy HH:mm", { locale: ptBR })}</p>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
 
         {/* Log de operações */}
         <div className="card p-6">
-          <h2 className="font-semibold text-slate-900 mb-4">📋 Log de Operações (últimas 30)</h2>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {changelogs.length === 0 && <p className="text-sm text-slate-400">Nenhuma operação registrada</p>}
-            {changelogs.map(log => (
-              <div key={log.id} className="flex items-start gap-3 text-xs border-b border-slate-50 pb-2">
-                <span className="font-mono text-slate-400 shrink-0">
-                  {format(log.timestamp, "HH:mm:ss", { locale: ptBR })}
-                </span>
-                <div>
-                  <span className="font-medium text-slate-700">
-                    {entityLabel[log.entityType] ?? '📄'} {log.entityType}
-                  </span>
-                  <span className={`ml-2 font-semibold ${log.operation === 'create' ? 'text-green-600' : log.operation === 'delete' ? 'text-red-600' : 'text-blue-600'}`}>
-                    {log.operation}
-                  </span>
-                  <p className="text-slate-400 font-mono truncate max-w-xs">{log.entityId}</p>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <RefreshCw className="w-5 h-5" />
+              Histórico de Operações
+            </h2>
+            <span className="text-xs text-slate-500">Últimas 50</span>
+          </div>
+          
+          {/* Resumo por tipo */}
+          <div className="grid grid-cols-4 gap-2 mb-4 pb-4 border-b border-slate-100">
+            {Object.entries(operacoesPorTipo).map(([tipo, count]) => {
+              const info = entityLabels[tipo]
+              if (!info || count === 0) return null
+              return (
+                <div key={tipo} className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg ${info.color} text-xs`}>
+                  {info.icon}
+                  <span className="font-medium">{count}</span>
                 </div>
-                <Badge label={log.synced ? 'Sync' : 'Pendente'} variant={log.synced ? 'green' : 'yellow'} />
+              )
+            })}
+          </div>
+          
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {changelogs.length === 0 && (
+              <div className="text-center py-8 text-slate-400 text-sm">
+                Nenhuma operação registrada
               </div>
-            ))}
+            )}
+            {changelogs.map(log => {
+              const entityInfo = entityLabels[log.entityType] || { 
+                label: log.entityType, 
+                icon: <Database className="w-4 h-4" />, 
+                color: 'bg-gray-100 text-gray-700' 
+              }
+              const opInfo = operationLabels[log.operation] || { 
+                label: log.operation, 
+                color: 'text-gray-600 bg-gray-50' 
+              }
+              
+              return (
+                <div key={log.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${entityInfo.color}`}>
+                    {entityInfo.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700">{entityInfo.label}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${opInfo.color}`}>
+                        {opInfo.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                      <span className="font-mono">{log.entityId.substring(0, 20)}...</span>
+                      {log.dispositivo?.nome && (
+                        <>
+                          <span>•</span>
+                          <span>{log.dispositivo.nome}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-500">
+                      {format(log.timestamp, "HH:mm:ss", { locale: ptBR })}
+                    </p>
+                    <Badge 
+                      label={log.synced ? 'Sync' : 'Pendente'} 
+                      variant={log.synced ? 'green' : 'yellow'} 
+                      size="sm"
+                    />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

@@ -277,7 +277,8 @@ export default async function SyncPage() {
               
               // Extrair informações amigáveis do campo changes
               const changes = log.changes as Record<string, unknown>
-              const entityName = changes?.nome || changes?.descricao || changes?.name || null
+              const entityNameRaw = changes?.nome ?? changes?.descricao ?? changes?.name ?? null
+              const entityName = typeof entityNameRaw === 'string' ? entityNameRaw : null
               const entityDetail = (() => {
                 if (log.entityType === 'cliente') {
                   return changes?.cpf ? `CPF: ${String(changes.cpf).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.***.***-$2')}` : null

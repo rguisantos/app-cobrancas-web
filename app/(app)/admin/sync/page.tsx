@@ -274,29 +274,57 @@ export default async function SyncPage() {
                 color: 'text-gray-600 bg-gray-50' 
               }
               
+              // Extrair informações amigáveis do campo changes
+              const changes = log.changes as Record<string, unknown>
+              const entityName = changes?.nome || changes?.descricao || changes?.name || null
+              const entityDetail = (() => {
+                if (log.entityType === 'cliente') {
+                  return changes?.cpf ? `CPF: ${String(changes.cpf).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.***.***-$2')}` : null
+                }
+                if (log.entityType === 'produto') {
+                  return changes?.valor ? `R$ ${Number(changes.valor).toFixed(2)}` : null
+                }
+                if (log.entityType === 'locacao') {
+                  return changes?.dataLocacao ? `Data: ${format(new Date(String(changes.dataLocacao)), 'dd/MM/yyyy')}` : null
+                }
+                if (log.entityType === 'cobranca') {
+                  return changes?.valor ? `R$ ${Number(changes.valor).toFixed(2)}` : null
+                }
+                return null
+              })()
+              
               return (
-                <div key={log.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-slate-50 transition-colors">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${entityInfo.color}`}>
+                <div key={log.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${entityInfo.color}`}>
                     {entityInfo.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-700">{entityInfo.label}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-slate-700">
+                        {entityName || entityInfo.label}
+                      </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${opInfo.color}`}>
                         {opInfo.label}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                      <span className="font-mono">{log.entityId.substring(0, 20)}...</span>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap">
+                      {entityDetail && (
+                        <>
+                          <span className="text-slate-600">{entityDetail}</span>
+                          <span className="text-slate-300">•</span>
+                        </>
+                      )}
                       {log.dispositivo?.nome && (
                         <>
-                          <span>•</span>
-                          <span>{log.dispositivo.nome}</span>
+                          <span className="inline-flex items-center gap-1">
+                            <Smartphone className="w-3 h-3" />
+                            {log.dispositivo.nome}
+                          </span>
                         </>
                       )}
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     <p className="text-xs text-slate-500">
                       {format(log.timestamp, "HH:mm:ss", { locale: ptBR })}
                     </p>

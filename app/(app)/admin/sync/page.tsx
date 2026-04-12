@@ -50,6 +50,22 @@ export default async function SyncPage() {
     cobranca: changelogs.filter(l => l.entityType === 'cobranca').length,
   }
 
+  // Timestamp atual para verificação de status online (30 min)
+  // Server Component: executado apenas uma vez no servidor
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now()
+  const ONLINE_THRESHOLD = 1000 * 60 * 30
+  
+  // Pré-calcular status dos dispositivos
+  const dispositivosComStatus = dispositivos.map(d => ({
+    ...d,
+    isOnline: d.ultimaSincronizacao && 
+      (nowMs - new Date(d.ultimaSincronizacao).getTime()) < ONLINE_THRESHOLD,
+    lastSyncFormatted: d.ultimaSincronizacao 
+      ? formatDistanceToNow(new Date(d.ultimaSincronizacao), { locale: ptBR, addSuffix: true })
+      : 'Nunca'
+  }))
+
   // Labels amigáveis
   const entityLabels: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
     cliente: { label: 'Cliente', icon: <Users className="w-4 h-4" />, color: 'bg-blue-100 text-blue-700' },
@@ -131,43 +147,35 @@ export default async function SyncPage() {
           <span className="text-xs text-slate-500">{dispositivos.length} dispositivo(s)</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {dispositivos.map(d => {
-            const isOnline = d.ultimaSincronizacao && 
-              (Date.now() - new Date(d.ultimaSincronizacao).getTime()) < 1000 * 60 * 30 // 30 min
-            const lastSync = d.ultimaSincronizacao 
-              ? formatDistanceToNow(new Date(d.ultimaSincronizacao), { locale: ptBR, addSuffix: true })
-              : 'Nunca'
-            
-            return (
-              <div key={d.id} className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                  isOnline ? 'bg-green-100' : 'bg-slate-100'
-                }`}>
-                  {isOnline ? (
-                    <Wifi className="w-6 h-6 text-green-600" />
-                  ) : (
-                    <WifiOff className="w-6 h-6 text-slate-400" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-slate-900 truncate">{d.nome}</p>
-                    <Badge 
-                      label={d.status === 'ativo' ? 'Ativo' : 'Inativo'} 
-                      variant={d.status === 'ativo' ? 'green' : 'gray'} 
-                      size="sm"
-                    />
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Último sync: {lastSync}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    {d._count.changeLogs} operações
-                  </p>
-                </div>
+          {dispositivosComStatus.map(d => (
+            <div key={d.id} className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                d.isOnline ? 'bg-green-100' : 'bg-slate-100'
+              }`}>
+                {d.isOnline ? (
+                  <Wifi className="w-6 h-6 text-green-600" />
+                ) : (
+                  <WifiOff className="w-6 h-6 text-slate-400" />
+                )}
               </div>
-            )
-          })}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-slate-900 truncate">{d.nome}</p>
+                  <Badge 
+                    label={d.status === 'ativo' ? 'Ativo' : 'Inativo'} 
+                    variant={d.status === 'ativo' ? 'green' : 'gray'} 
+                    size="sm"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Último sync: {d.lastSyncFormatted}
+                </p>
+                <p className="text-xs text-slate-400">
+                  {d._count.changeLogs} operações
+                </p>
+              </div>
+            </div>
+          ))}
           {dispositivos.length === 0 && (
             <div className="col-span-full text-center py-8 text-slate-400 text-sm">
               Nenhum dispositivo registrado

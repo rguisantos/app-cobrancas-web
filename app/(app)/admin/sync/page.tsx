@@ -22,12 +22,7 @@ export default async function SyncPage() {
     }),
     prisma.changeLog.findMany({ 
       orderBy: { timestamp: 'desc' }, 
-      take: 50,
-      include: {
-        dispositivo: {
-          select: { nome: true }
-        }
-      }
+      take: 50
     }),
     prisma.dispositivo.findMany({ 
       orderBy: { ultimaSincronizacao: 'desc' },
@@ -38,6 +33,9 @@ export default async function SyncPage() {
       }
     }),
   ])
+
+  // Criar mapa de dispositivos para lookup rápido
+  const dispositivosMap = new Map(dispositivos.map(d => [d.id, d.nome]))
 
   // Estatísticas
   const totalOperacoes = changelogs.length
@@ -314,11 +312,11 @@ export default async function SyncPage() {
                           <span className="text-slate-300">•</span>
                         </>
                       )}
-                      {log.dispositivo?.nome && (
+                      {log.deviceId && dispositivosMap.has(log.deviceId) && (
                         <>
                           <span className="inline-flex items-center gap-1">
                             <Smartphone className="w-3 h-3" />
-                            {log.dispositivo.nome}
+                            {dispositivosMap.get(log.deviceId)}
                           </span>
                         </>
                       )}

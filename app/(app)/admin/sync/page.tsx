@@ -25,17 +25,20 @@ export default async function SyncPage() {
       take: 50
     }),
     prisma.dispositivo.findMany({ 
-      orderBy: { ultimaSincronizacao: 'desc' },
-      include: {
-        _count: {
-          select: { changeLogs: true }
-        }
-      }
+      orderBy: { ultimaSincronizacao: 'desc' }
     }),
   ])
 
   // Criar mapa de dispositivos para lookup rápido
   const dispositivosMap = new Map(dispositivos.map(d => [d.id, d.nome]))
+  
+  // Contar operações por dispositivo
+  const operacoesPorDispositivo = new Map<string, number>()
+  changelogs.forEach(log => {
+    if (log.deviceId) {
+      operacoesPorDispositivo.set(log.deviceId, (operacoesPorDispositivo.get(log.deviceId) || 0) + 1)
+    }
+  })
 
   // Estatísticas
   const totalOperacoes = changelogs.length
@@ -169,7 +172,7 @@ export default async function SyncPage() {
                   Último sync: {d.lastSyncFormatted}
                 </p>
                 <p className="text-xs text-slate-400">
-                  {d._count.changeLogs} operações
+                  {operacoesPorDispositivo.get(d.id) || 0} operações
                 </p>
               </div>
             </div>

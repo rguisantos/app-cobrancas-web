@@ -1,0 +1,127 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
+import { serverError, validateBody, ApiError } from '@/lib/api-helpers'
+import { metaCreateSchema } from '@/lib/validations'
+
+// GET /api/metas - List all metas with progress
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const status = searchParams.get('status') // ativa | atingida | expirada
+
+    const metas = await prisma.meta.findMany({
+      where: status ? { status } : undefined,
+      orderBy: { dataFim: 'desc' },
+    })
+
+    // Calculate progress for each meta
+    const metasComProgresso = await Promise.all(metas.map(async (meta) => {
+      let valorAtual = meta.valorAtual
+
+      // Auto-calculate current value for active metas
+      if (meta.status === 'ativa') {
+        const rotaFilter = meta.rotaId
+          ? Prisma.sql`AND cl."rotaId" = ${meta.rotaId}`
+          : Prisma.empty
+
+        if (meta.tipo === 'receita') {
+          const result = await prisma.$queryRaw<any[]>(Prisma.sql`
+            SELECT COALESCE(SUM(cb."valorRecebido"), 0)::float as total
+            FROM cobrancas cb
+            INNER JOIN locacoes l ON l.id = cb."locacaoId"
+            INNER JOIN clientes cl ON cl.id = l."clienteId"
+            WHERE cb."dataVencimento" >= ${meta.dataInicio}
+              AND cb."dataVencimento" <= ${meta.dataFim}
+              AND cb."deletedAt" IS NULL
+              ${rotaFilter}
+          `)
+          valorAtual = result[0]?.total || 0
+        } else if (meta.tipo === 'cobrancas') {
+          const result = await prisma.$queryRaw<any[]>(Prisma.sql`
+            SELECT COUNT(*)::int as total
+            FROM cobrancas cb
+            INNER JOIN locacoes l ON l.id = cb."locacaoId"
+            INNER JOIN clientes cl ON cl.id = l."clienteId"
+            WHERE cb."dataVencimento" >= ${meta.dataInicio}
+              AND cb."dataVencimento" <= ${meta.dataFim}
+              AND cb."deletedAt" IS NULL
+              ${rotaFilter}
+          `)
+          valorAtual = result[0]?.total || 0
+        } else if (meta.tipo === 'adimplencia') {
+          const result = await prisma.$queryRaw<any[]>(Prisma.sql`
+            SELECT 
+              COUNT(*)::int as total,
+              COUNT(CASE WHEN cb.status IN ('Pago', 'Parcial') THEN 1 END)::int as pagas
+            FROM cobrancas cb
+            INNER JOIN locacoes l ON l.id = cb."locacaoId"
+            INNER JOIN clientes cl ON cl.id = l."clienteId"
+            WHERE cb."dataVencimento" >= ${meta.dataInicio}
+              AND cb."dataVencimento" <= ${meta.dataFim}
+              AND cb."deletedAt" IS NULL
+              ${rotaFilter}
+          `)
+          const total = result[0]?.total || 0
+          const pagas = result[0]?.pagas || 0
+          valorAtual = total > 0 ? (pagas / total) * 100 : 0
+        }
+
+        // Auto-update if reached
+        if (valorAtual >= meta.valorMeta && meta.status === 'ativa') {
+          await prisma.meta.update({
+            where: { id: meta.id },
+            data: { status: 'atingida', valorAtual },
+          })
+        } else {
+          await prisma.meta.update({
+            where: { id: meta.id },
+            data: { valorAtual },
+          })
+        }
+      }
+
+      const percentual = meta.valorMeta > 0 ? Math.min(100, (valorAtual / meta.valorMeta) * 100) : 0
+
+      return {
+        ...meta,
+        valorAtual,
+        percentual: Math.round(percentual * 10) / 10,
+        diasRestantes: Math.max(0, Math.ceil((new Date(meta.dataFim).getTime() - Date.now()) / (1000 * 60 * 60 * 24))),
+      }
+    }))
+
+    return NextResponse.json(metasComProgresso)
+  } catch (error) {
+    console.error('Erro ao buscar metas:', error)
+    return NextResponse.json({ error: 'Erro ao buscar metas' }, { status: 500 })
+  }
+}
+
+// POST /api/metas - Create a new meta
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const data = validateBody(metaCreateSchema, body)
+
+    const meta = await prisma.meta.create({
+      data: {
+        nome: data.nome,
+        tipo: data.tipo,
+        valorMeta: data.valorMeta,
+        dataInicio: data.dataInicio,
+        dataFim: data.dataFim,
+        rotaId: data.rotaId || null,
+        criadoPor: data.criadoPor || null,
+      },
+    })
+
+    return NextResponse.json(meta, { status: 201 })
+  } catch (err) {
+    if (err instanceof ApiError) {
+      return NextResponse.json({ error: err.message, details: err.details }, { status: err.statusCode })
+    }
+    console.error('Erro ao criar meta:', err)
+    return serverError()
+  }
+}

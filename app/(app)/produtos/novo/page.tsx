@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, Hash, Settings, Wrench, FileText, Loader2, Calendar, Tag, Package } from 'lucide-react'
 import Header from '@/components/layout/header'
+import { useToast } from '@/components/ui/toaster'
 
 interface TipoProduto { id: string; nome: string }
 interface DescricaoProduto { id: string; nome: string }
@@ -15,6 +16,7 @@ export default function NovoProdutoPage() {
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [tipos, setTipos] = useState<TipoProduto[]>([])
+  const { error: toastError } = useToast()
   const [descricoes, setDescricoes] = useState<DescricaoProduto[]>([])
   const [tamanhos, setTamanhos] = useState<TamanhoProduto[]>([])
   const [formData, setFormData] = useState({
@@ -116,12 +118,12 @@ export default function NovoProdutoPage() {
       if (res.ok) {
         router.push('/produtos')
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao salvar produto')
+        const errorData = await res.json()
+        toastError(errorData.error || 'Erro ao salvar produto')
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao salvar produto')
+      toastError('Erro ao salvar produto')
     } finally {
       setLoading(false)
     }

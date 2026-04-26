@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, User, Shield, Loader2 } from 'lucide-react'
 import Header from '@/components/layout/header'
+import { useToast } from '@/components/ui/toaster'
 
 interface Rota {
   id: string
@@ -25,6 +26,7 @@ export default function EditarUsuarioPage() {
   const [loadingData, setLoadingData] = useState(true)
   const [rotas, setRotas] = useState<Rota[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const { error: toastError } = useToast()
   
   const [formData, setFormData] = useState({
     nome: '',
@@ -151,12 +153,12 @@ export default function EditarUsuarioPage() {
         if (error.errors) {
           setErrors(error.errors)
         } else {
-          alert(error.error || 'Erro ao atualizar usuário')
+          toastError(error.error || 'Erro ao atualizar usuário')
         }
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao atualizar usuário')
+      toastError('Erro ao atualizar usuário')
     } finally {
       setLoading(false)
     }

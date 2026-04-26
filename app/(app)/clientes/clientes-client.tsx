@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { 
   Users,
   Phone,
@@ -22,6 +23,7 @@ import { useState, useCallback } from 'react'
 import { StatusClienteBadge } from '@/components/ui/badge'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 import { exportToCSV, exportEntityList } from '@/lib/export-utils'
+import { useToast } from '@/components/ui/toaster'
 
 // ============================================================================
 // TIPOS
@@ -319,6 +321,8 @@ export function ClientesClient({
   statusFilter,
 }: ClientesClientProps) {
   const totalPages = Math.ceil(total / limit)
+  const router = useRouter()
+  const toast = useToast()
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchLoading, setBatchLoading] = useState(false)
   const [confirmModal, setConfirmModal] = useState<{
@@ -369,13 +373,14 @@ export function ClientesClient({
           })
           if (res.ok) {
             setSelectedIds(new Set())
-            window.location.reload()
+            toast.success(`${selectedIds.size} cliente${selectedIds.size > 1 ? 's' : ''} excluído${selectedIds.size > 1 ? 's' : ''}`)
+            router.refresh()
           } else {
             const data = await res.json()
-            alert(data.error || 'Erro ao excluir clientes')
+            toast.error(data.error || 'Erro ao excluir clientes')
           }
         } catch {
-          alert('Erro ao excluir clientes')
+          toast.error('Erro ao excluir clientes')
         } finally {
           setBatchLoading(false)
           setConfirmModal(prev => ({ ...prev, open: false }))
@@ -400,13 +405,14 @@ export function ClientesClient({
           })
           if (res.ok) {
             setSelectedIds(new Set())
-            window.location.reload()
+            toast.success(`Rota alterada para ${selectedIds.size} cliente${selectedIds.size > 1 ? 's' : ''}`)
+            router.refresh()
           } else {
             const data = await res.json()
-            alert(data.error || 'Erro ao alterar rota')
+            toast.error(data.error || 'Erro ao alterar rota')
           }
         } catch {
-          alert('Erro ao alterar rota')
+          toast.error('Erro ao alterar rota')
         } finally {
           setBatchLoading(false)
           setConfirmModal(prev => ({ ...prev, open: false }))

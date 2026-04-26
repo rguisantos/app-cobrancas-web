@@ -5,6 +5,7 @@ import { Plus, Loader2, Pencil, Check, X, Trash2, FileText, ArrowLeft } from 'lu
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useToast } from '@/components/ui/toaster'
 
 interface DescricaoProduto {
   id: string
@@ -17,6 +18,7 @@ interface DescricoesProdutoClientProps {
 }
 
 export default function DescricoesProdutoClient({ descricoesIniciais }: DescricoesProdutoClientProps) {
+  const { error: toastError } = useToast()
   const [descricoes, setDescricoes] = useState<DescricaoProduto[]>(descricoesIniciais)
   const [novoNome, setNovoNome] = useState('')
   const [loading, setLoading] = useState(false)
@@ -38,14 +40,14 @@ export default function DescricoesProdutoClient({ descricoesIniciais }: Descrico
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Erro ao criar descrição de produto')
+        toastError(data.error || 'Erro ao criar descrição de produto')
         return
       }
       const nova = await res.json()
       setDescricoes(prev => [...prev, { id: nova.id, nome: nova.nome, createdAt: nova.createdAt }])
       setNovoNome('')
     } catch {
-      alert('Erro ao criar descrição de produto')
+      toastError('Erro ao criar descrição de produto')
     } finally {
       setLoading(false)
     }
@@ -64,14 +66,14 @@ export default function DescricoesProdutoClient({ descricoesIniciais }: Descrico
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Erro ao atualizar descrição de produto')
+        toastError(data.error || 'Erro ao atualizar descrição de produto')
         return
       }
       const atualizada = await res.json()
       setDescricoes(prev => prev.map(d => d.id === id ? { ...d, nome: atualizada.nome } : d))
       setEditingId(null)
     } catch {
-      alert('Erro ao atualizar descrição de produto')
+      toastError('Erro ao atualizar descrição de produto')
     } finally {
       setEditLoading(false)
     }
@@ -84,12 +86,12 @@ export default function DescricoesProdutoClient({ descricoesIniciais }: Descrico
     try {
       const res = await fetch(`/api/descricoes-produto/${id}`, { method: 'DELETE' })
       if (!res.ok) {
-        alert('Erro ao excluir descrição de produto')
+        toastError('Erro ao excluir descrição de produto')
         return
       }
       setDescricoes(prev => prev.filter(d => d.id !== id))
     } catch {
-      alert('Erro ao excluir descrição de produto')
+      toastError('Erro ao excluir descrição de produto')
     } finally {
       setDeleteLoading(null)
     }

@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save } from 'lucide-react'
 import Header from '@/components/layout/header'
+import { useToast } from '@/components/ui/toaster'
 
 export default function NovaRotaPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const { error: toastError } = useToast()
   const [formData, setFormData] = useState({
     descricao: '',
     status: 'Ativo'
@@ -33,12 +35,12 @@ export default function NovaRotaPage() {
       if (res.ok) {
         router.push('/admin/rotas')
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao salvar rota')
+        const errorData = await res.json()
+        toastError(errorData.error || 'Erro ao salvar rota')
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao salvar rota')
+      toastError('Erro ao salvar rota')
     } finally {
       setLoading(false)
     }

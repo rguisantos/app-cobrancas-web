@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, User, Shield, Loader2, Phone, Mail, FileText, Tag, Eye, EyeOff } from 'lucide-react'
 import Header from '@/components/layout/header'
+import { useToast } from '@/components/ui/toaster'
 
 interface Rota {
   id: string
@@ -46,6 +47,7 @@ export default function NovoUsuarioPage() {
   const [rotas, setRotas] = useState<Rota[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showPassword, setShowPassword] = useState(false)
+  const { error: toastError } = useToast()
   
   const [formData, setFormData] = useState({
     nome: '',
@@ -149,12 +151,12 @@ export default function NovoUsuarioPage() {
         if (error.errors) {
           setErrors(error.errors)
         } else {
-          alert(error.error || 'Erro ao criar usuário')
+          toastError(error.error || 'Erro ao criar usuário')
         }
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao criar usuário')
+      toastError('Erro ao criar usuário')
     } finally {
       setLoading(false)
     }

@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, Hash, Settings, Wrench, FileText, Loader2, Calendar, Tag, Package } from 'lucide-react'
 import Header from '@/components/layout/header'
+import { useToast } from '@/components/ui/toaster'
 
 interface TipoProduto { id: string; nome: string }
 interface DescricaoProduto { id: string; nome: string }
@@ -18,6 +19,7 @@ export default function EditarProdutoPage() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [loadingData, setLoadingData] = useState(true)
   const [tipos, setTipos] = useState<TipoProduto[]>([])
+  const { error: toastError } = useToast()
   const [descricoes, setDescricoes] = useState<DescricaoProduto[]>([])
   const [tamanhos, setTamanhos] = useState<TamanhoProduto[]>([])
   const [formData, setFormData] = useState({
@@ -144,12 +146,12 @@ export default function EditarProdutoPage() {
       if (res.ok) {
         router.push('/produtos')
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao atualizar produto')
+        const errorData = await res.json()
+        toastError(errorData.error || 'Erro ao atualizar produto')
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao atualizar produto')
+      toastError('Erro ao atualizar produto')
     } finally {
       setLoading(false)
     }

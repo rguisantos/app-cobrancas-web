@@ -5,6 +5,7 @@ import { Plus, Loader2, Pencil, Check, X, Trash2, Tag, ArrowLeft } from 'lucide-
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useToast } from '@/components/ui/toaster'
 
 interface TipoProduto {
   id: string
@@ -17,6 +18,7 @@ interface TiposProdutoClientProps {
 }
 
 export default function TiposProdutoClient({ tiposIniciais }: TiposProdutoClientProps) {
+  const { error: toastError } = useToast()
   const [tipos, setTipos] = useState<TipoProduto[]>(tiposIniciais)
   const [novoNome, setNovoNome] = useState('')
   const [loading, setLoading] = useState(false)
@@ -38,14 +40,14 @@ export default function TiposProdutoClient({ tiposIniciais }: TiposProdutoClient
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Erro ao criar tipo de produto')
+        toastError(data.error || 'Erro ao criar tipo de produto')
         return
       }
       const novo = await res.json()
       setTipos(prev => [...prev, { id: novo.id, nome: novo.nome, createdAt: novo.createdAt }])
       setNovoNome('')
     } catch {
-      alert('Erro ao criar tipo de produto')
+      toastError('Erro ao criar tipo de produto')
     } finally {
       setLoading(false)
     }
@@ -64,14 +66,14 @@ export default function TiposProdutoClient({ tiposIniciais }: TiposProdutoClient
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Erro ao atualizar tipo de produto')
+        toastError(data.error || 'Erro ao atualizar tipo de produto')
         return
       }
       const atualizado = await res.json()
       setTipos(prev => prev.map(t => t.id === id ? { ...t, nome: atualizado.nome } : t))
       setEditingId(null)
     } catch {
-      alert('Erro ao atualizar tipo de produto')
+      toastError('Erro ao atualizar tipo de produto')
     } finally {
       setEditLoading(false)
     }
@@ -84,12 +86,12 @@ export default function TiposProdutoClient({ tiposIniciais }: TiposProdutoClient
     try {
       const res = await fetch(`/api/tipos-produto/${id}`, { method: 'DELETE' })
       if (!res.ok) {
-        alert('Erro ao excluir tipo de produto')
+        toastError('Erro ao excluir tipo de produto')
         return
       }
       setTipos(prev => prev.filter(t => t.id !== id))
     } catch {
-      alert('Erro ao excluir tipo de produto')
+      toastError('Erro ao excluir tipo de produto')
     } finally {
       setDeleteLoading(null)
     }

@@ -5,6 +5,7 @@ import { Plus, Loader2, Pencil, Check, X, Trash2, Building2, ArrowLeft } from 'l
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useToast } from '@/components/ui/toaster'
 
 interface Estabelecimento {
   id: string
@@ -19,6 +20,7 @@ interface EstabelecimentosClientProps {
 }
 
 export default function EstabelecimentosClient({ estabelecimentosIniciais }: EstabelecimentosClientProps) {
+  const { error: toastError } = useToast()
   const [estabelecimentos, setEstabelecimentos] = useState<Estabelecimento[]>(estabelecimentosIniciais)
   const [novoNome, setNovoNome] = useState('')
   const [novoEndereco, setNovoEndereco] = useState('')
@@ -48,7 +50,7 @@ export default function EstabelecimentosClient({ estabelecimentosIniciais }: Est
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Erro ao criar estabelecimento')
+        toastError(data.error || 'Erro ao criar estabelecimento')
         return
       }
       const novo = await res.json()
@@ -63,7 +65,7 @@ export default function EstabelecimentosClient({ estabelecimentosIniciais }: Est
       setNovoEndereco('')
       setNovoObservacao('')
     } catch {
-      alert('Erro ao criar estabelecimento')
+      toastError('Erro ao criar estabelecimento')
     } finally {
       setLoading(false)
     }
@@ -86,7 +88,7 @@ export default function EstabelecimentosClient({ estabelecimentosIniciais }: Est
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Erro ao atualizar estabelecimento')
+        toastError(data.error || 'Erro ao atualizar estabelecimento')
         return
       }
       const atualizado = await res.json()
@@ -98,7 +100,7 @@ export default function EstabelecimentosClient({ estabelecimentosIniciais }: Est
       } : e))
       setEditingId(null)
     } catch {
-      alert('Erro ao atualizar estabelecimento')
+      toastError('Erro ao atualizar estabelecimento')
     } finally {
       setEditLoading(false)
     }
@@ -111,12 +113,12 @@ export default function EstabelecimentosClient({ estabelecimentosIniciais }: Est
     try {
       const res = await fetch(`/api/estabelecimentos/${id}`, { method: 'DELETE' })
       if (!res.ok) {
-        alert('Erro ao excluir estabelecimento')
+        toastError('Erro ao excluir estabelecimento')
         return
       }
       setEstabelecimentos(prev => prev.filter(e => e.id !== id))
     } catch {
-      alert('Erro ao excluir estabelecimento')
+      toastError('Erro ao excluir estabelecimento')
     } finally {
       setDeleteLoading(null)
     }

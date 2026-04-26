@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, MapPin, Loader2 } from 'lucide-react'
 import Header from '@/components/layout/header'
+import { useToast } from '@/components/ui/toaster'
 
 interface Locacao {
   id: string
@@ -24,6 +25,7 @@ export default function EnviarEstoquePage() {
   const router = useRouter()
   const params = useParams()
   const locacaoId = params.id as string
+  const { success, error } = useToast()
   
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
@@ -87,15 +89,15 @@ export default function EnviarEstoquePage() {
       })
 
       if (res.ok) {
-        alert(`Produto enviado para ${formData.estabelecimento} com sucesso!`)
+        success(`Produto enviado para ${formData.estabelecimento} com sucesso!`)
         router.push('/produtos')
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao enviar produto')
+        const errorData = await res.json()
+        error(errorData.error || 'Erro ao enviar produto')
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao enviar produto')
+      error('Erro ao enviar produto')
     } finally {
       setLoading(false)
     }

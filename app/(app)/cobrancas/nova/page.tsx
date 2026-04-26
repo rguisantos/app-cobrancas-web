@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft, Save, Calculator, Loader2, FileText, Hash, DollarSign, Calendar, User, Package } from 'lucide-react'
 import Header from '@/components/layout/header'
 import { formatarMoeda } from '@/shared/types'
+import { useToast } from '@/components/ui/toaster'
 
 interface Locacao {
   id: string
@@ -29,6 +30,7 @@ export default function NovaCobrancaPage() {
   const [loading, setLoading] = useState(false)
   const [locacoes, setLocacoes] = useState<Locacao[]>([])
   const [locacaoSelecionada, setLocacaoSelecionada] = useState<Locacao | null>(null)
+  const { warning, error: toastError } = useToast()
 
   const [formData, setFormData] = useState({
     locacaoId: locacaoIdPreSelect || '',
@@ -107,7 +109,7 @@ export default function NovaCobrancaPage() {
     e.preventDefault()
 
     if (!locacaoSelecionada) {
-      alert('Selecione uma locação')
+      warning('Selecione uma locação')
       return
     }
 
@@ -115,7 +117,7 @@ export default function NovaCobrancaPage() {
     const relogioAtual = parseFloat(formData.relogioAtual) || 0
 
     if (relogioAtual < relogioAnterior) {
-      alert('A leitura atual não pode ser menor que a leitura anterior')
+      warning('A leitura atual não pode ser menor que a leitura anterior')
       return
     }
 
@@ -166,12 +168,12 @@ export default function NovaCobrancaPage() {
         })
         router.push('/cobrancas')
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao salvar cobrança')
+        const errorData = await res.json()
+        toastError(errorData.error || 'Erro ao salvar cobrança')
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao salvar cobrança')
+      toastError('Erro ao salvar cobrança')
     } finally {
       setLoading(false)
     }

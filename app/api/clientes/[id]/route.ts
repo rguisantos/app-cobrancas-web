@@ -1,7 +1,17 @@
 // GET/PUT/DELETE /api/clientes/[id]
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, notFound, serverError, forbidden } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, notFound, serverError, forbidden, validateBody, handleApiError } from '@/lib/api-helpers'
+import { clienteUpdateSchema } from '@/lib/validations'
+
+/** Check if user has permission to modify clientes */
+function canModify(session: any): boolean {
+  if (!session?.user) return false
+  if (session.user.tipoPermissao === 'Administrador') return true
+  if (session.user.tipoPermissao === 'Secretario') return true
+  if (session.user.permissoesWeb?.todosCadastros) return true
+  return false
+}
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -12,8 +22,16 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     where: { id, deletedAt: null },
     include: {
       rota: true,
-      locacoes: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' } },
-      cobrancas: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 10 },
+      locacoes: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: 5,  // Only load 5 most recent locações (detail page shows max 5)
+      },
+      cobrancas: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      },
     },
   })
 
@@ -25,24 +43,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params
   const session = await getAuthSession()
   if (!session) return unauthorized()
+  if (!canModify(session)) return forbidden('Sem permissão para editar clientes')
 
   try {
     const body = await req.json()
-    const allowed = ['tipoPessoa', 'identificador', 'nomeExibicao', 'nomeCompleto', 'razaoSocial', 'nomeFantasia', 'cpf', 'cnpj', 'rg', 'inscricaoEstadual', 'email', 'telefonePrincipal', 'contatos', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'estado', 'rotaId', 'rotaNome', 'status', 'observacao', 'dataCadastro', 'dataUltimaAlteracao', 'latitude', 'longitude']
-    const data: Record<string, any> = {}
-    for (const key of allowed) {
-      if (key in body) data[key] = body[key]
-    }
+    const data = validateBody(clienteUpdateSchema, body)
 
     const cliente = await prisma.cliente.update({
       where: { id },
-      data: { ...data, version: { increment: 1 }, deviceId: 'web', needsSync: true },
+      data: {
+        ...data,
+        version: { increment: 1 },
+        deviceId: 'web',
+        needsSync: true,
+      },
     })
 
     return NextResponse.json(cliente)
   } catch (err) {
-    console.error('[PUT /clientes/id]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }
 
@@ -50,11 +69,17 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const session = await getAuthSession()
   if (!session) return unauthorized()
+  if (!canModify(session)) return forbidden('Sem permissão para excluir clientes')
 
   try {
     await prisma.cliente.update({
       where: { id },
-      data: { deletedAt: new Date(), needsSync: true, version: { increment: 1 } },
+      data: {
+        deletedAt: new Date(),
+        status: 'Inativo',
+        needsSync: true,
+        version: { increment: 1 },
+      },
     })
     return NextResponse.json({ success: true })
   } catch {

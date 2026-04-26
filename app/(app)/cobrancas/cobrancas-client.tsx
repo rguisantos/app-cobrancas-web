@@ -28,6 +28,7 @@ import {
   ArrowRightLeft,
 } from 'lucide-react'
 import { formatarMoeda } from '@/shared/types'
+import { useToast } from '@/components/ui/toaster'
 import { useState, useCallback } from 'react'
 import Header from '@/components/layout/header'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
@@ -473,6 +474,7 @@ export function CobrancasClient({
   statusFilter,
   buscaFilter,
 }: CobrancasClientProps) {
+  const { error: toastError } = useToast()
   const [busca, setBusca] = useState(buscaFilter || '')
   const [status, setStatus] = useState(statusFilter || '')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -536,10 +538,10 @@ export function CobrancasClient({
             window.location.reload()
           } else {
             const data = await res.json()
-            alert(data.error || 'Erro ao excluir cobranças')
+            toastError(data.error || 'Erro ao excluir cobranças')
           }
         } catch {
-          alert('Erro ao excluir cobranças')
+          toastError('Erro ao excluir cobranças')
         } finally {
           setBatchLoading(false)
           setConfirmModal(prev => ({ ...prev, open: false }))
@@ -566,10 +568,10 @@ export function CobrancasClient({
             window.location.reload()
           } else {
             const data = await res.json()
-            alert(data.error || 'Erro ao alterar status')
+            toastError(data.error || 'Erro ao alterar status')
           }
         } catch {
-          alert('Erro ao alterar status')
+          toastError('Erro ao alterar status')
         } finally {
           setBatchLoading(false)
           setConfirmModal(prev => ({ ...prev, open: false }))

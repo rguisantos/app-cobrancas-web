@@ -5,6 +5,7 @@ import { Plus, Loader2, Pencil, Check, X, Trash2, Ruler, ArrowLeft } from 'lucid
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { useToast } from '@/components/ui/toaster'
 
 interface TamanhoProduto {
   id: string
@@ -17,6 +18,7 @@ interface TamanhosProdutoClientProps {
 }
 
 export default function TamanhosProdutoClient({ tamanhosIniciais }: TamanhosProdutoClientProps) {
+  const { error: toastError } = useToast()
   const [tamanhos, setTamanhos] = useState<TamanhoProduto[]>(tamanhosIniciais)
   const [novoNome, setNovoNome] = useState('')
   const [loading, setLoading] = useState(false)
@@ -38,14 +40,14 @@ export default function TamanhosProdutoClient({ tamanhosIniciais }: TamanhosProd
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Erro ao criar tamanho de produto')
+        toastError(data.error || 'Erro ao criar tamanho de produto')
         return
       }
       const novo = await res.json()
       setTamanhos(prev => [...prev, { id: novo.id, nome: novo.nome, createdAt: novo.createdAt }])
       setNovoNome('')
     } catch {
-      alert('Erro ao criar tamanho de produto')
+      toastError('Erro ao criar tamanho de produto')
     } finally {
       setLoading(false)
     }
@@ -64,14 +66,14 @@ export default function TamanhosProdutoClient({ tamanhosIniciais }: TamanhosProd
       })
       if (!res.ok) {
         const data = await res.json()
-        alert(data.error || 'Erro ao atualizar tamanho de produto')
+        toastError(data.error || 'Erro ao atualizar tamanho de produto')
         return
       }
       const atualizado = await res.json()
       setTamanhos(prev => prev.map(t => t.id === id ? { ...t, nome: atualizado.nome } : t))
       setEditingId(null)
     } catch {
-      alert('Erro ao atualizar tamanho de produto')
+      toastError('Erro ao atualizar tamanho de produto')
     } finally {
       setEditLoading(false)
     }
@@ -84,12 +86,12 @@ export default function TamanhosProdutoClient({ tamanhosIniciais }: TamanhosProd
     try {
       const res = await fetch(`/api/tamanhos-produto/${id}`, { method: 'DELETE' })
       if (!res.ok) {
-        alert('Erro ao excluir tamanho de produto')
+        toastError('Erro ao excluir tamanho de produto')
         return
       }
       setTamanhos(prev => prev.filter(t => t.id !== id))
     } catch {
-      alert('Erro ao excluir tamanho de produto')
+      toastError('Erro ao excluir tamanho de produto')
     } finally {
       setDeleteLoading(null)
     }

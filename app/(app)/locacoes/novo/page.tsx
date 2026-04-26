@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, Loader2, Package, User, DollarSign, Wrench, FileText, Calendar, TrendingUp, TrendingDown, Clock } from 'lucide-react'
 import Header from '@/components/layout/header'
+import { useToast } from '@/components/ui/toaster'
 
 interface Cliente { 
   id: string
@@ -31,6 +32,7 @@ export default function NovaLocacaoPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const clienteIdPreSelect = searchParams.get('clienteId')
+  const { warning, error } = useToast()
   
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
@@ -109,32 +111,32 @@ export default function NovaLocacaoPage() {
     const cliente = clientes.find(c => c.id === formData.clienteId)
     
     if (!cliente || !formData.produtoId) {
-      alert('Selecione um cliente e um produto')
+      warning('Selecione um cliente e um produto')
       return
     }
 
     if (!formData.numeroRelogio.trim()) {
-      alert('Informe o número do relógio')
+      warning('Informe o número do relógio')
       return
     }
 
     if (formData.formaPagamento !== 'Periodo') {
       if (!formData.precoFicha || parseFloat(formData.precoFicha) <= 0) {
-        alert('Informe o preço da ficha')
+        warning('Informe o preço da ficha')
         return
       }
       const pct = parseFloat(formData.percentualEmpresa)
       if (isNaN(pct) || pct < 0 || pct > 100) {
-        alert('Percentual da empresa deve ser entre 0 e 100')
+        warning('Percentual da empresa deve ser entre 0 e 100')
         return
       }
     } else {
       if (!formData.valorFixo || parseFloat(formData.valorFixo) <= 0) {
-        alert('Informe o valor fixo')
+        warning('Informe o valor fixo')
         return
       }
       if (!formData.periodicidade) {
-        alert('Selecione a periodicidade')
+        warning('Selecione a periodicidade')
         return
       }
     }
@@ -170,12 +172,12 @@ export default function NovaLocacaoPage() {
       if (res.ok) {
         router.push('/locacoes')
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao salvar locação')
+        const errorData = await res.json()
+        error(errorData.error || 'Erro ao salvar locação')
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao salvar locação')
+      error('Erro ao salvar locação')
     } finally {
       setLoading(false)
     }

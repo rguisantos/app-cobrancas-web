@@ -16,6 +16,7 @@ import {
   Info,
 } from 'lucide-react'
 import Header from '@/components/layout/header'
+import { useToast } from '@/components/ui/toaster'
 
 interface Produto {
   id: string
@@ -36,6 +37,7 @@ export default function NovaManutencaoPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const produtoIdPreSelect = searchParams.get('produtoId')
+  const { warning, error } = useToast()
 
   const [loading, setLoading] = useState(false)
   const [produtos, setProdutos] = useState<Produto[]>([])
@@ -115,7 +117,7 @@ export default function NovaManutencaoPage() {
     e.preventDefault()
 
     if (!produtoSelecionado) {
-      alert('Selecione um produto')
+      warning('Selecione um produto')
       return
     }
 
@@ -141,12 +143,12 @@ export default function NovaManutencaoPage() {
       if (res.ok) {
         router.push('/manutencoes')
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao registrar manutenção')
+        const errorData = await res.json()
+        error(errorData.error || 'Erro ao registrar manutenção')
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao registrar manutenção')
+      error('Erro ao registrar manutenção')
     } finally {
       setLoading(false)
     }

@@ -5,11 +5,13 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Save, MapPin, Loader2, Trash2 } from 'lucide-react'
 import Header from '@/components/layout/header'
+import { useToast } from '@/components/ui/toaster'
 
 export default function EditarRotaPage() {
   const router = useRouter()
   const params = useParams()
   const rotaId = params.id as string
+  const { error: toastError } = useToast()
   
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -58,11 +60,11 @@ export default function EditarRotaPage() {
       if (res.ok) {
         router.push(`/admin/rotas/${rotaId}`)
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao atualizar rota')
+        const errorData = await res.json()
+        toastError(errorData.error || 'Erro ao atualizar rota')
       }
     } catch {
-      alert('Erro ao atualizar rota')
+      toastError('Erro ao atualizar rota')
     } finally {
       setSaving(false)
     }
@@ -82,11 +84,11 @@ export default function EditarRotaPage() {
       if (res.ok) {
         router.push('/admin/rotas')
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao excluir rota')
+        const errorData = await res.json()
+        toastError(errorData.error || 'Erro ao excluir rota')
       }
     } catch {
-      alert('Erro ao excluir rota')
+      toastError('Erro ao excluir rota')
     } finally {
       setDeleting(false)
     }

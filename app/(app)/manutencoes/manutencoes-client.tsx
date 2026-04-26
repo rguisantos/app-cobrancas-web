@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { exportToCSV, exportToXLSX, exportEntityList } from '@/lib/export-utils'
+import { useToast } from '@/components/ui/toaster'
 
 interface Manutencao {
   id: string
@@ -262,6 +263,7 @@ export function ManutencoesClient({
 }: ManutencoesClientProps) {
   const [deleting, setDeleting] = useState<string | null>(null)
   const totalPages = Math.ceil(total / limit)
+  const { error } = useToast()
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir esta manutenção?')) return
@@ -271,10 +273,10 @@ export function ManutencoesClient({
       if (res.ok) {
         window.location.reload()
       } else {
-        alert('Erro ao excluir manutenção')
+        error('Erro ao excluir manutenção')
       }
     } catch {
-      alert('Erro ao excluir manutenção')
+      error('Erro ao excluir manutenção')
     } finally {
       setDeleting(null)
     }

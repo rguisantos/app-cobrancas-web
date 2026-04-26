@@ -3,18 +3,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, forbidden, badRequest, serverError } from '@/lib/api-helpers'
 
-const batchSchema = {
-  delete: {
-    action: 'delete' as const,
-    ids: [] as string[],
-  },
-  updateRota: {
-    action: 'updateRota' as const,
-    ids: [] as string[],
-    data: { rotaId: '' } as { rotaId: string },
-  },
-}
-
 export async function POST(req: NextRequest) {
   const session = await getAuthSession()
   if (!session) return unauthorized()
@@ -40,10 +28,15 @@ export async function POST(req: NextRequest) {
 
     switch (action) {
       case 'delete': {
-        // Soft delete: set deletedAt
+        // Soft delete: set deletedAt + mark for sync
         const result = await prisma.cliente.updateMany({
           where: { id: { in: ids }, deletedAt: null },
-          data: { deletedAt: new Date(), status: 'Inativo' },
+          data: {
+            deletedAt: new Date(),
+            status: 'Inativo',
+            needsSync: true,
+            version: { increment: 1 },
+          },
         })
         return NextResponse.json({
           success: true,
@@ -66,9 +59,15 @@ export async function POST(req: NextRequest) {
           return badRequest('Rota não encontrada')
         }
 
+        // Update rota + mark for sync
         const result = await prisma.cliente.updateMany({
           where: { id: { in: ids }, deletedAt: null },
-          data: { rotaId: data.rotaId, rotaNome: rota.descricao },
+          data: {
+            rotaId: data.rotaId,
+            rotaNome: rota.descricao,
+            needsSync: true,
+            version: { increment: 1 },
+          },
         })
         return NextResponse.json({
           success: true,

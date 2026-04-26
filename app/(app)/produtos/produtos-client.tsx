@@ -24,6 +24,7 @@ import { useState, useCallback } from 'react'
 import { StatusProdutoBadge } from '@/components/ui/badge'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 import { exportToCSV, exportEntityList } from '@/lib/export-utils'
+import { useToast } from '@/components/ui/toaster'
 
 // ============================================================================
 // TIPOS
@@ -342,6 +343,7 @@ export function ProdutosClient({
   statusFilter,
 }: ProdutosClientProps) {
   const totalPages = Math.ceil(total / limit)
+  const { error: toastError } = useToast()
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchLoading, setBatchLoading] = useState(false)
   const [confirmModal, setConfirmModal] = useState<{
@@ -395,10 +397,10 @@ export function ProdutosClient({
             window.location.reload()
           } else {
             const data = await res.json()
-            alert(data.error || 'Erro ao excluir produtos')
+            toastError(data.error || 'Erro ao excluir produtos')
           }
         } catch {
-          alert('Erro ao excluir produtos')
+          toastError('Erro ao excluir produtos')
         } finally {
           setBatchLoading(false)
           setConfirmModal(prev => ({ ...prev, open: false }))
@@ -425,10 +427,10 @@ export function ProdutosClient({
             window.location.reload()
           } else {
             const data = await res.json()
-            alert(data.error || 'Erro ao alterar status')
+            toastError(data.error || 'Erro ao alterar status')
           }
         } catch {
-          alert('Erro ao alterar status')
+          toastError('Erro ao alterar status')
         } finally {
           setBatchLoading(false)
           setConfirmModal(prev => ({ ...prev, open: false }))

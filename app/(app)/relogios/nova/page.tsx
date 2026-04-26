@@ -13,6 +13,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import Header from '@/components/layout/header'
+import { useToast } from '@/components/ui/toaster'
 
 interface Produto {
   id: string
@@ -27,6 +28,7 @@ export default function NovaAlteracaoRelogioPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const produtoIdPreSelect = searchParams.get('produtoId')
+  const { warning, error } = useToast()
 
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
@@ -84,22 +86,22 @@ export default function NovaAlteracaoRelogioPage() {
     e.preventDefault()
 
     if (!formData.produtoId) {
-      alert('Selecione um produto')
+      warning('Selecione um produto')
       return
     }
 
     if (!formData.relogioNovo.trim()) {
-      alert('Informe o novo número do relógio')
+      warning('Informe o novo número do relógio')
       return
     }
 
     if (!formData.motivo.trim()) {
-      alert('Informe o motivo da alteração')
+      warning('Informe o motivo da alteração')
       return
     }
 
     if (produtoSelecionado && formData.relogioNovo === produtoSelecionado.numeroRelogio) {
-      alert('O novo número do relógio é igual ao atual')
+      warning('O novo número do relógio é igual ao atual')
       return
     }
 
@@ -119,12 +121,12 @@ export default function NovaAlteracaoRelogioPage() {
       if (res.ok) {
         router.push('/relogios')
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao registrar alteração')
+        const errorData = await res.json()
+        error(errorData.error || 'Erro ao registrar alteração')
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao registrar alteração')
+      error('Erro ao registrar alteração')
     } finally {
       setLoading(false)
     }

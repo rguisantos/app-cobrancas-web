@@ -8,7 +8,8 @@ import { StatusClienteBadge, StatusLocacaoBadge, StatusPagamentoBadge } from '@/
 import { formatarMoeda } from '@/shared/types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ArrowLeft, Edit, MapPin, Phone, Mail, FileText, Calendar, TrendingUp, DollarSign, Package, Clock } from 'lucide-react'
+import { ArrowLeft, Edit, MapPin, Phone, Mail, FileText, Calendar, TrendingUp, DollarSign, Package, Clock, Trash2 } from 'lucide-react'
+import { ClienteDetailClient } from './cliente-detail-client'
 
 export const metadata: Metadata = { title: 'Detalhes do Cliente' }
 
@@ -20,12 +21,25 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
     where: { id, deletedAt: null },
     include: {
       rota: true,
-      locacoes: { where: { deletedAt: null }, orderBy: { dataLocacao: 'desc' } },
-      cobrancas: { where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 10 },
+      locacoes: {
+        where: { deletedAt: null },
+        orderBy: { dataLocacao: 'desc' },
+        take: 5, // Only load 5 most recent (what we display)
+      },
+      cobrancas: {
+        where: { deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      },
     },
   })
 
   if (!cliente) notFound()
+
+  // Get total locações count separately for the "E mais X" indicator
+  const totalLocacoes = await prisma.locacao.count({
+    where: { clienteId: id, deletedAt: null },
+  })
 
   const podeEditar = session?.user.permissoesWeb?.todosCadastros
   const locacoesAtivas = cliente.locacoes.filter(l => l.status === 'Ativa')
@@ -44,10 +58,13 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
               <span className="hidden sm:inline">Voltar</span>
             </Link>
             {podeEditar && (
-              <Link href={`/clientes/${cliente.id}/editar`} className="btn-primary text-sm">
-                <Edit className="w-4 h-4" />
-                <span className="hidden sm:inline">Editar</span>
-              </Link>
+              <>
+                <Link href={`/clientes/${cliente.id}/editar`} className="btn-primary text-sm">
+                  <Edit className="w-4 h-4" />
+                  <span className="hidden sm:inline">Editar</span>
+                </Link>
+                <ClienteDetailClient clienteId={cliente.id} clienteNome={cliente.nomeExibicao} />
+              </>
             )}
           </div>
         }
@@ -74,7 +91,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                   <span className="text-sm text-slate-500">Rota</span>
                   <span className="text-sm font-medium text-slate-900">{cliente.rota?.descricao ?? '—'}</span>
                 </div>
-                
+
                 {cliente.cpf && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">CPF</span>
@@ -87,7 +104,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                     <span className="text-sm font-medium text-slate-900">{cliente.cnpj}</span>
                   </div>
                 )}
-                
+
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-500 flex items-center gap-1">
                     <Phone className="w-3.5 h-3.5" />
@@ -97,7 +114,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                     {cliente.telefonePrincipal}
                   </a>
                 </div>
-                
+
                 {cliente.email && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500 flex items-center gap-1">
@@ -132,7 +149,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
               {/* Observação */}
               {cliente.observacao && (
                 <div className="mt-6 pt-6 border-t border-slate-100">
-                  <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Observação</p>
+                  <p className="xs font-medium text-slate-500 uppercase tracking-wider mb-2">Observação</p>
                   <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">{cliente.observacao}</p>
                 </div>
               )}
@@ -144,7 +161,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
             <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <h2 className="font-semibold text-slate-900 flex items-center gap-2">
                 <Package className="w-5 h-5 text-purple-600" />
-                Locações ({cliente.locacoes.length})
+                Locações ({totalLocacoes})
               </h2>
               {podeEditar && (
                 <Link href={`/locacoes/nova?clienteId=${cliente.id}`} className="btn-primary text-xs py-1.5">
@@ -162,7 +179,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {cliente.locacoes.slice(0, 5).map(l => (
+                  {cliente.locacoes.map(l => (
                     <Link
                       key={l.id}
                       href={`/locacoes/${l.id}`}
@@ -182,9 +199,9 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                       </div>
                     </Link>
                   ))}
-                  {cliente.locacoes.length > 5 && (
+                  {totalLocacoes > 5 && (
                     <p className="text-center text-sm text-slate-400 pt-2">
-                      E mais {cliente.locacoes.length - 5} locações...
+                      E mais {totalLocacoes - 5} locações...
                     </p>
                   )}
                 </div>
@@ -268,7 +285,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
             </div>
           </section>
 
-          {/* Ações Rápidas - Mobile FAB */}
+          {/* Ações Rápidas - Desktop */}
           {podeEditar && (
             <div className="hidden lg:block">
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">

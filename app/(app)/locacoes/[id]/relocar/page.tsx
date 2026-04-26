@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft, Save, Search, ArrowLeftRight, Loader2, ArrowRight } from 'lucide-react'
 import Header from '@/components/layout/header'
 import { formatarMoeda } from '@/shared/types'
+import { useToast } from '@/components/ui/toaster'
 
 interface Locacao {
   id: string
@@ -41,6 +42,7 @@ export default function RelocarProdutoPage() {
   const router = useRouter()
   const params = useParams()
   const locacaoId = params.id as string
+  const { success, error } = useToast()
   
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
@@ -178,15 +180,15 @@ export default function RelocarProdutoPage() {
 
       if (res.ok) {
         const data = await res.json()
-        alert(`Produto relocado com sucesso para ${formData.novoClienteNome}!`)
+        success(`Produto relocado com sucesso para ${formData.novoClienteNome}!`)
         router.push('/locacoes')
       } else {
-        const error = await res.json()
-        alert(error.error || 'Erro ao relocar produto')
+        const errorData = await res.json()
+        error(errorData.error || 'Erro ao relocar produto')
       }
     } catch (err) {
       console.error(err)
-      alert('Erro ao relocar produto')
+      error('Erro ao relocar produto')
     } finally {
       setLoading(false)
     }

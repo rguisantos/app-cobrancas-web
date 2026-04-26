@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import AuthSessionProvider from '@/components/providers/session-provider'
 import ThemeProvider from '@/components/providers/theme-provider'
+import { Toaster } from '@/components/ui/toaster'
 
 export const metadata: Metadata = {
   title: { template: '%s | App Cobranças', default: 'App Cobranças' },
@@ -37,7 +38,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <AuthProvider>
-          <AuthSessionProvider>{children}</AuthSessionProvider>
+          <AuthSessionProvider>
+            <Toaster>{children}</Toaster>
+          </AuthSessionProvider>
         </AuthProvider>
       </body>
     </html>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Loader2, Key, Copy, Check, Eye, EyeOff, Smartphone, Tablet, Monitor, Trash2, RefreshCw, Wifi, WifiOff, X, AlertTriangle, MoreVertical, Clock, CheckCircle2, XCircle, SmartphoneIcon } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useToast } from '@/components/ui/toaster';
 
 interface Dispositivo {
   id: string;
@@ -35,6 +36,7 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
   const [showSenha, setShowSenha] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const { error: toastError } = useToast();
   
   // Form state
   const [nome, setNome] = useState('');
@@ -93,7 +95,7 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
       setDispositivos([novo, ...dispositivos]);
       setShowModal(false);
     } catch (error) {
-      alert('Erro ao criar dispositivo');
+      toastError('Erro ao criar dispositivo');
     } finally {
       setLoading(false);
     }
@@ -117,7 +119,7 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
         d.id === id ? { ...d, senhaNumerica: novaSenha } : d
       ));
     } catch {
-      alert('Erro ao regenerar senha');
+      toastError('Erro ao regenerar senha');
     }
   };
 
@@ -138,7 +140,7 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
         d.id === id ? { ...d, status: novoStatus } : d
       ));
     } catch {
-      alert('Erro ao alterar status');
+      toastError('Erro ao alterar status');
     }
   };
 
@@ -151,7 +153,7 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
       if (!res.ok) throw new Error('Erro');
       setDispositivos(dispositivos.filter(d => d.id !== id));
     } catch {
-      alert('Erro ao excluir');
+      toastError('Erro ao excluir');
     }
   };
 

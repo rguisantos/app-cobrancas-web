@@ -89,12 +89,15 @@ export default function LoginPage() {
           </div>
           
           {/* Help text */}
-          <p className="text-center text-slate-400 text-sm mt-6">
-            Precisa de ajuda?{' '}
-            <a href="#" className="text-primary-600 hover:text-primary-700 font-medium">
-              Entre em contato
+          <div className="flex items-center justify-center gap-4 text-sm">
+            <a href="/forgot-password" className="text-primary-600 hover:text-primary-700 font-medium">
+              Esqueceu a senha?
             </a>
-          </p>
+            <span className="text-slate-300">|</span>
+            <a href="#" className="text-slate-400 hover:text-slate-500">
+              Suporte
+            </a>
+          </div>
         </div>
       </div>
     </div>

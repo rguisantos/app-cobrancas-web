@@ -1,105 +1,67 @@
 // POST /api/mobile/auth/login — Login para o app mobile
+// Mantido para compatibilidade com o app mobile existente
 // Este endpoint está fora de /api/auth/ para evitar interceptação pelo NextAuth
-// Retorna { token, user } no formato esperado pelo app mobile
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { verificarSenha } from '@/lib/hash'
-import { gerarToken } from '@/lib/jwt'
+import { executarLogin } from '@/lib/auth-core'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
-import { z } from 'zod'
+import { loginSchema } from '@/lib/validations'
 
-// Rate limit: 10 attempts per 15 minutes per IP (mobile may have more users behind same IP)
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 10 })
-
-const schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-})
+// Rate limit: 10 tentativas por 15 minutos por IP (mobile pode ter mais usuários atrás do mesmo IP)
+const mobileLoginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 10 })
 
 export async function POST(req: NextRequest) {
-  // Rate limit check
   const ip = getClientIp(req)
-  const limitResult = loginLimiter(ip)
-  if (!limitResult.success) {
-    const retryAfterSeconds = Math.ceil((limitResult.resetAt - Date.now()) / 1000)
-    return NextResponse.json(
-      { error: 'Muitas tentativas de login. Tente novamente mais tarde.' },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(retryAfterSeconds),
-          'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': String(limitResult.resetAt),
-        },
-      }
-    )
-  }
 
-  console.log('[MOBILE AUTH] Requisição de login recebida')
-  
   try {
     const body = await req.json()
-    console.log('[MOBILE AUTH] Email:', body.email)
-    
-    const { email, password } = schema.parse(body)
+    // Forçar dispositivo como Mobile para compatibilidade
+    const parsed = loginSchema.safeParse({ ...body, dispositivo: 'Mobile' })
 
-    const usuario = await prisma.usuario.findFirst({
-      where: { email, status: 'Ativo', bloqueado: false, deletedAt: null },
-      include: { rotasPermitidasRel: { include: { rota: true } } },
-    })
-
-    if (!usuario) {
-      console.log('[MOBILE AUTH] Usuário não encontrado:', email)
-      return NextResponse.json({ error: 'Email e/ou senha incorretos' }, { status: 401 })
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Dados inválidos', details: parsed.error.errors },
+        { status: 400 }
+      )
     }
 
-    const senhaOk = await verificarSenha(password, usuario.senha)
-    if (!senhaOk) {
-      console.log('[MOBILE AUTH] Senha incorreta para:', email)
-      return NextResponse.json({ error: 'Email e/ou senha incorretos' }, { status: 401 })
+    const limitResult = mobileLoginLimiter(`Mobile:${ip}`)
+    if (!limitResult.success) {
+      const retryAfterSeconds = Math.ceil((limitResult.resetAt - Date.now()) / 1000)
+      return NextResponse.json(
+        { error: 'Muitas tentativas de login. Tente novamente mais tarde.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfterSeconds),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(limitResult.resetAt),
+          },
+        }
+      )
     }
 
-    // Atualizar último acesso
-    await prisma.usuario.update({
-      where: { id: usuario.id },
-      data: {
-        dataUltimoAcesso: new Date().toISOString(),
-        ultimoAcessoDispositivo: 'Mobile',
-      },
+    const result = await executarLogin({
+      email: parsed.data.email,
+      senha: parsed.data.senha,
+      dispositivo: 'Mobile',
+      ip,
+      userAgent: req.headers.get('user-agent') || undefined,
     })
 
-    const token = gerarToken({
-      sub: usuario.id,
-      email: usuario.email,
-      nome: usuario.nome,
-      tipoPermissao: usuario.tipoPermissao,
-    })
+    if (!result.success) {
+      const response: Record<string, unknown> = { error: result.error }
+      if (result.lockoutInfo) {
+        response.lockoutInfo = result.lockoutInfo
+      }
+      return NextResponse.json(response, { status: result.status })
+    }
 
-    const rotasPermitidas = usuario.rotasPermitidasRel.map((ur) => ur.rotaId)
-
-    console.log('[MOBILE AUTH] Login bem-sucedido para:', email)
-    
     return NextResponse.json({
-      token,
-      user: {
-        id: usuario.id,
-        email: usuario.email,
-        nome: usuario.nome,
-        role: usuario.tipoPermissao,
-        tipoPermissao: usuario.tipoPermissao,
-        permissoes: {
-          web:    usuario.permissoesWeb,
-          mobile: usuario.permissoesMobile,
-        },
-        rotasPermitidas,
-        status: usuario.status,
-      },
+      token: result.accessToken,
+      refreshToken: result.refreshToken,
+      user: result.user,
     })
   } catch (err) {
-    console.error('[MOBILE AUTH] Erro:', err)
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Dados inválidos', details: err.errors }, { status: 400 })
-    }
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 }

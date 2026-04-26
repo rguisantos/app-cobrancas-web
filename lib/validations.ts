@@ -201,6 +201,32 @@ export const metaUpdateSchema = z.object({
   { message: 'Data de fim deve ser posterior à data de início', path: ['dataFim'] },
 )
 
+// ─── Autenticação ───────────────────────────────────────────
+
+export const loginSchema = z.object({
+  email: z.string().email('Email inválido'),
+  senha: z.string().min(1, 'Senha é obrigatória'),
+  dispositivo: z.enum(['Web', 'Mobile']).default('Web'),
+})
+
+export const trocarSenhaSchema = z.object({
+  senhaAtual: z.string().min(1, 'Senha atual é obrigatória'),
+  novaSenha: z.string()
+    .min(8, 'Senha deve ter pelo menos 8 caracteres')
+    .regex(/[A-Z]/, 'Senha deve conter pelo menos uma letra maiúscula')
+    .regex(/[a-z]/, 'Senha deve conter pelo menos uma letra minúscula')
+    .regex(/[0-9]/, 'Senha deve conter pelo menos um número')
+    .regex(/[!@#$%^&*()_+\-=\[\]{}|;:\',.<>?\/]/, 'Senha deve conter pelo menos um caractere especial'),
+  confirmarSenha: z.string().min(1, 'Confirmação é obrigatória'),
+}).refine(data => data.novaSenha === data.confirmarSenha, {
+  message: 'As senhas não coincidem',
+  path: ['confirmarSenha'],
+})
+
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token é obrigatório'),
+})
+
 // ─── Type exports ───────────────────────────────────────────
 
 export type ClienteCreateInput = z.infer<typeof clienteCreateSchema>
@@ -217,3 +243,6 @@ export type MetaCreateInput = z.infer<typeof metaCreateSchema>
 export type MetaUpdateInput = z.infer<typeof metaUpdateSchema>
 export type RotaCreateInput = z.infer<typeof rotaCreateSchema>
 export type RotaUpdateInput = z.infer<typeof rotaUpdateSchema>
+export type LoginInput = z.infer<typeof loginSchema>
+export type TrocarSenhaInput = z.infer<typeof trocarSenhaSchema>
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>

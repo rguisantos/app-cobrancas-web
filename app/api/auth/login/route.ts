@@ -1,95 +1,79 @@
-// POST /api/auth/login — Login para o app web
-// Retorna { token, user } no mesmo formato que o mobile espera
+// POST /api/auth/login — Login unificado para Web e Mobile
+// Retorna { token, refreshToken, user }
+// O campo `dispositivo` no body determina se é Web ou Mobile
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { verificarSenha } from '@/lib/hash'
-import { gerarToken } from '@/lib/jwt'
+import { executarLogin, checkDbRateLimit } from '@/lib/auth-core'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
-import { z } from 'zod'
+import { loginSchema } from '@/lib/validations'
 
-// Rate limit: 5 attempts per 15 minutes per IP
+// Rate limit in-memory como primeira camada (rápido, mas reseta em cold start)
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 5 })
-
-const schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-})
+const mobileLoginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 10 })
 
 export async function POST(req: NextRequest) {
-  // Rate limit check
   const ip = getClientIp(req)
-  const limitResult = loginLimiter(ip)
-  if (!limitResult.success) {
-    const retryAfterSeconds = Math.ceil((limitResult.resetAt - Date.now()) / 1000)
-    return NextResponse.json(
-      { error: 'Muitas tentativas de login. Tente novamente mais tarde.' },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(retryAfterSeconds),
-          'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': String(limitResult.resetAt),
-        },
-      }
-    )
-  }
 
   try {
     const body = await req.json()
-    const { email, password } = schema.parse(body)
+    const parsed = loginSchema.safeParse(body)
 
-    const usuario = await prisma.usuario.findFirst({
-      where: { email, status: 'Ativo', bloqueado: false, deletedAt: null },
-      include: { rotasPermitidasRel: { include: { rota: true } } },
-    })
-
-    if (!usuario) {
-      return NextResponse.json({ error: 'Email e/ou senha incorretos' }, { status: 401 })
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Dados inválidos', details: parsed.error.errors },
+        { status: 400 }
+      )
     }
 
-    const senhaOk = await verificarSenha(password, usuario.senha)
-    if (!senhaOk) {
-      return NextResponse.json({ error: 'Email e/ou senha incorretos' }, { status: 401 })
+    const { email, senha, dispositivo } = parsed.data
+
+    // 1. Rate limit in-memory como primeira camada (rápido, proteção básica)
+    const limiter = dispositivo === 'Mobile' ? mobileLoginLimiter : loginLimiter
+    const limitResult = limiter(`${dispositivo}:${ip}`)
+    if (!limitResult.success) {
+      const retryAfterSeconds = Math.ceil((limitResult.resetAt - Date.now()) / 1000)
+      return NextResponse.json(
+        { error: 'Muitas tentativas de login. Tente novamente mais tarde.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(retryAfterSeconds),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(limitResult.resetAt),
+          },
+        }
+      )
     }
 
-    // Atualizar último acesso
-    await prisma.usuario.update({
-      where: { id: usuario.id },
-      data: {
-        dataUltimoAcesso: new Date().toISOString(),
-        ultimoAcessoDispositivo: 'Mobile',
-      },
+    // 2. Executar login (inclui rate limiting persistente via DB + lockout + validação)
+    const result = await executarLogin({
+      email,
+      senha,
+      dispositivo,
+      ip,
+      userAgent: req.headers.get('user-agent') || undefined,
     })
 
-    const token = gerarToken({
-      sub: usuario.id,
-      email: usuario.email,
-      nome: usuario.nome,
-      tipoPermissao: usuario.tipoPermissao,
-    })
-
-    const rotasPermitidas = usuario.rotasPermitidasRel.map((ur) => ur.rotaId)
+    if (!result.success) {
+      const response: Record<string, unknown> = { error: result.error }
+      if (result.lockoutInfo) {
+        response.lockoutInfo = result.lockoutInfo
+      }
+      if (result.status === 429) {
+        // Rate limit via DB — incluir informações no header
+        return NextResponse.json(response, {
+          status: 429,
+          headers: { 'Retry-After': '900' }, // 15 minutos
+        })
+      }
+      return NextResponse.json(response, { status: result.status })
+    }
 
     return NextResponse.json({
-      token,
-      user: {
-        id: usuario.id,
-        email: usuario.email,
-        nome: usuario.nome,
-        role: usuario.tipoPermissao,
-        tipoPermissao: usuario.tipoPermissao,
-        permissoes: {
-          web:    usuario.permissoesWeb,
-          mobile: usuario.permissoesMobile,
-        },
-        rotasPermitidas,
-        status: usuario.status,
-      },
+      token: result.accessToken,
+      refreshToken: result.refreshToken,
+      user: result.user,
     })
   } catch (err) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Dados inválidos', details: err.errors }, { status: 400 })
-    }
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 }

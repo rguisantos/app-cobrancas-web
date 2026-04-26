@@ -1,134 +1,79 @@
-// POST /api/mobile/auth/refresh — Renova token JWT do mobile
-// Recebe o token atual (ainda válido ou dentro da janela de tolerância)
-// e emite um novo token com expiração renovada.
+// POST /api/mobile/auth/refresh — Renova tokens usando refresh token armazenado no DB
+// Sistema de rotação de refresh tokens: a cada renovação, o token antigo é revogado
+// e um novo par (access + refresh) é emitido.
 import { NextRequest, NextResponse } from 'next/server'
+import { validarRefreshToken, criarSessao, revogarSessao } from '@/lib/auth-core'
 import { prisma } from '@/lib/prisma'
-import { extrairToken, verificarToken, gerarToken } from '@/lib/jwt'
-import { logger } from '@/lib/logger'
 import { rateLimit, getClientIp } from '@/lib/rate-limit'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
-// Rate limit: 30 attempts per 15 minutes per IP (refresh tokens are called more frequently)
+// Rate limit: 30 tentativas por 15 minutos por IP (refresh é chamado com mais frequência)
 const refreshLimiter = rateLimit({ windowMs: 15 * 60 * 1000, maxRequests: 30 })
 
-// Janela de tolerância: permite renovar tokens expirados há até 7 dias
-const REFRESH_GRACE_PERIOD_MS = 7 * 24 * 60 * 60 * 1000
+const schema = z.object({
+  refreshToken: z.string().min(1, 'Refresh token é obrigatório'),
+})
 
 export async function POST(req: NextRequest) {
-  // Rate limit check
   const ip = getClientIp(req)
   const limitResult = refreshLimiter(ip)
   if (!limitResult.success) {
-    const retryAfterSeconds = Math.ceil((limitResult.resetAt - Date.now()) / 1000)
     return NextResponse.json(
       { success: false, error: 'Muitas requisições. Tente novamente mais tarde.' },
       {
         status: 429,
-        headers: {
-          'Retry-After': String(retryAfterSeconds),
-          'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': String(limitResult.resetAt),
-        },
+        headers: { 'Retry-After': String(Math.ceil((limitResult.resetAt - Date.now()) / 1000)) },
       }
     )
   }
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    const token = extrairToken(authHeader)
-    
-    if (!token) {
-      return NextResponse.json({ success: false, error: 'Token não fornecido' }, { status: 401 })
+    const body = await req.json()
+    const { refreshToken } = schema.parse(body)
+
+    // Validar o refresh token contra o banco de dados
+    const validation = await validarRefreshToken(refreshToken)
+
+    if (!validation.valid || !validation.usuarioId || !validation.sessaoId) {
+      return NextResponse.json(
+        { success: false, error: 'Refresh token inválido ou expirado. Faça login novamente.' },
+        { status: 401 }
+      )
     }
 
-    // Tentar verificar o token normalmente
-    let payload = verificarToken(token)
-    
-    // Se o token expirou, verificar se está dentro da janela de tolerância
-    if (!payload) {
-      try {
-        const jwt = require('jsonwebtoken')
-        const secret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET
-        if (!secret) {
-          return NextResponse.json({ success: false, error: 'Configuração do servidor incompleta' }, { status: 500 })
-        }
-
-        // Decodificar sem verificar expiração para checar o payload
-        const decoded = jwt.decode(token) as any
-        if (!decoded?.sub) {
-          return NextResponse.json({ success: false, error: 'Token malformado' }, { status: 401 })
-        }
-
-        // Verificar se está dentro da janela de tolerância
-        const exp = decoded.exp * 1000 // Converter para ms
-        const now = Date.now()
-        if (now - exp > REFRESH_GRACE_PERIOD_MS) {
-          logger.warn(`[auth/refresh] Token expirado há mais de 7 dias, recusando renovação`)
-          return NextResponse.json({ 
-            success: false, 
-            error: 'Token expirado há muito tempo. Faça login novamente.' 
-          }, { status: 401 })
-        }
-
-        // Verificar se o usuário ainda está ativo
-        const usuario = await prisma.usuario.findFirst({
-          where: { 
-            id: decoded.sub, 
-            status: 'Ativo', 
-            bloqueado: false, 
-            deletedAt: null 
-          },
-        })
-
-        if (!usuario) {
-          return NextResponse.json({ success: false, error: 'Usuário inativo ou bloqueado' }, { status: 401 })
-        }
-
-        // Emitir novo token
-        payload = {
-          sub: usuario.id,
-          email: usuario.email,
-          nome: usuario.nome,
-          tipoPermissao: usuario.tipoPermissao,
-        }
-      } catch (decodeError) {
-        logger.error(`[auth/refresh] Erro ao decodificar token:`, decodeError)
-        return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
-      }
-    }
-
-    if (!payload) {
-      return NextResponse.json({ success: false, error: 'Token inválido' }, { status: 401 })
-    }
-
-    // Verificar se o usuário ainda está ativo no banco
+    // Verificar se o usuário ainda está ativo
     const usuario = await prisma.usuario.findFirst({
-      where: { 
-        id: payload.sub, 
-        status: 'Ativo', 
-        bloqueado: false, 
-        deletedAt: null 
-      },
+      where: { id: validation.usuarioId, status: 'Ativo', bloqueado: false, deletedAt: null },
       include: { rotasPermitidasRel: { include: { rota: true } } },
     })
 
     if (!usuario) {
-      return NextResponse.json({ success: false, error: 'Usuário inativo ou bloqueado' }, { status: 401 })
+      // Revogar sessão do usuário inativo
+      await revogarSessao(refreshToken)
+      return NextResponse.json(
+        { success: false, error: 'Usuário inativo ou bloqueado' },
+        { status: 401 }
+      )
     }
 
-    // Emitir novo token com expiração renovada
-    const newToken = gerarToken({
-      sub: usuario.id,
-      email: usuario.email,
-      nome: usuario.nome,
-      tipoPermissao: usuario.tipoPermissao,
-    })
+    // Revogar o refresh token antigo (rotação)
+    await revogarSessao(refreshToken)
+
+    // Criar nova sessão com novos tokens
+    const { accessToken, refreshToken: newRefreshToken } = await criarSessao(
+      usuario.id,
+      'Mobile',
+      ip,
+      req.headers.get('user-agent') || undefined
+    )
 
     const rotasPermitidas = usuario.rotasPermitidasRel.map((ur) => ur.rotaId)
 
     return NextResponse.json({
       success: true,
-      token: newToken,
+      token: accessToken,
+      refreshToken: newRefreshToken,
       user: {
         id: usuario.id,
         email: usuario.email,
@@ -136,7 +81,7 @@ export async function POST(req: NextRequest) {
         role: usuario.tipoPermissao,
         tipoPermissao: usuario.tipoPermissao,
         permissoes: {
-          web:    usuario.permissoesWeb,
+          web: usuario.permissoesWeb,
           mobile: usuario.permissoesMobile,
         },
         rotasPermitidas,
@@ -144,7 +89,10 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (err) {
-    logger.error(`[auth/refresh] Erro interno:`, err)
+    if (err instanceof z.ZodError) {
+      return NextResponse.json({ success: false, error: 'Dados inválidos' }, { status: 400 })
+    }
+    logger.error('[mobile/auth/refresh] Erro interno:', err)
     return NextResponse.json({ success: false, error: 'Erro interno' }, { status: 500 })
   }
 }

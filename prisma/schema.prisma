@@ -328,6 +328,8 @@ model Usuario {
   
   status                  String    @default("Ativo")
   bloqueado               Boolean   @default(false)
+  tentativasLoginFalhas   Int       @default(0)
+  bloqueadoAte            DateTime?
   
   dataUltimoAcesso        String?
   ultimoAcessoDispositivo String?   // 'Web' | 'Mobile'
@@ -344,6 +346,8 @@ model Usuario {
 
   rotasPermitidasRel UsuarioRota[]
   notificacoes       Notificacao[]
+  sessoes            Sessao[]
+  tokensRecuperacao  TokenRecuperacao[]
 
   @@index([updatedAt])              // Para sync pull de permissões
   @@index([deletedAt, updatedAt])   // Índice composto para queries de sync
@@ -568,4 +572,64 @@ model Meta {
   @@index([status])
   @@index([dataInicio, dataFim])
   @@index([rotaId])
+}
+
+// ============================================================
+// SESSÕES — Gerenciamento de sessões de autenticação
+// ============================================================
+
+model Sessao {
+  id            String   @id @default(uuid())
+  usuarioId     String
+  refreshToken  String   @unique  // Hashed refresh token
+  dispositivo   String   // 'Web' | 'Mobile'
+  ip            String?
+  userAgent     String?
+  expiraEm      DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("sessoes")
+  @@index([usuarioId])
+  @@index([refreshToken])
+  @@index([expiraEm])
+}
+
+// ============================================================
+// TENTATIVAS DE LOGIN — Rastreamento para bloqueio de conta
+// ============================================================
+
+model TentativaLogin {
+  id        String   @id @default(uuid())
+  email     String
+  ip        String
+  sucesso   Boolean
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@map("tentativas_login")
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+}
+
+// ============================================================
+// TOKENS DE RECUPERAÇÃO — Para redefinição de senha
+// ============================================================
+
+model TokenRecuperacao {
+  id        String    @id @default(uuid())
+  usuarioId String
+  token     String    @unique  // Hash SHA-256 do token enviado por email
+  usado     Boolean   @default(false)
+  expiraEm  DateTime
+  createdAt DateTime  @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@map("tokens_recuperacao")
+  @@index([token])
+  @@index([usuarioId])
+  @@index([expiraEm])
 }

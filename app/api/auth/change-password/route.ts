@@ -1,32 +1,24 @@
-// POST /api/auth/change-password — Altera senha do usuário
+// POST /api/auth/change-password — Altera senha com política forte
 // Suporta autenticação via JWT (mobile) e sessão NextAuth (web)
+// Após alterar a senha, todas as sessões são revogadas para segurança
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extrairToken, verificarToken } from '@/lib/jwt'
 import { verificarSenha, hashSenha } from '@/lib/hash'
 import { getSession } from '@/lib/auth'
-import { z } from 'zod'
-
-const schema = z.object({
-  senhaAtual: z.string().min(1, 'Senha atual é obrigatória'),
-  novaSenha: z.string().min(6, 'Nova senha deve ter pelo menos 6 caracteres'),
-  confirmarSenha: z.string().min(1, 'Confirmação de senha é obrigatória'),
-}).refine(data => data.novaSenha === data.confirmarSenha, {
-  message: 'As senhas não coincidem',
-  path: ['confirmarSenha'],
-})
+import { revogarTodasSessoes } from '@/lib/auth-core'
+import { trocarSenhaSchema } from '@/lib/validations'
 
 export async function POST(req: NextRequest) {
-  // Tentar autenticação via sessão NextAuth (web) ou JWT (mobile)
   let userId: string | null = null
 
-  // 1. Tentar sessão NextAuth
+  // 1. Tentar sessão NextAuth (web)
   const session = await getSession()
   if (session?.user?.id) {
     userId = session.user.id
   }
 
-  // 2. Se não tem sessão, tentar JWT
+  // 2. Se não tem sessão, tentar JWT (mobile)
   if (!userId) {
     const token = extrairToken(req.headers.get('Authorization'))
     if (token) {
@@ -43,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const validated = schema.parse(body)
+    const validated = trocarSenhaSchema.parse(body)
 
     const usuario = await prisma.usuario.findUnique({
       where: { id: userId },
@@ -68,15 +60,20 @@ export async function POST(req: NextRequest) {
       data: { senha: novaSenhaHash },
     })
 
-    return NextResponse.json({ success: true, message: 'Senha alterada com sucesso' })
+    // Revogar todas as sessões (garante que qualquer atacante com a senha antiga seja desconectado)
+    await revogarTodasSessoes(usuario.id)
+
+    return NextResponse.json({
+      success: true,
+      message: 'Senha alterada com sucesso. Faça login novamente nos outros dispositivos.',
+    })
   } catch (error) {
-    if (error instanceof z.ZodError) {
+    if (error instanceof (await import('zod')).ZodError) {
       return NextResponse.json(
-        { error: 'Dados inválidos', details: error.errors.map(e => e.message) },
+        { error: 'Dados inválidos', details: error.errors.map((e) => e.message) },
         { status: 400 }
       )
     }
-    console.error('[auth/change-password]', error)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 }

@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extrairToken, verificarToken } from '@/lib/jwt'
+import { logger } from '@/lib/logger'
 
 export async function GET(req: NextRequest) {
   const token = extrairToken(req.headers.get('Authorization'))
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
       status: usuario.status,
     })
   } catch (error) {
-    console.error('[auth/me]', error)
+    logger.error('[auth/me] Erro ao buscar usuário:', error)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 }

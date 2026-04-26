@@ -1,8 +1,19 @@
 // GET /api/relatorios/produtos — Relatório de produtos
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthSession, unauthorized, forbidden } from '@/lib/api-helpers'
 
 export async function GET(request: NextRequest) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
+  // Somente quem tem permissão de relatórios ou todosCadastros pode acessar
+  if (session.user.tipoPermissao === 'AcessoControlado' &&
+      !session.user.permissoesWeb?.relatorios &&
+      !session.user.permissoesWeb?.todosCadastros) {
+    return forbidden('Sem permissão para acessar relatórios')
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const hoje = new Date()

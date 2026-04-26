@@ -499,7 +499,7 @@ export default async function ProdutoDetailPage({ params }: { params: Promise<{ 
                     </Link>
                   )}
                   {podeEditar && (
-                    <Link href={`/produtos/${produto.id}/editar`} className="btn-secondary w-full justify-center">
+                    <Link href={`/manutencoes/nova?produtoId=${produto.id}`} className="btn-secondary w-full justify-center">
                       <Wrench className="w-4 h-4" />
                       Registrar Manutenção
                     </Link>

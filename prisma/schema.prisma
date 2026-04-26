@@ -168,7 +168,9 @@ model Produto {
   historicoRelogio HistoricoRelogio[]
 
   @@map("produtos")
+  @@index([identificador])         // Busca frequente por identificador
   @@index([statusProduto])
+  @@index([tipoId])                // Filtro por tipo de produto
   @@index([updatedAt])              // Para sync pull
   @@index([deletedAt, updatedAt])   // Índice composto para queries de sync pull
   @@index([deviceId, updatedAt])    // Índice composto para filtrar por dispositivo

@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { 
+import { useRouter } from 'next/navigation'
+import {
   Package,
   Box,
   Hash,
@@ -25,27 +26,14 @@ import { StatusProdutoBadge } from '@/components/ui/badge'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 import { exportToCSV, exportEntityList } from '@/lib/export-utils'
 import { useToast } from '@/components/ui/toaster'
+import { produtoService, type ProdutoListado } from '@/lib/produto-service'
 
 // ============================================================================
 // TIPOS
 // ============================================================================
 
-interface Produto {
-  id: string
-  identificador: string
-  tipoNome: string
-  descricaoNome: string
-  tamanhoNome: string
-  numeroRelogio: string
-  conservacao: string
-  statusProduto: string
-  clienteNome?: string
-  locacaoId?: string
-  estabelecimento?: string | null
-}
-
 interface ProdutosClientProps {
-  produtos: Produto[]
+  produtos: ProdutoListado[]
   total: number
   page: number
   limit: number
@@ -58,26 +46,26 @@ interface ProdutosClientProps {
 // COMPONENTE DE CARD PARA MOBILE
 // ============================================================================
 
-function ProdutoCard({ 
-  produto, 
-  podeEditar, 
-  selected, 
-  onToggleSelect 
-}: { 
-  produto: Produto
+function ProdutoCard({
+  produto,
+  podeEditar,
+  selected,
+  onToggleSelect
+}: {
+  produto: ProdutoListado
   podeEditar: boolean
   selected: boolean
   onToggleSelect: () => void
 }) {
   const estaLocado = !!produto.clienteNome
-  
+
   return (
     <div className={`card p-4 space-y-3 transition-colors ${selected ? 'ring-2 ring-primary-500 bg-primary-50/30' : ''}`}>
       {/* Header com identificador e status */}
       <div className="flex items-start gap-3">
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg shadow-sm flex-shrink-0 ${
-          estaLocado 
-            ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white' 
+          estaLocado
+            ? 'bg-gradient-to-br from-purple-500 to-purple-600 text-white'
             : 'bg-gradient-to-br from-slate-400 to-slate-500 text-white'
         }`}>
           {produto.identificador}
@@ -125,7 +113,7 @@ function ProdutoCard({
           {estaLocado ? (
             <>
               <User className="w-4 h-4 text-purple-500" />
-              <Link 
+              <Link
                 href={`/locacoes/${produto.locacaoId}`}
                 className="text-sm font-medium text-purple-600 hover:text-purple-800"
               >
@@ -155,15 +143,15 @@ function ProdutoCard({
 // COMPONENTE DE TABELA PARA DESKTOP
 // ============================================================================
 
-function ProdutosTable({ 
-  produtos, 
-  podeEditar, 
-  selectedIds, 
-  onToggleSelect, 
-  onToggleSelectAll, 
-  allSelected 
-}: { 
-  produtos: Produto[]
+function ProdutosTable({
+  produtos,
+  podeEditar,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
+  allSelected
+}: {
+  produtos: ProdutoListado[]
   podeEditar: boolean
   selectedIds: Set<string>
   onToggleSelect: (id: string) => void
@@ -342,6 +330,7 @@ export function ProdutosClient({
   buscaFilter,
   statusFilter,
 }: ProdutosClientProps) {
+  const router = useRouter()
   const totalPages = Math.ceil(total / limit)
   const { error: toastError } = useToast()
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -387,20 +376,14 @@ export function ProdutosClient({
       onConfirm: async () => {
         setBatchLoading(true)
         try {
-          const res = await fetch('/api/produtos/batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'delete', ids: Array.from(selectedIds) }),
+          await produtoService.batch({
+            action: 'delete',
+            ids: Array.from(selectedIds),
           })
-          if (res.ok) {
-            setSelectedIds(new Set())
-            window.location.reload()
-          } else {
-            const data = await res.json()
-            toastError(data.error || 'Erro ao excluir produtos')
-          }
-        } catch {
-          toastError('Erro ao excluir produtos')
+          setSelectedIds(new Set())
+          router.refresh()
+        } catch (err) {
+          toastError(err instanceof Error ? err.message : 'Erro ao excluir produtos')
         } finally {
           setBatchLoading(false)
           setConfirmModal(prev => ({ ...prev, open: false }))
@@ -417,20 +400,15 @@ export function ProdutosClient({
       onConfirm: async () => {
         setBatchLoading(true)
         try {
-          const res = await fetch('/api/produtos/batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'updateStatus', ids: Array.from(selectedIds), data: { statusProduto: status } }),
+          await produtoService.batch({
+            action: 'updateStatus',
+            ids: Array.from(selectedIds),
+            data: { statusProduto: status },
           })
-          if (res.ok) {
-            setSelectedIds(new Set())
-            window.location.reload()
-          } else {
-            const data = await res.json()
-            toastError(data.error || 'Erro ao alterar status')
-          }
-        } catch {
-          toastError('Erro ao alterar status')
+          setSelectedIds(new Set())
+          router.refresh()
+        } catch (err) {
+          toastError(err instanceof Error ? err.message : 'Erro ao alterar status')
         } finally {
           setBatchLoading(false)
           setConfirmModal(prev => ({ ...prev, open: false }))
@@ -450,11 +428,11 @@ export function ProdutosClient({
             <Search className="w-3.5 h-3.5" />
             Buscar
           </label>
-          <input 
-            name="busca" 
-            className="input text-sm" 
-            placeholder="Número, tipo ou relógio..." 
-            defaultValue={buscaFilter} 
+          <input
+            name="busca"
+            className="input text-sm"
+            placeholder="Número, tipo ou relógio..."
+            defaultValue={buscaFilter}
           />
         </div>
         <div className="w-32 md:w-44">
@@ -509,19 +487,19 @@ export function ProdutosClient({
           {/* Cards em mobile, tabela em desktop */}
           <div className="block lg:hidden space-y-3">
             {produtos.map(p => (
-              <ProdutoCard 
-                key={p.id} 
-                produto={p} 
+              <ProdutoCard
+                key={p.id}
+                produto={p}
                 podeEditar={podeEditar}
                 selected={selectedIds.has(p.id)}
                 onToggleSelect={() => toggleSelect(p.id)}
               />
             ))}
           </div>
-          
+
           <div className="hidden lg:block card overflow-hidden">
-            <ProdutosTable 
-              produtos={produtos} 
+            <ProdutosTable
+              produtos={produtos}
               podeEditar={podeEditar}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}

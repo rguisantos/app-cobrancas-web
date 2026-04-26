@@ -1,15 +1,13 @@
 import { DefaultSession } from 'next-auth'
+import { PermissoesWeb, PermissoesMobile } from '@cobrancas/shared'
 
 declare module 'next-auth' {
   interface Session {
     user: DefaultSession['user'] & {
       id: string
       tipoPermissao: string
-      permissoesWeb: {
-        todosCadastros: boolean
-        locacaoRelocacaoEstoque: boolean
-        relatorios: boolean
-      }
+      permissoesWeb: PermissoesWeb
+      permissoesMobile: PermissoesMobile
     }
   }
 }

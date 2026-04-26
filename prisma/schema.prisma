@@ -322,11 +322,8 @@ model Usuario {
   senha                   String    // bcrypt hash
   
   tipoPermissao           String    // 'Administrador' | 'Secretario' | 'AcessoControlado'
-  permissoesWeb           Json
-  permissoesMobile        Json
-  
-  // Rotas permitidas (para Acesso Controlado)
-  rotasPermitidas         Json      // Array<string | number>
+  permissoesWeb           Json      // PermissoesWeb — expandido com flags granulares
+  permissoesMobile        Json      // PermissoesMobile — expandido com flags granulares
   
   status                  String    @default("Ativo")
   bloqueado               Boolean   @default(false)
@@ -350,9 +347,12 @@ model Usuario {
   notificacoes       Notificacao[]
   sessoes            Sessao[]
   tokensRecuperacao  TokenRecuperacao[]
+  logsAuditoria      LogAuditoria[]
 
   @@index([updatedAt])              // Para sync pull de permissões
   @@index([deletedAt, updatedAt])   // Índice composto para queries de sync
+  @@index([status])                 // Busca por status ativo/inativo
+  @@index([tipoPermissao])          // Busca por tipo de permissão
   @@map("usuarios")
 }
 
@@ -634,4 +634,28 @@ model TokenRecuperacao {
   @@index([token])
   @@index([usuarioId])
   @@index([expiraEm])
+}
+
+// ============================================================
+// LOG DE AUDITORIA — Rastreamento de ações importantes
+// ============================================================
+
+model LogAuditoria {
+  id          String   @id @default(uuid())
+  usuarioId   String?  // Usuário que executou a ação (null se sistema)
+  acao        String   // 'criar_usuario' | 'editar_usuario' | 'excluir_usuario' | 'desbloquear_usuario' | 'reset_senha' | 'alterar_permissao' | 'login' | 'logout'
+  entidade    String   // 'usuario' | 'sessao' | etc.
+  entidadeId  String?  // ID da entidade afetada
+  detalhes    Json?    // Dados adicionais da ação (campos alterados, etc.)
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@map("log_auditoria")
+  @@index([usuarioId])
+  @@index([acao])
+  @@index([entidade, entidadeId])
+  @@index([createdAt])
 }

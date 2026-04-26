@@ -3,27 +3,54 @@ import { withAuth } from 'next-auth/middleware'
 import { NextResponse } from 'next/server'
 import type { PermissoesWeb } from '@/shared/types'
 
-// Mapeamento de rotas para permissões necessárias
+// Mapeamento de rotas para permissões necessárias (usa novas permissões expandidas)
 const ROUTE_PERMISSIONS: Record<string, keyof PermissoesWeb | 'admin'> = {
-  '/admin': 'admin',
-  '/clientes': 'todosCadastros',
-  '/produtos': 'todosCadastros',
+  '/admin/usuarios': 'adminUsuarios',
+  '/admin/cadastros': 'adminCadastros',
+  '/admin/dispositivos': 'adminDispositivos',
+  '/admin/sync': 'adminSincronizacao',
+  '/admin/auditoria': 'adminAuditoria',
+  '/admin/cron': 'adminSincronizacao',
+  '/admin/metas': 'relatorios',
+  '/admin/email': 'adminCadastros',
+  '/admin/rotas': 'rotas',
+  '/clientes': 'clientes',
+  '/produtos': 'produtos',
   '/locacoes': 'locacaoRelocacaoEstoque',
-  '/cobrancas': 'locacaoRelocacaoEstoque',
+  '/cobrancas': 'cobrancas',
+  '/manutencoes': 'manutencoes',
+  '/relogios': 'relogios',
   '/relatorios': 'relatorios',
+  '/dashboard': 'dashboard',
+  '/agenda': 'agenda',
+  '/mapa': 'mapa',
+  '/perfil': 'dashboard', // Perfil requer apenas acesso básico
 }
 
 // Mapeamento de APIs para permissões necessárias
 const API_PERMISSIONS: Record<string, keyof PermissoesWeb | 'admin'> = {
-  '/api/clientes': 'todosCadastros',
-  '/api/produtos': 'todosCadastros',
-  '/api/rotas': 'todosCadastros',
-  '/api/usuarios': 'admin',
+  '/api/clientes': 'clientes',
+  '/api/produtos': 'produtos',
+  '/api/rotas': 'rotas',
+  '/api/usuarios': 'adminUsuarios',
   '/api/locacoes': 'locacaoRelocacaoEstoque',
-  '/api/cobrancas': 'locacaoRelocacaoEstoque',
+  '/api/cobrancas': 'cobrancas',
+  '/api/manutencoes': 'manutencoes',
+  '/api/historico-relogio': 'relogios',
   '/api/relatorios': 'relatorios',
-  '/api/dispositivos': 'admin',
-  '/api/estabelecimentos': 'todosCadastros',
+  '/api/dashboard': 'dashboard',
+  '/api/agenda': 'agenda',
+  '/api/mapa': 'mapa',
+  '/api/dispositivos': 'adminDispositivos',
+  '/api/estabelecimentos': 'adminCadastros',
+  '/api/tipos-produto': 'produtos',
+  '/api/descricoes-produto': 'produtos',
+  '/api/tamanhos-produto': 'produtos',
+  '/api/auditoria': 'adminAuditoria',
+  '/api/sync': 'adminSincronizacao',
+  '/api/metas': 'relatorios',
+  '/api/busca-global': 'dashboard',
+  '/api/notificacoes': 'dashboard',
 }
 
 function hasPermission(
@@ -37,10 +64,10 @@ function hasPermission(
   // Permissão de admin apenas para Administrador
   if (required === 'admin') return false
   
-  // Secretário tem acesso a cadastros e locação
+  // Secretário: acesso a cadastros e operações, relatórios via flag
   if (tipoPermissao === 'Secretario') {
-    if (required === 'todosCadastros' || required === 'locacaoRelocacaoEstoque') return true
-    if (required === 'relatorios') return permissoesWeb?.relatorios ?? true
+    // Verificar permissão específica no mapa
+    return permissoesWeb?.[required] ?? true
   }
   
   // AcessoControlado verifica permissão específica
@@ -52,7 +79,7 @@ function hasPermission(
 }
 
 function getRequiredPermission(pathname: string): keyof PermissoesWeb | 'admin' | null {
-  // Verificar páginas
+  // Verificar páginas (ordem importa — rotas mais específicas primeiro)
   for (const [route, permission] of Object.entries(ROUTE_PERMISSIONS)) {
     if (pathname.startsWith(route)) return permission
   }
@@ -113,8 +140,13 @@ export const config = {
     '/produtos/:path*',
     '/locacoes/:path*',
     '/cobrancas/:path*',
+    '/manutencoes/:path*',
+    '/relogios/:path*',
     '/relatorios/:path*',
+    '/agenda/:path*',
+    '/mapa/:path*',
     '/admin/:path*',
+    '/perfil/:path*',
     // APIs protegidas
     '/api/clientes/:path*',
     '/api/produtos/:path*',
@@ -130,8 +162,16 @@ export const config = {
     '/api/tipos-produto/:path*',
     '/api/descricoes-produto/:path*',
     '/api/tamanhos-produto/:path*',
-    '/api/cron/:path*',         // Rotas de automação — auth própria via CRON_SECRET (middleware permite sem sessão)
-    // '/api/sync/:path*' - removido: mobile usa JWT próprio
+    '/api/manutencoes/:path*',
+    '/api/historico-relogio/:path*',
+    '/api/auditoria/:path*',
+    '/api/sync/:path*',
+    '/api/metas/:path*',
+    '/api/agenda/:path*',
+    '/api/mapa/:path*',
+    '/api/busca-global/:path*',
+    '/api/notificacoes/:path*',
+    '/api/cron/:path*',         // Rotas de automação — auth própria via CRON_SECRET
     // '/api/admin/:path*' - removido para permitir migrate com token próprio
     // '/api/mobile/auth/:path*' - removido: mobile auth é público
   ],

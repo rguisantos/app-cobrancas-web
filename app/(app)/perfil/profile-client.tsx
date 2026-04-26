@@ -17,8 +17,24 @@ import {
   CheckCircle2,
   AlertCircle,
   Calendar,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react'
-import { formatarMoeda } from '@/shared/types'
+
+// ─── Types ──────────────────────────────────────────────────────
+
+interface PermissoesWeb {
+  clientes: boolean; produtos: boolean; rotas: boolean
+  locacaoRelocacaoEstoque: boolean; cobrancas: boolean; manutencoes: boolean; relogios: boolean
+  relatorios: boolean; dashboard: boolean; agenda: boolean; mapa: boolean
+  adminCadastros: boolean; adminUsuarios: boolean; adminDispositivos: boolean; adminSincronizacao: boolean; adminAuditoria: boolean
+}
+
+interface PermissoesMobile {
+  clientes: boolean; produtos: boolean; alteracaoRelogio: boolean
+  locacaoRelocacaoEstoque: boolean; cobrancasFaturas: boolean; manutencoes: boolean
+  relatorios: boolean; sincronizacao: boolean
+}
 
 interface UsuarioData {
   id: string
@@ -28,6 +44,8 @@ interface UsuarioData {
   telefone: string | null
   tipoPermissao: string
   status: string
+  permissoesWeb?: PermissoesWeb | null
+  permissoesMobile?: PermissoesMobile | null
   dataUltimoAcesso: string | null
   ultimoAcessoDispositivo: string | null
   createdAt: string | Date
@@ -37,6 +55,107 @@ interface UsuarioData {
 interface ProfileClientProps {
   usuario: UsuarioData
 }
+
+// ─── Helpers ────────────────────────────────────────────────────
+
+const WEB_PERM_GROUPS = [
+  {
+    label: 'Cadastros',
+    perms: [
+      { key: 'clientes', label: 'Clientes' },
+      { key: 'produtos', label: 'Produtos' },
+      { key: 'rotas', label: 'Rotas' },
+    ],
+  },
+  {
+    label: 'Operações',
+    perms: [
+      { key: 'locacaoRelocacaoEstoque', label: 'Locação/Relocação' },
+      { key: 'cobrancas', label: 'Cobranças' },
+      { key: 'manutencoes', label: 'Manutenções' },
+      { key: 'relogios', label: 'Relógios' },
+    ],
+  },
+  {
+    label: 'Visualização',
+    perms: [
+      { key: 'relatorios', label: 'Relatórios' },
+      { key: 'dashboard', label: 'Dashboard' },
+      { key: 'agenda', label: 'Agenda' },
+      { key: 'mapa', label: 'Mapa' },
+    ],
+  },
+  {
+    label: 'Admin',
+    perms: [
+      { key: 'adminCadastros', label: 'Cadastros' },
+      { key: 'adminUsuarios', label: 'Usuários' },
+      { key: 'adminDispositivos', label: 'Dispositivos' },
+      { key: 'adminSincronizacao', label: 'Sincronização' },
+      { key: 'adminAuditoria', label: 'Auditoria' },
+    ],
+  },
+]
+
+const MOBILE_PERM_GROUPS = [
+  {
+    label: 'Cadastros',
+    perms: [
+      { key: 'clientes', label: 'Clientes' },
+      { key: 'produtos', label: 'Produtos' },
+    ],
+  },
+  {
+    label: 'Operações',
+    perms: [
+      { key: 'alteracaoRelogio', label: 'Alteração de Relógio' },
+      { key: 'locacaoRelocacaoEstoque', label: 'Locação/Relocação/Estoque' },
+      { key: 'cobrancasFaturas', label: 'Cobranças e Faturas' },
+      { key: 'manutencoes', label: 'Manutenções' },
+    ],
+  },
+  {
+    label: 'Visualização',
+    perms: [
+      { key: 'relatorios', label: 'Relatórios' },
+      { key: 'sincronizacao', label: 'Sincronização' },
+    ],
+  },
+]
+
+function getPasswordStrength(password: string): {
+  score: number
+  label: string
+  color: string
+  checks: { label: string; pass: boolean }[]
+} {
+  const checks = [
+    { label: 'Pelo menos 8 caracteres', pass: password.length >= 8 },
+    { label: 'Letra maiúscula', pass: /[A-Z]/.test(password) },
+    { label: 'Letra minúscula', pass: /[a-z]/.test(password) },
+    { label: 'Número', pass: /[0-9]/.test(password) },
+    { label: 'Caractere especial', pass: /[!@#$%^&*()_+\-=\[\]{}|;:',.<>?\/]/.test(password) },
+  ]
+  const score = checks.filter(c => c.pass).length
+  let label = 'Muito fraca'
+  let color = 'bg-red-500'
+  if (score === 5) { label = 'Forte'; color = 'bg-emerald-500' }
+  else if (score >= 4) { label = 'Boa'; color = 'bg-amber-500' }
+  else if (score >= 3) { label = 'Razoável'; color = 'bg-orange-500' }
+  else if (score >= 2) { label = 'Fraca'; color = 'bg-red-400' }
+  return { score, label, color, checks }
+}
+
+function validateSenha(senha: string): string | null {
+  if (senha.length < 8) return 'A senha deve ter pelo menos 8 caracteres'
+  if (!/[A-Z]/.test(senha)) return 'A senha deve conter pelo menos uma letra maiúscula'
+  if (!/[a-z]/.test(senha)) return 'A senha deve conter pelo menos uma letra minúscula'
+  if (!/[0-9]/.test(senha)) return 'A senha deve conter pelo menos um número'
+  if (!/[!@#$%^&*()_+\-=\[\]{}|;:',.<>?\/]/.test(senha)) return 'A senha deve conter pelo menos um caractere especial'
+  return null
+}
+
+// ─── Component ──────────────────────────────────────────────────
 
 export default function ProfileClient({ usuario }: ProfileClientProps) {
   const { update: updateSession } = useSession()
@@ -53,13 +172,15 @@ export default function ProfileClient({ usuario }: ProfileClientProps) {
     e.preventDefault()
     setMessage(null)
 
-    if (novaSenha !== confirmarSenha) {
-      setMessage({ type: 'error', text: 'As senhas não coincidem' })
+    // Strong password validation
+    const senhaError = validateSenha(novaSenha)
+    if (senhaError) {
+      setMessage({ type: 'error', text: senhaError })
       return
     }
 
-    if (novaSenha.length < 6) {
-      setMessage({ type: 'error', text: 'A nova senha deve ter pelo menos 6 caracteres' })
+    if (novaSenha !== confirmarSenha) {
+      setMessage({ type: 'error', text: 'As senhas não coincidem' })
       return
     }
 
@@ -91,6 +212,8 @@ export default function ProfileClient({ usuario }: ProfileClientProps) {
       setLoading(false)
     }
   }
+
+  const passwordStrength = getPasswordStrength(novaSenha)
 
   const permissaoLabel: Record<string, string> = {
     Administrador: 'Administrador',
@@ -171,6 +294,97 @@ export default function ProfileClient({ usuario }: ProfileClientProps) {
           </div>
         </section>
 
+        {/* Permissões */}
+        {(usuario.permissoesWeb || usuario.permissoesMobile) && (
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-emerald-100/50">
+              <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-emerald-600" />
+                Minhas Permissões
+              </h2>
+            </div>
+            <div className="p-4 md:p-6 space-y-6">
+              {/* Web Perms */}
+              {usuario.permissoesWeb && (
+                <div>
+                  <p className="text-sm font-medium text-slate-700 flex items-center gap-2 mb-3">
+                    <Monitor className="w-4 h-4 text-blue-600" />
+                    Web
+                  </p>
+                  <div className="space-y-3">
+                    {WEB_PERM_GROUPS.map(group => {
+                      const activePerms = group.perms.filter(p => (usuario.permissoesWeb as any)?.[p.key])
+                      if (activePerms.length === 0) return null
+                      return (
+                        <div key={group.label}>
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{group.label}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {group.perms.map(perm => {
+                              const active = (usuario.permissoesWeb as any)?.[perm.key]
+                              return (
+                                <span
+                                  key={perm.key}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    active
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : 'bg-slate-50 text-slate-400 border border-slate-100 line-through'
+                                  }`}
+                                >
+                                  {active ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                                  {perm.label}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Mobile Perms */}
+              {usuario.permissoesMobile && (
+                <div>
+                  <p className="text-sm font-medium text-slate-700 flex items-center gap-2 mb-3">
+                    <Smartphone className="w-4 h-4 text-purple-600" />
+                    Mobile
+                  </p>
+                  <div className="space-y-3">
+                    {MOBILE_PERM_GROUPS.map(group => {
+                      const activePerms = group.perms.filter(p => (usuario.permissoesMobile as any)?.[p.key])
+                      if (activePerms.length === 0) return null
+                      return (
+                        <div key={group.label}>
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">{group.label}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {group.perms.map(perm => {
+                              const active = (usuario.permissoesMobile as any)?.[perm.key]
+                              return (
+                                <span
+                                  key={perm.key}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                    active
+                                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                      : 'bg-slate-50 text-slate-400 border border-slate-100 line-through'
+                                  }`}
+                                >
+                                  {active ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                                  {perm.label}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Alterar Senha */}
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-amber-100/50">
@@ -228,9 +442,8 @@ export default function ProfileClient({ usuario }: ProfileClientProps) {
                     value={novaSenha}
                     onChange={e => setNovaSenha(e.target.value)}
                     className="input pr-10"
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mínimo 8 caracteres"
                     required
-                    minLength={6}
                   />
                   <button
                     type="button"
@@ -241,6 +454,46 @@ export default function ProfileClient({ usuario }: ProfileClientProps) {
                     {showNovaSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+
+                {/* Password Strength Indicator */}
+                {novaSenha && (
+                  <div className="mt-2 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-slate-600">Força da senha</span>
+                      <span className={`text-xs font-semibold ${
+                        passwordStrength.score === 5 ? 'text-emerald-600' :
+                        passwordStrength.score >= 4 ? 'text-amber-600' :
+                        passwordStrength.score >= 3 ? 'text-orange-600' : 'text-red-600'
+                      }`}>
+                        {passwordStrength.label}
+                      </span>
+                    </div>
+                    <div className="flex gap-1 mb-2">
+                      {[1, 2, 3, 4, 5].map(i => (
+                        <div
+                          key={i}
+                          className={`h-1.5 flex-1 rounded-full transition-colors ${
+                            i <= passwordStrength.score ? passwordStrength.color : 'bg-slate-200'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <div className="space-y-1">
+                      {passwordStrength.checks.map((check, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5">
+                          {check.pass ? (
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 text-slate-300" />
+                          )}
+                          <span className={`text-xs ${check.pass ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {check.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Confirmar Senha */}
@@ -256,7 +509,6 @@ export default function ProfileClient({ usuario }: ProfileClientProps) {
                     }`}
                     placeholder="Repita a nova senha"
                     required
-                    minLength={6}
                   />
                   <button
                     type="button"
@@ -361,10 +613,31 @@ export default function ProfileClient({ usuario }: ProfileClientProps) {
         <section className="bg-amber-50 rounded-xl border border-amber-200 p-4">
           <h3 className="font-semibold text-amber-800 mb-2 flex items-center gap-2">
             <Shield className="w-4 h-4" />
-            Dica de Segurança
+            Política de Senha
           </h3>
-          <p className="text-sm text-amber-700">
-            Use uma senha forte com letras maiúsculas, minúsculas, números e caracteres especiais.
+          <ul className="text-sm text-amber-700 space-y-1">
+            <li className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+              Mínimo 8 caracteres
+            </li>
+            <li className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+              Pelo menos uma letra maiúscula
+            </li>
+            <li className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+              Pelo menos uma letra minúscula
+            </li>
+            <li className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+              Pelo menos um número
+            </li>
+            <li className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+              Pelo menos um caractere especial
+            </li>
+          </ul>
+          <p className="text-xs text-amber-600 mt-3">
             Nunca compartilhe sua senha com terceiros.
           </p>
         </section>

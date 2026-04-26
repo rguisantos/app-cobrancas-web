@@ -21,6 +21,8 @@ export default async function PerfilPage() {
       cpf: true,
       telefone: true,
       tipoPermissao: true,
+      permissoesWeb: true,
+      permissoesMobile: true,
       status: true,
       dataUltimoAcesso: true,
       ultimoAcessoDispositivo: true,
@@ -37,7 +39,7 @@ export default async function PerfilPage() {
         title="Meu Perfil"
         subtitle="Gerencie suas informações e senha de acesso"
       />
-      <ProfileClient usuario={usuario} />
+      <ProfileClient usuario={usuario as any} />
     </div>
   )
 }

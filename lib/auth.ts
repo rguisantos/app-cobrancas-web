@@ -86,6 +86,7 @@ export const authOptions: NextAuthOptions = {
           name: usuario.nome,
           tipoPermissao: usuario.tipoPermissao,
           permissoesWeb: usuario.permissoesWeb,
+          permissoesMobile: usuario.permissoesMobile,
         }
       },
     }),
@@ -96,6 +97,7 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id
         token.tipoPermissao = (user as any).tipoPermissao
         token.permissoesWeb = (user as any).permissoesWeb
+        token.permissoesMobile = (user as any).permissoesMobile
         token.lastChecked = Date.now() // Rastrear quando verificamos o usuário pela última vez
       }
 
@@ -105,7 +107,7 @@ export const authOptions: NextAuthOptions = {
         try {
           const usuario = await prisma.usuario.findFirst({
             where: { id: token.id as string, status: 'Ativo', bloqueado: false, deletedAt: null },
-            select: { tipoPermissao: true, permissoesWeb: true, status: true, bloqueado: true },
+            select: { tipoPermissao: true, permissoesWeb: true, permissoesMobile: true, status: true, bloqueado: true },
           })
 
           if (!usuario) {
@@ -117,6 +119,7 @@ export const authOptions: NextAuthOptions = {
           // Atualizar permissões caso tenham mudado
           token.tipoPermissao = usuario.tipoPermissao
           token.permissoesWeb = usuario.permissoesWeb
+          token.permissoesMobile = usuario.permissoesMobile
           token.lastChecked = Date.now()
         } catch (err) {
           logger.error('[auth/jwt] Erro ao re-validar usuário:', err)
@@ -129,9 +132,10 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (token) {
-        session.user.id            = token.id as string
-        session.user.tipoPermissao = token.tipoPermissao as string
-        session.user.permissoesWeb = token.permissoesWeb as any
+        session.user.id             = token.id as string
+        session.user.tipoPermissao  = token.tipoPermissao as string
+        session.user.permissoesWeb  = token.permissoesWeb as any
+        session.user.permissoesMobile = token.permissoesMobile as any
       }
       return session
     },

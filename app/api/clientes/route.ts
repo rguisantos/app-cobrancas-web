@@ -2,7 +2,7 @@
 // POST /api/clientes — criar
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, serverError, validateBody, ApiError, handleApiError } from '@/lib/api-helpers'
+import { getAuthSession, getUserRotaIds, unauthorized, serverError, validateBody, ApiError, handleApiError } from '@/lib/api-helpers'
 import { clienteCreateSchema } from '@/lib/validations'
 
 export async function GET(req: NextRequest) {
@@ -25,6 +25,12 @@ export async function GET(req: NextRequest) {
       { identificador:    { contains: busca, mode: 'insensitive' } },
       { telefonePrincipal:{ contains: busca } },
     ]
+  }
+
+  // Filtrar clientes por rotas permitidas do usuário
+  const userRotaIds = await getUserRotaIds(session)
+  if (userRotaIds !== null) {
+    where.rotaId = { in: userRotaIds }
   }
 
   const [clientes, total] = await Promise.all([

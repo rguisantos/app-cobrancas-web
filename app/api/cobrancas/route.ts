@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, forbidden, serverError } from '@/lib/api-helpers'
+import { getAuthSession, getUserRotaIds, unauthorized, forbidden, serverError } from '@/lib/api-helpers'
 import { z } from 'zod'
 
 // Schema explícito — sem mass assignment
@@ -51,8 +51,15 @@ export async function GET(req: NextRequest) {
     if (dataInicio) where.dataFim.gte = dataInicio
     if (dataFim)    where.dataFim.lte = dataFim
   }
+
+  // Filtrar cobranças por rotas permitidas do usuário (via cliente.rotaId)
+  const userRotaIds = await getUserRotaIds(session)
+  if (userRotaIds !== null) {
+    where.cliente = { rotaId: { in: userRotaIds } }
+  }
+
   const [cobrancas, total] = await Promise.all([
-    prisma.cobranca.findMany({ where, include: { cliente: { select: { nomeExibicao: true } } }, orderBy: { createdAt: 'desc' }, skip: (page-1)*limit, take: limit }),
+    prisma.cobranca.findMany({ where, include: { cliente: { select: { nomeExibicao: true, rotaId: true } } }, orderBy: { createdAt: 'desc' }, skip: (page-1)*limit, take: limit }),
     prisma.cobranca.count({ where }),
   ])
   return NextResponse.json({ data: cobrancas, total, page, limit })

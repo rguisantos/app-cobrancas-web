@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, MapPin, Loader2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, MapPin, Loader2, Trash2, AlertTriangle } from 'lucide-react'
 import Header from '@/components/layout/header'
 import { useToast } from '@/components/ui/toaster'
 
@@ -11,11 +11,13 @@ export default function EditarRotaPage() {
   const router = useRouter()
   const params = useParams()
   const rotaId = params.id as string
-  const { error: toastError } = useToast()
+  const { error: toastError, success: toastSuccess } = useToast()
   
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [clientCount, setClientCount] = useState(0)
   const [formData, setFormData] = useState({
     descricao: '',
     status: 'Ativo',
@@ -34,6 +36,8 @@ export default function EditarRotaPage() {
           descricao: data.descricao || '',
           status: data.status || 'Ativo',
         })
+        // Contar clientes da resposta
+        setClientCount(data.clientes?.length || 0)
       })
       .catch(() => router.push('/admin/rotas'))
       .finally(() => setLoading(false))
@@ -58,10 +62,15 @@ export default function EditarRotaPage() {
       })
 
       if (res.ok) {
+        toastSuccess('Rota atualizada com sucesso')
         router.push(`/admin/rotas/${rotaId}`)
       } else {
         const errorData = await res.json()
-        toastError(errorData.error || 'Erro ao atualizar rota')
+        if (errorData.error?.includes('descrição')) {
+          setErrors({ descricao: errorData.error })
+        } else {
+          toastError(errorData.error || 'Erro ao atualizar rota')
+        }
       }
     } catch {
       toastError('Erro ao atualizar rota')
@@ -71,10 +80,6 @@ export default function EditarRotaPage() {
   }
 
   const handleDelete = async () => {
-    if (!confirm('Tem certeza que deseja excluir esta rota? Esta ação não pode ser desfeita.')) {
-      return
-    }
-
     setDeleting(true)
     try {
       const res = await fetch(`/api/rotas/${rotaId}`, {
@@ -82,6 +87,11 @@ export default function EditarRotaPage() {
       })
 
       if (res.ok) {
+        const data = await res.json()
+        const msg = data.clientesDesvinculados > 0
+          ? `Rota excluída. ${data.clientesDesvinculados} cliente(s) desvinculado(s).`
+          : 'Rota excluída com sucesso.'
+        toastSuccess(msg)
         router.push('/admin/rotas')
       } else {
         const errorData = await res.json()
@@ -91,6 +101,7 @@ export default function EditarRotaPage() {
       toastError('Erro ao excluir rota')
     } finally {
       setDeleting(false)
+      setShowDeleteConfirm(false)
     }
   }
 
@@ -145,10 +156,12 @@ export default function EditarRotaPage() {
                     : 'border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
                 }`}
                 placeholder="Ex: Rota Norte, Zona Sul..."
+                maxLength={100}
               />
               {errors.descricao && (
                 <p className="text-red-500 text-xs mt-1">{errors.descricao}</p>
               )}
+              <p className="text-xs text-slate-400 mt-1">{formData.descricao.length}/100 caracteres</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -164,6 +177,56 @@ export default function EditarRotaPage() {
               </select>
             </div>
           </div>
+        </div>
+
+        {/* Zona de perigo */}
+        <div className="card p-6 border-red-200 bg-red-50/30">
+          <div className="flex items-center gap-3 mb-4">
+            <AlertTriangle className="w-5 h-5 text-red-500" />
+            <h3 className="font-semibold text-red-700">Zona de Perigo</h3>
+          </div>
+          <p className="text-sm text-slate-600 mb-4">
+            A exclusão de uma rota é permanente. {clientCount > 0 && (
+              <span className="font-medium text-red-600">
+                Esta rota possui {clientCount} cliente{clientCount !== 1 ? 's' : ''} vinculado{clientCount !== 1 ? 's' : ''} que ficarão sem rota.
+              </span>
+            )}
+          </p>
+          {!showDeleteConfirm ? (
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200"
+            >
+              <Trash2 className="w-4 h-4" />
+              Excluir Rota
+            </button>
+          ) : (
+            <div className="flex items-center gap-3 p-3 bg-red-100 rounded-lg">
+              <p className="text-sm font-medium text-red-700 flex-1">
+                Tem certeza? Esta ação não pode ser desfeita.
+              </p>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {deleting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin inline mr-1" /> Excluindo...</>
+                ) : (
+                  'Sim, excluir'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 bg-white text-slate-700 text-sm font-medium rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Ações */}
@@ -185,19 +248,6 @@ export default function EditarRotaPage() {
                   Salvar Alterações
                 </>
               )}
-            </button>
-            <button 
-              type="button" 
-              onClick={handleDelete}
-              disabled={deleting}
-              className="btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200"
-            >
-              {deleting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Trash2 className="w-4 h-4" />
-              )}
-              <span className="hidden sm:inline">Excluir</span>
             </button>
             <Link 
               href={`/admin/rotas/${rotaId}`} 

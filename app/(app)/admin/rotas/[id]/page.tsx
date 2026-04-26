@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import Header from '@/components/layout/header'
-import { StatusClienteBadge } from '@/components/ui/badge'
+import { StatusRotaBadge } from '@/components/ui/badge'
 import EmptyState from '@/components/ui/empty-state'
 import { ArrowLeft, Edit, Users, MapPin, DollarSign, Package, UserCheck, Clock, TrendingUp } from 'lucide-react'
 import { format } from 'date-fns'
@@ -33,40 +33,45 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
           }
         },
         orderBy: { nomeExibicao: 'asc' }
-      }
-    }
+      },
+      usuarioRotas: {
+        include: {
+          usuario: {
+            select: { id: true, nome: true, email: true, tipoPermissao: true }
+          }
+        }
+      },
+      _count: {
+        select: {
+          clientes: { where: { deletedAt: null } },
+        },
+      },
+    },
   })
 
   if (!rota) notFound()
 
-  // Buscar usuários com acesso a esta rota
-  // Administradores têm acesso total + usuários com acesso controlado
-  const [adminUsers, controlledUsers] = await Promise.all([
-    prisma.usuario.findMany({
-      where: {
-        deletedAt: null,
-        status: 'Ativo',
-        tipoPermissao: 'Administrador'
-      },
-      select: { id: true, nome: true, email: true, tipoPermissao: true }
-    }),
-    prisma.usuario.findMany({
-      where: {
-        deletedAt: null,
-        status: 'Ativo',
-        tipoPermissao: 'AcessoControlado'
-      },
-      select: { id: true, nome: true, email: true, tipoPermissao: true, rotasPermitidas: true }
-    })
-  ])
-  
-  // Filtrar usuários com acesso controlado que têm esta rota (campo JSON)
-  const usuariosComAcessoControlado = controlledUsers.filter(u => {
-    const rotas = u.rotasPermitidas as string[] | null
-    return rotas?.includes(id)
+  // Buscar administradores (têm acesso total a todas as rotas)
+  const adminUsers = await prisma.usuario.findMany({
+    where: {
+      deletedAt: null,
+      status: 'Ativo',
+      tipoPermissao: 'Administrador',
+    },
+    select: { id: true, nome: true, email: true, tipoPermissao: true },
   })
-  
-  const usuariosComAcesso = [...adminUsers, ...usuariosComAcessoControlado]
+
+  // Usuários com acesso controlado — usar dados da junction table UsuarioRota
+  const usuariosControlados = rota.usuarioRotas
+    .filter(ur => ur.usuario.tipoPermissao === 'AcessoControlado')
+    .map(ur => ur.usuario)
+
+  // Combinar: admins + controlados (sem duplicatas)
+  const adminIds = new Set(adminUsers.map(u => u.id))
+  const usuariosComAcesso = [
+    ...adminUsers,
+    ...usuariosControlados.filter(u => !adminIds.has(u.id)),
+  ]
 
   const podeEditar = session?.user.tipoPermissao === 'Administrador'
   const clientesAtivos = rota.clientes.filter(c => c.status === 'Ativo')
@@ -152,7 +157,7 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
                 <Users className="w-5 h-5" />
                 Clientes da Rota
               </h2>
-              <StatusClienteBadge status={rota.status} />
+              <StatusRotaBadge status={rota.status} />
             </div>
 
             {rota.clientes.length === 0 ? (
@@ -181,7 +186,7 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
                         <td className="py-2.5 font-medium">{cliente.nomeExibicao}</td>
                         <td className="py-2.5 text-slate-600 hidden md:table-cell">{cliente.cidade || '-'}</td>
                         <td className="py-2.5 text-center">
-                          <StatusClienteBadge status={cliente.status} />
+                          <StatusRotaBadge status={cliente.status} />
                         </td>
                         <td className="py-2.5 text-center hidden sm:table-cell">
                           {cliente.locacoes.length > 0 && (
@@ -293,6 +298,10 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
                     R$ {valorTotalLocacoes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
+                <div className="flex justify-between text-sm mt-2">
+                  <span className="text-slate-500">Usuários com acesso</span>
+                  <span className="font-semibold">{usuariosComAcesso.length}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -306,7 +315,7 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">Status</span>
-                <StatusClienteBadge status={rota.status} />
+                <StatusRotaBadge status={rota.status} />
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Criada em</span>

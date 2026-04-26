@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, forbidden, serverError, validateBody, ApiError, handleApiError } from '@/lib/api-helpers'
+import { getAuthSession, getUserRotaIds, unauthorized, forbidden, serverError, validateBody, ApiError, handleApiError } from '@/lib/api-helpers'
 import { locacaoCreateSchema } from '@/lib/validations'
 
 export async function GET(req: NextRequest) {
@@ -14,8 +14,15 @@ export async function GET(req: NextRequest) {
   const where: any = { deletedAt: null }
   if (clienteId) where.clienteId = clienteId
   if (status)    where.status    = status
+
+  // Filtrar locações por rotas permitidas do usuário (via cliente.rotaId)
+  const userRotaIds = await getUserRotaIds(session)
+  if (userRotaIds !== null) {
+    where.cliente = { rotaId: { in: userRotaIds } }
+  }
+
   const [locacoes, total] = await Promise.all([
-    prisma.locacao.findMany({ where, include: { cliente: { select: { nomeExibicao: true } }, produto: { select: { tipoNome: true, identificador: true } } }, orderBy: { dataLocacao: 'desc' }, skip: (page-1)*limit, take: limit }),
+    prisma.locacao.findMany({ where, include: { cliente: { select: { nomeExibicao: true, rotaId: true } }, produto: { select: { tipoNome: true, identificador: true } } }, orderBy: { dataLocacao: 'desc' }, skip: (page-1)*limit, take: limit }),
     prisma.locacao.count({ where }),
   ])
   return NextResponse.json({ data: locacoes, total, page, limit })

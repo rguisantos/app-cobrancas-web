@@ -12,11 +12,14 @@ const dateStringToDate = z.string().transform((v) => new Date(v))
 // ─── Rota ───────────────────────────────────────────────────
 
 export const rotaCreateSchema = z.object({
-  descricao: z.string().min(1, 'Descrição é obrigatória'),
+  descricao: z.string().min(1, 'Descrição é obrigatória').max(100, 'Descrição deve ter no máximo 100 caracteres'),
   status: z.enum(['Ativo', 'Inativo']).default('Ativo'),
 })
 
-export const rotaUpdateSchema = rotaCreateSchema.partial()
+export const rotaUpdateSchema = z.object({
+  descricao: z.string().min(1, 'Descrição é obrigatória').max(100, 'Descrição deve ter no máximo 100 caracteres').optional(),
+  status: z.enum(['Ativo', 'Inativo']).optional(),
+})
 
 // ─── Cliente ────────────────────────────────────────────────
 

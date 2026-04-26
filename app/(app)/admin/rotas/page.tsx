@@ -3,9 +3,9 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import Header from '@/components/layout/header'
-import { StatusClienteBadge } from '@/components/ui/badge'
+import { StatusRotaBadge } from '@/components/ui/badge'
 import EmptyState from '@/components/ui/empty-state'
-import { MapPin, Users, Edit } from 'lucide-react'
+import { MapPin, Users, Edit, UserCheck } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Rotas' }
 
@@ -16,7 +16,10 @@ export default async function RotasPage() {
     where: { deletedAt: null },
     include: {
       _count: {
-        select: { clientes: { where: { deletedAt: null } } }
+        select: { 
+          clientes: { where: { deletedAt: null } },
+          usuarioRotas: true,
+        }
       }
     },
     orderBy: { descricao: 'asc' }
@@ -68,7 +71,7 @@ export default async function RotasPage() {
                       <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
                         {rota.descricao}
                       </h3>
-                      <StatusClienteBadge status={rota.status} />
+                      <StatusRotaBadge status={rota.status} />
                     </div>
                   </div>
                   {podeEditar && (
@@ -87,6 +90,14 @@ export default async function RotasPage() {
                       <strong className="text-slate-900">{rota._count.clientes}</strong> cliente{rota._count.clientes !== 1 ? 's' : ''}
                     </span>
                   </div>
+                  {rota._count.usuarioRotas > 0 && (
+                    <div className="flex items-center gap-1.5 text-slate-500">
+                      <UserCheck className="w-4 h-4" />
+                      <span>
+                        <strong className="text-slate-900">{rota._count.usuarioRotas}</strong> cobrador{rota._count.usuarioRotas !== 1 ? 'es' : ''}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </Link>

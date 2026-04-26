@@ -32,6 +32,7 @@ model Rota {
   clientes        Cliente[]
   usuarioRotas    UsuarioRota[]
 
+  @@unique([descricao, deletedAt], name: "rota_descricao_unique_active")
   @@map("rotas")
 }
 

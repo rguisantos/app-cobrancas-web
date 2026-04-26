@@ -55,3 +55,7 @@ export function StatusLocacaoBadge({ status }: { status: string }) {
   }
   return <Badge label={status} variant={map[status] ?? 'gray'} />
 }
+
+export function StatusRotaBadge({ status }: { status: string }) {
+  return <Badge label={status} variant={status === 'Ativo' ? 'green' : 'gray'} />
+}

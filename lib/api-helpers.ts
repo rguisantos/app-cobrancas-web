@@ -1,6 +1,7 @@
 // lib/api-helpers.ts
 import { getServerSession } from 'next-auth'
 import { authOptions } from './auth'
+import { prisma } from './prisma'
 import { NextResponse } from 'next/server'
 import { ZodTypeAny } from 'zod'
 
@@ -41,6 +42,30 @@ export function validateBody<T = any>(schema: ZodTypeAny, data: unknown): T {
 
 export async function getAuthSession() {
   return getServerSession(authOptions)
+}
+
+/**
+ * Obtém os IDs das rotas permitidas para o usuário autenticado.
+ * - Administradores e Secretários: retorna null (acesso total)
+ * - AcessoControlado: retorna array de rotaIds da tabela UsuarioRota
+ */
+export async function getUserRotaIds(session: any): Promise<string[] | null> {
+  if (!session?.user?.id) return null
+
+  const tipoPermissao = session.user.tipoPermissao
+
+  // Admin e Secretário têm acesso total
+  if (tipoPermissao === 'Administrador' || tipoPermissao === 'Secretario') {
+    return null // null = sem restrição (acesso total)
+  }
+
+  // AcessoControlado: buscar rotas permitidas da junction table
+  const usuarioRotas = await prisma.usuarioRota.findMany({
+    where: { usuarioId: session.user.id },
+    select: { rotaId: true },
+  })
+
+  return usuarioRotas.map(ur => ur.rotaId)
 }
 
 export function unauthorized() {

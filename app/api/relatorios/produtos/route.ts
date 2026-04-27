@@ -1,70 +1,34 @@
 // GET /api/relatorios/produtos — Relatório de produtos
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
-import { getAuthSession, unauthorized, forbidden } from '@/lib/api-helpers'
+import { Prisma } from '@prisma/client'
+import { authenticateReport, extractReportParams } from '@/lib/relatorios-helpers'
 
 export async function GET(request: NextRequest) {
-  const session = await getAuthSession()
-  if (!session) return unauthorized()
-
-  // Somente quem tem permissão de relatórios ou todosCadastros pode acessar
-  if (session.user.tipoPermissao === 'AcessoControlado' &&
-      !session.user.permissoesWeb?.relatorios &&
-      !session.user.permissoesWeb?.todosCadastros) {
-    return forbidden('Sem permissão para acessar relatórios')
-  }
+  const authResult = await authenticateReport(request)
+  if (authResult instanceof NextResponse) return authResult
 
   try {
-    const { searchParams } = new URL(request.url)
-    const hoje = new Date()
-    const dataInicioStr = searchParams.get('dataInicio')
-    const dataFimStr = searchParams.get('dataFim')
-    const statusFilter = searchParams.get('status') || undefined
-
-    const inicio = dataInicioStr ? new Date(dataInicioStr) : new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-    const fim = dataFimStr ? new Date(dataFimStr) : hoje
-    fim.setHours(23, 59, 59, 999)
+    const { status: statusFilter } = extractReportParams(request)
 
     const produtoWhere = {
       deletedAt: null,
       ...(statusFilter && { statusProduto: statusFilter }),
     }
 
-    // ── Raw queries with conditional status filter ──
+    // Build status filter fragment for raw queries
+    const statusFragment = statusFilter
+      ? Prisma.sql`AND "statusProduto" = ${statusFilter}`
+      : Prisma.empty
 
-    // Distribuição por tipo
-    const distribuicaoTipo = statusFilter
-      ? await prisma.$queryRaw<{ tipoNome: string; count: number }[]>`
-          SELECT "tipoNome", COUNT(*)::int as count
-          FROM produtos WHERE "deletedAt" IS NULL AND "statusProduto" = ${statusFilter}
-          GROUP BY "tipoNome" ORDER BY count DESC
-        `
-      : await prisma.$queryRaw<{ tipoNome: string; count: number }[]>`
-          SELECT "tipoNome", COUNT(*)::int as count
-          FROM produtos WHERE "deletedAt" IS NULL
-          GROUP BY "tipoNome" ORDER BY count DESC
-        `
-
-    // Distribuição por conservação
-    const distribuicaoConservacao = statusFilter
-      ? await prisma.$queryRaw<{ conservacao: string; count: number }[]>`
-          SELECT conservacao, COUNT(*)::int as count
-          FROM produtos WHERE "deletedAt" IS NULL AND "statusProduto" = ${statusFilter}
-          GROUP BY conservacao ORDER BY count DESC
-        `
-      : await prisma.$queryRaw<{ conservacao: string; count: number }[]>`
-          SELECT conservacao, COUNT(*)::int as count
-          FROM produtos WHERE "deletedAt" IS NULL
-          GROUP BY conservacao ORDER BY count DESC
-        `
-
-    // ── Parallel queries ──
     const [
       totalProdutos,
       produtosLocados,
       produtosEstoque,
       produtosManutencao,
       distribuicaoStatus,
+      distribuicaoTipo,
+      distribuicaoConservacao,
       topProdutosReceita,
       produtosDetalhados,
     ] = await Promise.all([
@@ -88,16 +52,28 @@ export async function GET(request: NextRequest) {
           )
       `,
       // 4. Produtos em manutenção
-      prisma.produto.count({
-        where: { deletedAt: null, statusProduto: 'Manutenção' },
-      }),
+      prisma.produto.count({ where: { deletedAt: null, statusProduto: 'Manutenção' } }),
       // 5. Distribuição por status
       prisma.$queryRaw<{ statusProduto: string; count: number }[]>`
         SELECT "statusProduto", COUNT(*)::int as count
         FROM produtos WHERE "deletedAt" IS NULL
         GROUP BY "statusProduto" ORDER BY count DESC
       `,
-      // 6. Top produtos por receita
+      // 6. Distribuição por tipo (com fragment em vez de duplicar query)
+      prisma.$queryRaw<{ tipoNome: string; count: number }[]>`
+        SELECT "tipoNome", COUNT(*)::int as count
+        FROM produtos WHERE "deletedAt" IS NULL
+        ${statusFragment}
+        GROUP BY "tipoNome" ORDER BY count DESC
+      `,
+      // 7. Distribuição por conservação (com fragment)
+      prisma.$queryRaw<{ conservacao: string; count: number }[]>`
+        SELECT conservacao, COUNT(*)::int as count
+        FROM produtos WHERE "deletedAt" IS NULL
+        ${statusFragment}
+        GROUP BY conservacao ORDER BY count DESC
+      `,
+      // 8. Top produtos por receita
       prisma.$queryRaw<{
         id: string; identificador: string; tipoNome: string; descricaoNome: string;
         statusProduto: string; conservacao: string; receita: number; cobrancas: number
@@ -111,7 +87,7 @@ export async function GET(request: NextRequest) {
         GROUP BY p.id, p.identificador, p."tipoNome", p."descricaoNome", p."statusProduto", p.conservacao
         ORDER BY receita DESC LIMIT 10
       `,
-      // 7. Produtos detalhados
+      // 9. Produtos detalhados
       prisma.produto.findMany({
         where: produtoWhere,
         include: {
@@ -142,14 +118,9 @@ export async function GET(request: NextRequest) {
       distribuicaoConservacao: distribuicaoConservacao.map(c => ({ conservacao: c.conservacao, count: c.count })),
       distribuicaoStatus: distribuicaoStatus.map(s => ({ statusProduto: s.statusProduto, count: s.count })),
       topProdutosReceita: topProdutosReceita.map(p => ({
-        id: p.id,
-        identificador: p.identificador,
-        tipoNome: p.tipoNome,
-        descricaoNome: p.descricaoNome,
-        statusProduto: p.statusProduto,
-        conservacao: p.conservacao,
-        receita: p.receita,
-        cobrancas: p.cobrancas,
+        id: p.id, identificador: p.identificador, tipoNome: p.tipoNome,
+        descricaoNome: p.descricaoNome, statusProduto: p.statusProduto,
+        conservacao: p.conservacao, receita: p.receita, cobrancas: p.cobrancas,
       })),
     }
 

@@ -1,15 +1,32 @@
+// GET /api/relatorios/comparativo — Comparação entre dois períodos
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import {
+  authenticateReport,
+  extractReportParams,
+  calcVariacao,
+} from '@/lib/relatorios-helpers'
+
+interface PeriodData {
+  receita: { receita: number; total_cobrado: number; saldo_devedor: number; total_cobrancas: number }
+  cobrancasStatus: { status: string; total: number; valor: number }[]
+  topClientes: { nome: string; total_pago: number }[]
+  inadimplencia: { total_atrasadas: number; valor_atrasado: number }
+  locacoesAtivas: number
+}
 
 export async function GET(request: NextRequest) {
+  const authResult = await authenticateReport(request, extractReportParams(request).rotaId)
+  if (authResult instanceof NextResponse) return authResult
+  const { effectiveRotaId } = authResult
+
   try {
     const { searchParams } = new URL(request.url)
     const periodo1Inicio = searchParams.get('periodo1Inicio')
     const periodo1Fim = searchParams.get('periodo1Fim')
     const periodo2Inicio = searchParams.get('periodo2Inicio')
     const periodo2Fim = searchParams.get('periodo2Fim')
-    const rotaId = searchParams.get('rotaId')
 
     if (!periodo1Inicio || !periodo1Fim || !periodo2Inicio || !periodo2Fim) {
       return NextResponse.json(
@@ -18,16 +35,16 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const rotaFilter = rotaId
-      ? Prisma.sql`AND cl."rotaId" = ${rotaId}`
+    const rotaFilter = effectiveRotaId
+      ? Prisma.sql`AND cl."rotaId" = ${effectiveRotaId}`
       : Prisma.empty
 
-    async function getPeriodData(inicio: string, fim: string) {
+    async function getPeriodData(inicio: string, fim: string): Promise<PeriodData> {
       const dataInicio = new Date(inicio)
       const dataFim = new Date(fim + 'T23:59:59')
 
       const [receita, cobrancasStatus, topClientes, inadimplencia, locacoesAtivas] = await Promise.all([
-        prisma.$queryRaw<any[]>(Prisma.sql`
+        prisma.$queryRaw<{ receita: number; total_cobrado: number; saldo_devedor: number; total_cobrancas: number }[]>(Prisma.sql`
           SELECT 
             COALESCE(SUM(cb."valorRecebido"), 0)::float as receita,
             COALESCE(SUM(cb."totalClientePaga"), 0)::float as total_cobrado,
@@ -41,7 +58,7 @@ export async function GET(request: NextRequest) {
             AND cb."deletedAt" IS NULL
             ${rotaFilter}
         `),
-        prisma.$queryRaw<any[]>(Prisma.sql`
+        prisma.$queryRaw<{ status: string; total: number; valor: number }[]>(Prisma.sql`
           SELECT 
             cb.status,
             COUNT(*)::int as total,
@@ -55,7 +72,7 @@ export async function GET(request: NextRequest) {
             ${rotaFilter}
           GROUP BY cb.status
         `),
-        prisma.$queryRaw<any[]>(Prisma.sql`
+        prisma.$queryRaw<{ nome: string; total_pago: number }[]>(Prisma.sql`
           SELECT 
             cl."nomeExibicao" as nome,
             COALESCE(SUM(cb."valorRecebido"), 0)::float as total_pago
@@ -70,7 +87,7 @@ export async function GET(request: NextRequest) {
           ORDER BY total_pago DESC
           LIMIT 5
         `),
-        prisma.$queryRaw<any[]>(Prisma.sql`
+        prisma.$queryRaw<{ total_atrasadas: number; valor_atrasado: number }[]>(Prisma.sql`
           SELECT 
             COUNT(*)::int as total_atrasadas,
             COALESCE(SUM(cb."saldoDevedorGerado"), 0)::float as valor_atrasado
@@ -83,7 +100,7 @@ export async function GET(request: NextRequest) {
             AND cb."deletedAt" IS NULL
             ${rotaFilter}
         `),
-        prisma.$queryRaw<any[]>(Prisma.sql`
+        prisma.$queryRaw<{ total: number }[]>(Prisma.sql`
           SELECT COUNT(*)::int as total
           FROM locacoes l
           INNER JOIN clientes cl ON cl.id = l."clienteId"
@@ -103,46 +120,44 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const periodo1 = await getPeriodData(periodo1Inicio, periodo1Fim)
-    const periodo2 = await getPeriodData(periodo2Inicio, periodo2Fim)
-
-    function calcVariation(current: number, previous: number) {
-      if (previous === 0) return current > 0 ? 100 : 0
-      return Math.round(((current - previous) / previous) * 100)
-    }
+    // FIX: Fetch both periods in parallel (was sequential before)
+    const [periodo1, periodo2] = await Promise.all([
+      getPeriodData(periodo1Inicio, periodo1Fim),
+      getPeriodData(periodo2Inicio, periodo2Fim),
+    ])
 
     const comparacao = {
       receita: {
         periodo1: periodo1.receita.receita,
         periodo2: periodo2.receita.receita,
-        variacao: calcVariation(periodo2.receita.receita, periodo1.receita.receita),
+        variacao: calcVariacao(periodo2.receita.receita, periodo1.receita.receita),
       },
       totalCobrado: {
         periodo1: periodo1.receita.total_cobrado,
         periodo2: periodo2.receita.total_cobrado,
-        variacao: calcVariation(periodo2.receita.total_cobrado, periodo1.receita.total_cobrado),
+        variacao: calcVariacao(periodo2.receita.total_cobrado, periodo1.receita.total_cobrado),
       },
       saldoDevedor: {
         periodo1: periodo1.receita.saldo_devedor,
         periodo2: periodo2.receita.saldo_devedor,
-        variacao: calcVariation(periodo2.receita.saldo_devedor, periodo1.receita.saldo_devedor),
+        variacao: calcVariacao(periodo2.receita.saldo_devedor, periodo1.receita.saldo_devedor),
       },
       totalCobrancas: {
         periodo1: periodo1.receita.total_cobrancas,
         periodo2: periodo2.receita.total_cobrancas,
-        variacao: calcVariation(periodo2.receita.total_cobrancas, periodo1.receita.total_cobrancas),
+        variacao: calcVariacao(periodo2.receita.total_cobrancas, periodo1.receita.total_cobrancas),
       },
       inadimplencia: {
         periodo1: periodo1.inadimplencia.total_atrasadas,
         periodo2: periodo2.inadimplencia.total_atrasadas,
         valor1: periodo1.inadimplencia.valor_atrasado,
         valor2: periodo2.inadimplencia.valor_atrasado,
-        variacao: calcVariation(periodo1.inadimplencia.total_atrasadas, periodo2.inadimplencia.total_atrasadas),
+        variacao: calcVariacao(periodo1.inadimplencia.total_atrasadas, periodo2.inadimplencia.total_atrasadas),
       },
       locacoesAtivas: {
         periodo1: periodo1.locacoesAtivas,
         periodo2: periodo2.locacoesAtivas,
-        variacao: calcVariation(periodo2.locacoesAtivas, periodo1.locacoesAtivas),
+        variacao: calcVariacao(periodo2.locacoesAtivas, periodo1.locacoesAtivas),
       },
       cobrancasStatus: { periodo1: periodo1.cobrancasStatus, periodo2: periodo2.cobrancasStatus },
       topClientes: { periodo1: periodo1.topClientes, periodo2: periodo2.topClientes },
@@ -151,9 +166,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(comparacao)
   } catch (error) {
     console.error('Erro no relatório comparativo:', error)
-    return NextResponse.json(
-      { error: 'Erro ao gerar relatório comparativo' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Erro ao gerar relatório comparativo' }, { status: 500 })
   }
 }

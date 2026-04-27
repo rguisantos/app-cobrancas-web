@@ -2,30 +2,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import {
+  authenticateReport,
+  extractReportParams,
+  buildTipoFragment,
+  buildConservacaoFragment,
+  buildEstabelecimentoFragment,
+} from '@/lib/relatorios-helpers'
 
 export async function GET(req: NextRequest) {
+  const authResult = await authenticateReport(req)
+  if (authResult instanceof NextResponse) return authResult
+
   try {
     const { searchParams } = new URL(req.url)
     const tipoId = searchParams.get('tipoId') || undefined
     const conservacao = searchParams.get('conservacao') || undefined
     const estabelecimento = searchParams.get('estabelecimento') || undefined
 
-    // Build reusable SQL fragments for conditional filters
-    const tipoIdFragment = tipoId
-      ? Prisma.sql`AND p."tipoId" = ${tipoId}`
-      : Prisma.empty
-
-    const tipoIdFragment2 = tipoId
-      ? Prisma.sql`AND "tipoId" = ${tipoId}`
-      : Prisma.empty
-
-    const conservacaoFragment = conservacao
-      ? Prisma.sql`AND conservacao = ${conservacao}`
-      : Prisma.empty
-
-    const estabelecimentoFragment = estabelecimento
-      ? Prisma.sql`AND estabelecimento = ${estabelecimento}`
-      : Prisma.empty
+    // Build reusable SQL fragments
+    const tipoIdFragment = buildTipoFragment(tipoId, 'p')
+    const tipoIdFragmentNoAlias = buildTipoFragment(tipoId) // sem alias
+    const conservacaoFragment = buildConservacaoFragment(conservacao)
+    const estabelecimentoFragment = buildEstabelecimentoFragment(estabelecimento)
 
     const [
       totalEstoqueResult,
@@ -50,25 +49,22 @@ export async function GET(req: NextRequest) {
             SELECT "produtoId" FROM locacoes WHERE status = 'Ativa' AND "deletedAt" IS NULL
           )
       `),
-
       // 2. Total locados
       prisma.$queryRaw<{ count: number }[]>(Prisma.sql`
         SELECT COUNT(DISTINCT p.id)::int as count
         FROM produtos p
         JOIN locacoes l ON p.id = l."produtoId"
         WHERE p."deletedAt" IS NULL AND l.status = 'Ativa' AND l."deletedAt" IS NULL
-        ${tipoId ? Prisma.sql`AND p."tipoId" = ${tipoId}` : Prisma.empty}
+        ${tipoIdFragment}
       `),
-
-      // 3. Total em manutenção
+      // 3. Total em manutenção (usando fragment sem alias)
       prisma.$queryRaw<{ count: number }[]>(Prisma.sql`
         SELECT COUNT(*)::int as count
         FROM produtos
         WHERE "deletedAt" IS NULL AND "statusProduto" = 'Manutenção'
-        ${tipoIdFragment2}
+        ${tipoIdFragmentNoAlias}
       `),
-
-      // 4. Estoque por tipo (breakdown: estoque, locado, manutenção)
+      // 4. Estoque por tipo
       prisma.$queryRaw<{ tipoNome: string; estoque: number; locado: number; manutencao: number }[]>(Prisma.sql`
         SELECT p."tipoNome",
           COUNT(DISTINCT CASE WHEN p."statusProduto" = 'Ativo'
@@ -82,8 +78,7 @@ export async function GET(req: NextRequest) {
         ${tipoIdFragment}
         GROUP BY p."tipoNome" ORDER BY estoque DESC
       `),
-
-      // 5. Estoque por conservação (produtos disponíveis — não locados)
+      // 5. Estoque por conservação
       prisma.$queryRaw<{ conservacao: string; count: number }[]>(Prisma.sql`
         SELECT conservacao, COUNT(*)::int as count
         FROM produtos
@@ -95,8 +90,7 @@ export async function GET(req: NextRequest) {
           )
         GROUP BY conservacao ORDER BY count DESC
       `),
-
-      // 6. Estoque por estabelecimento (produtos disponíveis — não locados)
+      // 6. Estoque por estabelecimento
       prisma.$queryRaw<{ estabelecimento: string; count: number }[]>(Prisma.sql`
         SELECT COALESCE(estabelecimento, 'Sem local') as estabelecimento, COUNT(*)::int as count
         FROM produtos
@@ -108,8 +102,7 @@ export async function GET(req: NextRequest) {
           )
         GROUP BY estabelecimento ORDER BY count DESC
       `),
-
-      // 7. Ocupação por tipo (total vs locados com percentual)
+      // 7. Ocupação por tipo
       prisma.$queryRaw<{ tipoNome: string; total: number; locados: number }[]>(Prisma.sql`
         SELECT p."tipoNome",
           COUNT(DISTINCT p.id)::int as total,
@@ -120,8 +113,7 @@ export async function GET(req: NextRequest) {
         ${tipoIdFragment}
         GROUP BY p."tipoNome" ORDER BY total DESC
       `),
-
-      // 8. Produtos em estoque detalhados (não locados)
+      // 8. Produtos em estoque detalhados
       prisma.produto.findMany({
         where: {
           deletedAt: null,
@@ -157,28 +149,16 @@ export async function GET(req: NextRequest) {
 
     const charts = {
       estoquePorTipo: estoquePorTipo.map(t => ({
-        tipoNome: t.tipoNome,
-        estoque: t.estoque,
-        locado: t.locado,
-        manutencao: t.manutencao,
+        tipoNome: t.tipoNome, estoque: t.estoque, locado: t.locado, manutencao: t.manutencao,
       })),
-      estoquePorConservacao: estoquePorConservacao.map(c => ({
-        conservacao: c.conservacao,
-        count: c.count,
-      })),
-      estoquePorEstabelecimento: estoquePorEstabelecimento.map(e => ({
-        estabelecimento: e.estabelecimento,
-        count: e.count,
-      })),
+      estoquePorConservacao: estoquePorConservacao.map(c => ({ conservacao: c.conservacao, count: c.count })),
+      estoquePorEstabelecimento: estoquePorEstabelecimento.map(e => ({ estabelecimento: e.estabelecimento, count: e.count })),
       ocupacaoPorTipo: ocupacaoPorTipo.map(o => ({
-        tipoNome: o.tipoNome,
-        total: o.total,
-        locados: o.locados,
+        tipoNome: o.tipoNome, total: o.total, locados: o.locados,
         percentual: o.total > 0 ? (o.locados / o.total) * 100 : 0,
       })),
     }
 
-    // Filter to only show products not currently located
     const tabela = produtosEstoque
       .filter(p => !p.locacoes?.length)
       .map(p => ({

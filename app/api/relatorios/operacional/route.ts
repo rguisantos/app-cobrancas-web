@@ -2,50 +2,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import {
+  authenticateReport,
+  extractReportParams,
+  calcularPeriodo,
+  buildRotaFragments,
+  fillMonthlyData,
+  mapDiaSemana,
+} from '@/lib/relatorios-helpers'
 
 export async function GET(req: NextRequest) {
+  const authResult = await authenticateReport(req, extractReportParams(req).rotaId)
+  if (authResult instanceof NextResponse) return authResult
+  const { effectiveRotaId } = authResult
+
   try {
-    const { searchParams } = new URL(req.url)
-    const hoje = new Date()
-    const periodo = searchParams.get('periodo') || undefined
-    const dataInicioStr = searchParams.get('dataInicio')
-    const dataFimStr = searchParams.get('dataFim')
-    const rotaId = searchParams.get('rotaId') || undefined
-
-    // Determine date range
-    let inicio: Date
-    let fim: Date
-
-    if (dataInicioStr && dataFimStr) {
-      inicio = new Date(dataInicioStr)
-      fim = new Date(dataFimStr)
-    } else if (periodo === 'mes') {
-      inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-      fim = new Date(hoje)
-    } else if (periodo === 'trimestre') {
-      inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1)
-      fim = new Date(hoje)
-    } else if (periodo === 'semestre') {
-      inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 5, 1)
-      fim = new Date(hoje)
-    } else if (periodo === 'ano') {
-      inicio = new Date(hoje.getFullYear(), 0, 1)
-      fim = new Date(hoje)
-    } else {
-      inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-      fim = new Date(hoje)
-    }
-    fim.setHours(23, 59, 59, 999)
+    const { periodo, dataInicio, dataFim } = extractReportParams(req)
+    const { inicio, fim } = calcularPeriodo(periodo, dataInicio, dataFim)
 
     // For tabela: last 30 days
-    const inicio30 = new Date(hoje)
+    const inicio30 = new Date()
     inicio30.setDate(inicio30.getDate() - 29)
     inicio30.setHours(0, 0, 0, 0)
 
-    // Build reusable SQL fragment for rotaId filter
-    const rotaSubqueryFragment = rotaId
-      ? Prisma.sql`AND "clienteId" IN (SELECT id FROM clientes WHERE "rotaId" = ${rotaId} AND "deletedAt" IS NULL)`
-      : Prisma.empty
+    const rotaFrags = buildRotaFragments(effectiveRotaId)
 
     const [
       cobrancasCriadasPeriodo,
@@ -58,26 +38,17 @@ export async function GET(req: NextRequest) {
       comparativoRecebidoPendenteMensalRaw,
       resumoDiario,
     ] = await Promise.all([
-      // 1. Cobranças criadas no período
       prisma.cobranca.count({
-        where: {
-          deletedAt: null,
-          createdAt: { gte: inicio, lte: fim },
-          ...(rotaId && { cliente: { rotaId } }),
-        },
+        where: { deletedAt: null, createdAt: { gte: inicio, lte: fim }, ...(effectiveRotaId && { cliente: { rotaId: effectiveRotaId } }) },
       }),
-
-      // 2. Taxa de pagamento no período (% pagas)
       prisma.$queryRaw<{ taxa: number }[]>(Prisma.sql`
         SELECT CASE WHEN COUNT(*) > 0
           THEN (COUNT(CASE WHEN status = 'Pago' THEN 1 END)::float / COUNT(*)) * 100
           ELSE 0 END as taxa
         FROM cobrancas
         WHERE "deletedAt" IS NULL AND "createdAt" >= ${inicio} AND "createdAt" <= ${fim}
-        ${rotaSubqueryFragment}
+        ${rotaFrags.rotaSubquery}
       `),
-
-      // 3. Tempo médio de pagamento (dias entre criação e pagamento)
       prisma.$queryRaw<{ media: number }[]>(Prisma.sql`
         SELECT COALESCE(AVG(
           EXTRACT(DAY FROM "dataPagamento"::timestamp - "createdAt")
@@ -85,64 +56,52 @@ export async function GET(req: NextRequest) {
         FROM cobrancas
         WHERE "deletedAt" IS NULL AND status = 'Pago' AND "dataPagamento" IS NOT NULL
           AND "createdAt" >= ${inicio} AND "createdAt" <= ${fim}
-        ${rotaSubqueryFragment}
+        ${rotaFrags.rotaSubquery}
       `),
-
-      // 4. Produtividade diária (cobranças criadas por dia)
       prisma.$queryRaw<{ media: number }[]>(Prisma.sql`
         SELECT CASE WHEN COUNT(DISTINCT DATE("createdAt")) > 0
           THEN (COUNT(*)::float / COUNT(DISTINCT DATE("createdAt")))
           ELSE 0 END as media
         FROM cobrancas
         WHERE "deletedAt" IS NULL AND "createdAt" >= ${inicio} AND "createdAt" <= ${fim}
-        ${rotaSubqueryFragment}
+        ${rotaFrags.rotaSubquery}
       `),
-
-      // 5. Cobranças por dia da semana (count + total)
       prisma.$queryRaw<{ diaSemana: number; count: number; total: number }[]>(Prisma.sql`
         SELECT EXTRACT(DOW FROM "createdAt")::int as "diaSemana",
           COUNT(*)::int as count,
           COALESCE(SUM("valorRecebido"), 0)::float as total
         FROM cobrancas
         WHERE "deletedAt" IS NULL AND "createdAt" >= ${inicio} AND "createdAt" <= ${fim}
-        ${rotaSubqueryFragment}
+        ${rotaFrags.rotaSubquery}
         GROUP BY "diaSemana" ORDER BY "diaSemana"
       `),
-
-      // 6. Receita por dia da semana
       prisma.$queryRaw<{ diaSemana: number; total: number }[]>(Prisma.sql`
         SELECT EXTRACT(DOW FROM "createdAt")::int as "diaSemana",
           COALESCE(SUM("valorRecebido"), 0)::float as total
         FROM cobrancas
         WHERE "deletedAt" IS NULL AND status = 'Pago'
           AND "createdAt" >= ${inicio} AND "createdAt" <= ${fim}
-        ${rotaSubqueryFragment}
+        ${rotaFrags.rotaSubquery}
         GROUP BY "diaSemana" ORDER BY "diaSemana"
       `),
-
-      // 7. Evolução cobranças criadas vs pagas (últimos 12 meses)
       prisma.$queryRaw<{ mes: Date; criadas: number; pagas: number }[]>(Prisma.sql`
         SELECT DATE_TRUNC('month', "createdAt") as mes,
           COUNT(*)::int as criadas,
           COUNT(CASE WHEN status = 'Pago' THEN 1 END)::int as pagas
         FROM cobrancas
-        WHERE "deletedAt" IS NULL AND "createdAt" >= ${new Date(hoje.getFullYear(), hoje.getMonth() - 11, 1)}
-        ${rotaSubqueryFragment}
+        WHERE "deletedAt" IS NULL AND "createdAt" >= ${new Date(new Date().getFullYear(), new Date().getMonth() - 11, 1)}
+        ${rotaFrags.rotaSubquery}
         GROUP BY mes ORDER BY mes ASC
       `),
-
-      // 8. Comparativo recebido vs pendente mensal (últimos 12 meses)
       prisma.$queryRaw<{ mes: Date; recebido: number; pendente: number }[]>(Prisma.sql`
         SELECT DATE_TRUNC('month', "createdAt") as mes,
           COALESCE(SUM(CASE WHEN status = 'Pago' THEN "valorRecebido" ELSE 0 END), 0)::float as recebido,
           COALESCE(SUM(CASE WHEN status IN ('Parcial', 'Pendente', 'Atrasado') THEN "saldoDevedorGerado" ELSE 0 END), 0)::float as pendente
         FROM cobrancas
-        WHERE "deletedAt" IS NULL AND "createdAt" >= ${new Date(hoje.getFullYear(), hoje.getMonth() - 11, 1)}
-        ${rotaSubqueryFragment}
+        WHERE "deletedAt" IS NULL AND "createdAt" >= ${new Date(new Date().getFullYear(), new Date().getMonth() - 11, 1)}
+        ${rotaFrags.rotaSubquery}
         GROUP BY mes ORDER BY mes ASC
       `),
-
-      // 9. Resumo diário (last 30 days)
       prisma.$queryRaw<{ data: Date; cobrancasCriadas: number; valorTotal: number; valorRecebido: number; saldoDevedor: number }[]>(Prisma.sql`
         SELECT DATE("createdAt") as data,
           COUNT(*)::int as "cobrancasCriadas",
@@ -151,65 +110,32 @@ export async function GET(req: NextRequest) {
           COALESCE(SUM("saldoDevedorGerado"), 0)::float as "saldoDevedor"
         FROM cobrancas
         WHERE "deletedAt" IS NULL AND "createdAt" >= ${inicio30} AND "createdAt" <= ${fim}
-        ${rotaSubqueryFragment}
+        ${rotaFrags.rotaSubquery}
         GROUP BY DATE("createdAt")
         ORDER BY data DESC LIMIT 30
       `),
     ])
 
-    // Process monthly data
-    const mesesLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    const evolucaoCobrancasCriadas = fillMonthlyData(evolucaoCobrancasCriadasRaw, 12, (mes, existente) => ({
+      mes,
+      criadas: (existente as { criadas: number } | undefined)?.criadas ?? 0,
+      pagas: (existente as { pagas: number } | undefined)?.pagas ?? 0,
+    }))
 
-    // Portuguese day names mapped to DOW (0=Dom, 1=Seg, ..., 6=Sáb)
-    const diasSemanaLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+    const comparativoRecebidoPendenteMensal = fillMonthlyData(comparativoRecebidoPendenteMensalRaw, 12, (mes, existente) => ({
+      mes,
+      recebido: (existente as { recebido: number } | undefined)?.recebido ?? 0,
+      pendente: (existente as { pendente: number } | undefined)?.pendente ?? 0,
+    }))
 
-    const evolucaoCobrancasCriadas = Array.from({ length: 12 }, (_, i) => {
-      const data = new Date(hoje.getFullYear(), hoje.getMonth() - (11 - i), 1)
-      const mesIndex = data.getMonth()
-      const existente = evolucaoCobrancasCriadasRaw.find(e => {
-        const eDate = new Date(e.mes)
-        return eDate.getMonth() === mesIndex && eDate.getFullYear() === data.getFullYear()
-      })
-      return {
-        mes: `${mesesLabels[mesIndex]}/${data.getFullYear().toString().slice(-2)}`,
-        criadas: existente?.criadas ?? 0,
-        pagas: existente?.pagas ?? 0,
-      }
-    })
+    const cobrancasPorDiaSemana = mapDiaSemana(cobrancasPorDiaSemanaRaw, (dow, existente) => ({
+      count: existente?.count ?? 0,
+      total: existente?.total ?? 0,
+    }))
 
-    const comparativoRecebidoPendenteMensal = Array.from({ length: 12 }, (_, i) => {
-      const data = new Date(hoje.getFullYear(), hoje.getMonth() - (11 - i), 1)
-      const mesIndex = data.getMonth()
-      const existente = comparativoRecebidoPendenteMensalRaw.find(e => {
-        const eDate = new Date(e.mes)
-        return eDate.getMonth() === mesIndex && eDate.getFullYear() === data.getFullYear()
-      })
-      return {
-        mes: `${mesesLabels[mesIndex]}/${data.getFullYear().toString().slice(-2)}`,
-        recebido: existente?.recebido ?? 0,
-        pendente: existente?.pendente ?? 0,
-      }
-    })
-
-    // Build cobrancasPorDiaSemana with Portuguese day names (Seg-Ter-Qua-Qui-Sex-Sáb-Dom)
-    // Reorder to start from Monday (Seg)
-    const ordemSegunda = [1, 2, 3, 4, 5, 6, 0] // Seg, Ter, Qua, Qui, Sex, Sáb, Dom
-    const cobrancasPorDiaSemana = ordemSegunda.map(dow => {
-      const existente = cobrancasPorDiaSemanaRaw.find(d => d.diaSemana === dow)
-      return {
-        dia: diasSemanaLabels[dow],
-        count: existente?.count ?? 0,
-        total: existente?.total ?? 0,
-      }
-    })
-
-    const receitaPorDiaSemana = ordemSegunda.map(dow => {
-      const existente = receitaPorDiaSemanaRaw.find(d => d.diaSemana === dow)
-      return {
-        dia: diasSemanaLabels[dow],
-        total: existente?.total ?? 0,
-      }
-    })
+    const receitaPorDiaSemana = mapDiaSemana(receitaPorDiaSemanaRaw, (dow, existente) => ({
+      total: existente?.total ?? 0,
+    }))
 
     const kpis = {
       cobrancasCriadasPeriodo,

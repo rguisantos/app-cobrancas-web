@@ -1,113 +1,32 @@
 // GET /api/relatorios/clientes — Relatório de clientes
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
+import {
+  authenticateReport,
+  extractReportParams,
+  calcularPeriodo,
+  buildRotaFragments,
+  fillMonthlyData,
+} from '@/lib/relatorios-helpers'
 
 export async function GET(request: NextRequest) {
+  const authResult = await authenticateReport(request, extractReportParams(request).rotaId)
+  if (authResult instanceof NextResponse) return authResult
+  const { effectiveRotaId } = authResult
+
   try {
-    const { searchParams } = new URL(request.url)
-    const hoje = new Date()
+    const { periodo, dataInicio, dataFim, status } = extractReportParams(request)
+    const { inicio, fim } = calcularPeriodo(periodo, dataInicio, dataFim)
 
-    // ── Period parsing ──
-    const periodo = searchParams.get('periodo') || 'mes'
-    const rotaId = searchParams.get('rotaId') || undefined
-    const statusFilter = searchParams.get('status') || undefined
-
-    let inicio: Date, fim: Date
-    switch (periodo) {
-      case 'trimestre':
-        inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1)
-        break
-      case 'semestre':
-        inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 5, 1)
-        break
-      case 'ano':
-        inicio = new Date(hoje.getFullYear(), 0, 1)
-        break
-      default:
-        inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-    }
-    fim = new Date(hoje)
-    fim.setHours(23, 59, 59, 999)
-
-    // Override with explicit dates if provided
-    if (searchParams.get('dataInicio')) {
-      inicio = new Date(searchParams.get('dataInicio')!)
-    }
-    if (searchParams.get('dataFim')) {
-      fim = new Date(searchParams.get('dataFim')!)
-      fim.setHours(23, 59, 59, 999)
-    }
+    const rotaFrags = buildRotaFragments(effectiveRotaId)
 
     const clienteWhere = {
       deletedAt: null,
-      ...(statusFilter && { status: statusFilter }),
-      ...(rotaId && { rotaId }),
+      ...(status && { status }),
+      ...(effectiveRotaId && { rotaId: effectiveRotaId }),
     }
 
-    // ── Raw queries with conditional rotaId filter ──
-
-    // Clientes por rota
-    const clientesPorRota = rotaId
-      ? await prisma.$queryRaw<{ rotaId: string; rotaDescricao: string; count: number }[]>`
-          SELECT COALESCE(r.id::text, 'sem-rota') as "rotaId",
-            COALESCE(r.descricao, 'Sem Rota') as "rotaDescricao",
-            COUNT(c.id)::int as count
-          FROM clientes c
-          LEFT JOIN rotas r ON c."rotaId" = r.id
-          WHERE c."deletedAt" IS NULL AND c.status = 'Ativo' AND c."rotaId" = ${rotaId}
-          GROUP BY r.id, r.descricao ORDER BY count DESC
-        `
-      : await prisma.$queryRaw<{ rotaId: string; rotaDescricao: string; count: number }[]>`
-          SELECT COALESCE(r.id::text, 'sem-rota') as "rotaId",
-            COALESCE(r.descricao, 'Sem Rota') as "rotaDescricao",
-            COUNT(c.id)::int as count
-          FROM clientes c
-          LEFT JOIN rotas r ON c."rotaId" = r.id
-          WHERE c."deletedAt" IS NULL AND c.status = 'Ativo'
-          GROUP BY r.id, r.descricao ORDER BY count DESC
-        `
-
-    // Top clientes por receita
-    const topClientesReceita = rotaId
-      ? await prisma.$queryRaw<{ clienteId: string; clienteNome: string; total: number; count: number }[]>`
-          SELECT cb."clienteId", cb."clienteNome",
-            SUM(cb."valorRecebido")::float as total, COUNT(*)::int as count
-          FROM cobrancas cb
-          JOIN clientes c ON cb."clienteId" = c.id
-          WHERE cb."deletedAt" IS NULL AND cb."createdAt" >= ${inicio} AND cb."createdAt" <= ${fim}
-            AND c."rotaId" = ${rotaId}
-          GROUP BY cb."clienteId", cb."clienteNome"
-          ORDER BY total DESC LIMIT 10
-        `
-      : await prisma.$queryRaw<{ clienteId: string; clienteNome: string; total: number; count: number }[]>`
-          SELECT cb."clienteId", cb."clienteNome",
-            SUM(cb."valorRecebido")::float as total, COUNT(*)::int as count
-          FROM cobrancas cb
-          WHERE cb."deletedAt" IS NULL AND cb."createdAt" >= ${inicio} AND cb."createdAt" <= ${fim}
-          GROUP BY cb."clienteId", cb."clienteNome"
-          ORDER BY total DESC LIMIT 10
-        `
-
-    // Receita média por cliente
-    const receitaMediaQuery = rotaId
-      ? await prisma.$queryRaw<{ media: number }[]>`
-          SELECT CASE WHEN COUNT(DISTINCT cb."clienteId") > 0
-            THEN (SUM(cb."valorRecebido")/COUNT(DISTINCT cb."clienteId"))::float
-            ELSE 0 END as media
-          FROM cobrancas cb
-          JOIN clientes c ON cb."clienteId" = c.id
-          WHERE cb."deletedAt" IS NULL AND cb."createdAt" >= ${inicio} AND cb."createdAt" <= ${fim}
-            AND c."rotaId" = ${rotaId}
-        `
-      : await prisma.$queryRaw<{ media: number }[]>`
-          SELECT CASE WHEN COUNT(DISTINCT "clienteId") > 0
-            THEN (SUM("valorRecebido")/COUNT(DISTINCT "clienteId"))::float
-            ELSE 0 END as media
-          FROM cobrancas
-          WHERE "deletedAt" IS NULL AND "createdAt" >= ${inicio} AND "createdAt" <= ${fim}
-        `
-
-    // ── Parallel queries ──
     const [
       totalClientesAtivos,
       clientesComLocacao,
@@ -115,10 +34,13 @@ export async function GET(request: NextRequest) {
       evolucaoNovosClientes,
       distribuicaoPorEstado,
       clientesDetalhados,
+      clientesPorRota,
+      topClientesReceita,
+      receitaMediaQuery,
     ] = await Promise.all([
       // 1. Total clientes ativos
       prisma.cliente.count({
-        where: { deletedAt: null, status: 'Ativo', ...(rotaId && { rotaId }) },
+        where: { deletedAt: null, status: 'Ativo', ...(effectiveRotaId && { rotaId: effectiveRotaId }) },
       }),
       // 2. Clientes com locação ativa
       prisma.$queryRaw<{ count: number }[]>`
@@ -130,12 +52,14 @@ export async function GET(request: NextRequest) {
         SELECT COUNT(DISTINCT cb."clienteId")::int as count
         FROM cobrancas cb
         WHERE cb."deletedAt" IS NULL AND cb.status IN ('Parcial','Pendente','Atrasado') AND cb."saldoDevedorGerado" > 0
+        ${rotaFrags.rotaSubquery}
       `,
       // 4. Evolução novos clientes (12 meses)
       prisma.$queryRaw<{ mes: Date; count: number }[]>`
         SELECT DATE_TRUNC('month', "createdAt") as mes, COUNT(*)::int as count
         FROM clientes
-        WHERE "deletedAt" IS NULL AND "createdAt" >= ${new Date(hoje.getFullYear(), hoje.getMonth() - 11, 1)}
+        WHERE "deletedAt" IS NULL AND "createdAt" >= ${new Date(new Date().getFullYear(), new Date().getMonth() - 11, 1)}
+        ${effectiveRotaId ? Prisma.sql`AND "rotaId" = ${effectiveRotaId}` : Prisma.empty}
         GROUP BY mes ORDER BY mes ASC
       `,
       // 5. Distribuição por estado
@@ -143,6 +67,7 @@ export async function GET(request: NextRequest) {
         SELECT estado, COUNT(*)::int as count
         FROM clientes
         WHERE "deletedAt" IS NULL AND status = 'Ativo'
+        ${effectiveRotaId ? Prisma.sql`AND "rotaId" = ${effectiveRotaId}` : Prisma.empty}
         GROUP BY estado ORDER BY count DESC
       `,
       // 6. Clientes detalhados
@@ -183,23 +108,43 @@ export async function GET(request: NextRequest) {
         orderBy: { nomeExibicao: 'asc' },
         take: 500,
       }),
+      // 7. Clientes por rota
+      prisma.$queryRaw<{ rotaId: string; rotaDescricao: string; count: number }[]>`
+        SELECT COALESCE(r.id::text, 'sem-rota') as "rotaId",
+          COALESCE(r.descricao, 'Sem Rota') as "rotaDescricao",
+          COUNT(c.id)::int as count
+        FROM clientes c
+        LEFT JOIN rotas r ON c."rotaId" = r.id
+        WHERE c."deletedAt" IS NULL AND c.status = 'Ativo'
+        ${rotaFrags.rotaClienteFilter}
+        GROUP BY r.id, r.descricao ORDER BY count DESC
+      `,
+      // 8. Top clientes por receita
+      prisma.$queryRaw<{ clienteId: string; clienteNome: string; total: number; count: number }[]>`
+        SELECT cb."clienteId", cb."clienteNome",
+          SUM(cb."valorRecebido")::float as total, COUNT(*)::int as count
+        FROM cobrancas cb
+        WHERE cb."deletedAt" IS NULL AND cb."createdAt" >= ${inicio} AND cb."createdAt" <= ${fim}
+        ${rotaFrags.rotaSubquery}
+        GROUP BY cb."clienteId", cb."clienteNome"
+        ORDER BY total DESC LIMIT 10
+      `,
+      // 9. Receita média por cliente
+      prisma.$queryRaw<{ media: number }[]>`
+        SELECT CASE WHEN COUNT(DISTINCT "clienteId") > 0
+          THEN (SUM("valorRecebido")/COUNT(DISTINCT "clienteId"))::float
+          ELSE 0 END as media
+        FROM cobrancas
+        WHERE "deletedAt" IS NULL AND "createdAt" >= ${inicio} AND "createdAt" <= ${fim}
+        ${rotaFrags.rotaSubquery}
+      `,
     ])
 
     // ── Processing ──
-    const mesesLabels = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-
-    const evolucaoNovosClientesCompleta = Array.from({ length: 12 }, (_, i) => {
-      const data = new Date(hoje.getFullYear(), hoje.getMonth() - (11 - i), 1)
-      const mesIndex = data.getMonth()
-      const existente = evolucaoNovosClientes.find(e => {
-        const eDate = new Date(e.mes)
-        return eDate.getMonth() === mesIndex && eDate.getFullYear() === data.getFullYear()
-      })
-      return {
-        mes: `${mesesLabels[mesIndex]}/${data.getFullYear().toString().slice(-2)}`,
-        count: existente?.count ?? 0,
-      }
-    })
+    const evolucaoNovosClientesCompleta = fillMonthlyData(evolucaoNovosClientes, 12, (mes, existente) => ({
+      mes,
+      count: (existente as { count: number } | undefined)?.count ?? 0,
+    }))
 
     const kpis = {
       totalClientesAtivos,

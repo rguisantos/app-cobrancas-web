@@ -6,9 +6,10 @@ import { getSession } from '@/lib/auth'
 import Header from '@/components/layout/header'
 import { StatusRotaBadge } from '@/components/ui/badge'
 import EmptyState from '@/components/ui/empty-state'
-import { ArrowLeft, Edit, Users, MapPin, DollarSign, Package, UserCheck, Clock, TrendingUp } from 'lucide-react'
+import { ArrowLeft, Edit, Users, MapPin, DollarSign, Package, UserCheck, Clock, TrendingUp, Palette, Tag, FileText } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import GerenciarCobradores from './gerenciar-cobradores'
 
 export const metadata: Metadata = { title: 'Detalhes da Rota' }
 
@@ -21,25 +22,25 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
     include: {
       clientes: {
         where: { deletedAt: null },
-        select: { 
-          id: true, 
-          nomeExibicao: true, 
-          identificador: true, 
-          status: true, 
+        select: {
+          id: true,
+          nomeExibicao: true,
+          identificador: true,
+          status: true,
           cidade: true,
           locacoes: {
             where: { status: 'Ativa' },
-            select: { id: true, precoFicha: true }
-          }
+            select: { id: true, precoFicha: true },
+          },
         },
-        orderBy: { nomeExibicao: 'asc' }
+        orderBy: { nomeExibicao: 'asc' },
       },
       usuarioRotas: {
         include: {
           usuario: {
-            select: { id: true, nome: true, email: true, tipoPermissao: true }
-          }
-        }
+            select: { id: true, nome: true, email: true, tipoPermissao: true },
+          },
+        },
       },
       _count: {
         select: {
@@ -73,12 +74,22 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
     ...usuariosControlados.filter(u => !adminIds.has(u.id)),
   ]
 
+  // Buscar todos os usuários AcessoControlado ativos para o select
+  const todosControlados = await prisma.usuario.findMany({
+    where: {
+      deletedAt: null,
+      status: 'Ativo',
+      tipoPermissao: 'AcessoControlado',
+    },
+    select: { id: true, nome: true, email: true, tipoPermissao: true },
+  })
+
   const podeEditar = session?.user.tipoPermissao === 'Administrador'
   const clientesAtivos = rota.clientes.filter(c => c.status === 'Ativo')
-  
+
   // Calcular métricas
   const totalLocacoesAtivas = rota.clientes.reduce((acc, c) => acc + c.locacoes.length, 0)
-  const valorTotalLocacoes = rota.clientes.reduce((acc, c) => 
+  const valorTotalLocacoes = rota.clientes.reduce((acc, c) =>
     acc + c.locacoes.reduce((sum, l) => sum + (l.precoFicha || 0), 0), 0
   )
 
@@ -161,9 +172,9 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
             </div>
 
             {rota.clientes.length === 0 ? (
-              <EmptyState 
-                icon="👥" 
-                title="Nenhum cliente nesta rota" 
+              <EmptyState
+                icon="👥"
+                title="Nenhum cliente nesta rota"
                 description="Os clientes serão listados aqui quando forem cadastrados com esta rota."
               />
             ) : (
@@ -196,7 +207,7 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
                           )}
                         </td>
                         <td className="py-2.5">
-                          <Link 
+                          <Link
                             href={`/clientes/${cliente.id}`}
                             className="text-blue-600 hover:text-blue-800 text-xs font-medium"
                           >
@@ -216,53 +227,16 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-slate-900 flex items-center gap-2">
                 <UserCheck className="w-5 h-5" />
-                Usuários com Acesso
+                Cobradores da Rota
               </h2>
-              {podeEditar && (
-                <Link 
-                  href="/admin/usuarios/novo" 
-                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  + Adicionar usuário
-                </Link>
-              )}
             </div>
 
-            {usuariosComAcesso.length === 0 ? (
-              <EmptyState 
-                icon="👤" 
-                title="Nenhum usuário com acesso" 
-                description="Administradores têm acesso total. Para outros usuários, configure 'Acesso Controlado' e selecione esta rota."
-              />
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {usuariosComAcesso.map(usuario => (
-                  <div 
-                    key={usuario.id} 
-                    className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 hover:border-slate-200 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                      usuario.tipoPermissao === 'Administrador' 
-                        ? 'bg-purple-100 text-purple-700' 
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {usuario.nome.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-900 truncate">{usuario.nome}</p>
-                      <p className="text-xs text-slate-500 truncate">{usuario.email}</p>
-                    </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      usuario.tipoPermissao === 'Administrador' 
-                        ? 'bg-purple-100 text-purple-700' 
-                        : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {usuario.tipoPermissao === 'Administrador' ? 'Admin' : 'Acesso Controlado'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <GerenciarCobradores
+              rotaId={rota.id}
+              usuariosComAcesso={usuariosComAcesso}
+              todosControlados={todosControlados}
+              podeEditar={podeEditar}
+            />
           </div>
         </div>
 
@@ -299,14 +273,14 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
                   </span>
                 </div>
                 <div className="flex justify-between text-sm mt-2">
-                  <span className="text-slate-500">Usuários com acesso</span>
+                  <span className="text-slate-500">Cobradores</span>
                   <span className="font-semibold">{usuariosComAcesso.length}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Informações */}
+          {/* Informações da Rota */}
           <div className="card p-5">
             <h3 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <MapPin className="w-4 h-4" />
@@ -316,6 +290,23 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
               <div className="flex justify-between">
                 <span className="text-slate-500">Status</span>
                 <StatusRotaBadge status={rota.status} />
+              </div>
+              {rota.regiao && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Região</span>
+                  <span className="font-medium">{rota.regiao}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Cor</span>
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded border border-slate-200" style={{ backgroundColor: rota.cor }} />
+                  <span className="font-mono text-xs">{rota.cor}</span>
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Ordem</span>
+                <span className="font-medium">{rota.ordem || '—'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Criada em</span>
@@ -328,6 +319,12 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
                 </div>
               )}
             </div>
+            {rota.observacao && (
+              <div className="mt-4 pt-3 border-t border-slate-100">
+                <p className="text-xs text-slate-500 mb-1">Observação</p>
+                <p className="text-sm text-slate-700 whitespace-pre-line">{rota.observacao}</p>
+              </div>
+            )}
           </div>
 
           {/* Ações */}
@@ -338,14 +335,14 @@ export default async function RotaDetailPage({ params }: { params: Promise<{ id:
                 Ações Rápidas
               </h3>
               <div className="space-y-2">
-                <Link 
+                <Link
                   href={`/admin/rotas/${rota.id}/editar`}
                   className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800"
                 >
                   <Edit className="w-4 h-4" />
                   Editar rota
                 </Link>
-                <Link 
+                <Link
                   href={`/admin/usuarios?rota=${rota.id}`}
                   className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800"
                 >

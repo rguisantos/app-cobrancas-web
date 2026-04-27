@@ -7,12 +7,23 @@ import { ArrowLeft, Save, MapPin, Loader2, Trash2, AlertTriangle } from 'lucide-
 import Header from '@/components/layout/header'
 import { useToast } from '@/components/ui/toaster'
 
+const CORES_PREDEFINIDAS = [
+  { nome: 'Azul', valor: '#2563EB' },
+  { nome: 'Verde', valor: '#16A34A' },
+  { nome: 'Roxo', valor: '#7C3AED' },
+  { nome: 'Vermelho', valor: '#DC2626' },
+  { nome: 'Laranja', valor: '#EA580C' },
+  { nome: 'Rosa', valor: '#DB2777' },
+  { nome: 'Ciano', valor: '#0891B2' },
+  { nome: 'Amarelo', valor: '#CA8A04' },
+]
+
 export default function EditarRotaPage() {
   const router = useRouter()
   const params = useParams()
   const rotaId = params.id as string
   const { error: toastError, success: toastSuccess } = useToast()
-  
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -21,6 +32,10 @@ export default function EditarRotaPage() {
   const [formData, setFormData] = useState({
     descricao: '',
     status: 'Ativo',
+    cor: '#2563EB',
+    regiao: '',
+    ordem: 0,
+    observacao: '',
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -35,8 +50,11 @@ export default function EditarRotaPage() {
         setFormData({
           descricao: data.descricao || '',
           status: data.status || 'Ativo',
+          cor: data.cor || '#2563EB',
+          regiao: data.regiao || '',
+          ordem: data.ordem || 0,
+          observacao: data.observacao || '',
         })
-        // Contar clientes da resposta
         setClientCount(data.clientes?.length || 0)
       })
       .catch(() => router.push('/admin/rotas'))
@@ -45,7 +63,7 @@ export default function EditarRotaPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!formData.descricao.trim()) {
       setErrors({ descricao: 'Descrição é obrigatória' })
       return
@@ -68,6 +86,8 @@ export default function EditarRotaPage() {
         const errorData = await res.json()
         if (errorData.error?.includes('descrição')) {
           setErrors({ descricao: errorData.error })
+        } else if (errorData.error?.includes('cliente')) {
+          toastError(errorData.error)
         } else {
           toastError(errorData.error || 'Erro ao atualizar rota')
         }
@@ -126,7 +146,8 @@ export default function EditarRotaPage() {
         }
       />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
+        {/* Informações Básicas */}
         <div className="card p-6">
           <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
             <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
@@ -138,7 +159,7 @@ export default function EditarRotaPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Descrição <span className="text-red-500">*</span>
@@ -151,8 +172,8 @@ export default function EditarRotaPage() {
                   setErrors(prev => ({ ...prev, descricao: '' }))
                 }}
                 className={`w-full px-4 py-2.5 rounded-lg border outline-none transition-all ${
-                  errors.descricao 
-                    ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' 
+                  errors.descricao
+                    ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
                     : 'border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
                 }`}
                 placeholder="Ex: Rota Norte, Zona Sul..."
@@ -163,20 +184,105 @@ export default function EditarRotaPage() {
               )}
               <p className="text-xs text-slate-400 mt-1">{formData.descricao.length}/100 caracteres</p>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Status</label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all bg-white"
+                >
+                  <option value="Ativo">Ativo</option>
+                  <option value="Inativo">Inativo</option>
+                </select>
+                {formData.status === 'Inativo' && clientCount > 0 && (
+                  <p className="text-amber-600 text-xs mt-1">
+                    Atenção: Esta rota possui {clientCount} cliente(s). Você não poderá inativar enquanto houver clientes ativos.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Região</label>
+                <input
+                  type="text"
+                  value={formData.regiao}
+                  onChange={(e) => setFormData(prev => ({ ...prev, regiao: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                  placeholder="Ex: Zona Norte"
+                  maxLength={100}
+                />
+              </div>
+            </div>
+
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Status
-              </label>
-              <select
-                value={formData.status}
-                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all bg-white"
-              >
-                <option value="Ativo">Ativo</option>
-                <option value="Inativo">Inativo</option>
-              </select>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Ordem de Cobrança</label>
+              <input
+                type="number"
+                value={formData.ordem}
+                onChange={(e) => setFormData(prev => ({ ...prev, ordem: parseInt(e.target.value) || 0 }))}
+                min={0}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                placeholder="0 = sem ordem específica"
+              />
+              <p className="text-xs text-slate-400 mt-1">Rotas com ordem menor são visitadas primeiro</p>
             </div>
           </div>
+        </div>
+
+        {/* Identificação Visual */}
+        <div className="card p-6">
+          <h2 className="font-semibold text-slate-900 mb-4">Identificação Visual</h2>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Cor da Rota</label>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {CORES_PREDEFINIDAS.map(cor => (
+                <button
+                  key={cor.valor}
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, cor: cor.valor }))}
+                  className={`w-10 h-10 rounded-lg border-2 transition-all hover:scale-110 ${
+                    formData.cor === cor.valor ? 'border-slate-900 ring-2 ring-slate-300 scale-110' : 'border-transparent'
+                  }`}
+                  style={{ backgroundColor: cor.valor }}
+                  title={cor.nome}
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={formData.cor}
+                onChange={(e) => setFormData(prev => ({ ...prev, cor: e.target.value }))}
+                className="w-10 h-10 rounded cursor-pointer border border-slate-200"
+              />
+              <input
+                type="text"
+                value={formData.cor}
+                onChange={(e) => setFormData(prev => ({ ...prev, cor: e.target.value }))}
+                className="w-32 px-3 py-2 rounded-lg border border-slate-200 text-sm font-mono"
+                maxLength={7}
+              />
+              <div
+                className="w-8 h-8 rounded-lg border border-slate-200"
+                style={{ backgroundColor: formData.cor }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Observações */}
+        <div className="card p-6">
+          <h2 className="font-semibold text-slate-900 mb-4">Observações</h2>
+          <textarea
+            value={formData.observacao}
+            onChange={(e) => setFormData(prev => ({ ...prev, observacao: e.target.value }))}
+            rows={3}
+            className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all resize-none"
+            placeholder="Anotações operacionais sobre a rota..."
+            maxLength={500}
+          />
+          <p className="text-xs text-slate-400 mt-1">{formData.observacao.length}/500 caracteres</p>
         </div>
 
         {/* Zona de perigo */}
@@ -186,7 +292,7 @@ export default function EditarRotaPage() {
             <h3 className="font-semibold text-red-700">Zona de Perigo</h3>
           </div>
           <p className="text-sm text-slate-600 mb-4">
-            A exclusão de uma rota é permanente. {clientCount > 0 && (
+            A exclusão de uma rota é permanente e não pode ser desfeita. {clientCount > 0 && (
               <span className="font-medium text-red-600">
                 Esta rota possui {clientCount} cliente{clientCount !== 1 ? 's' : ''} vinculado{clientCount !== 1 ? 's' : ''} que ficarão sem rota.
               </span>
@@ -232,9 +338,9 @@ export default function EditarRotaPage() {
         {/* Ações */}
         <div className="fixed bottom-0 left-0 right-0 lg:static lg:mt-0 bg-white border-t border-slate-200 p-4 lg:bg-transparent lg:border-0 lg:p-0 z-10">
           <div className="max-w-7xl mx-auto flex gap-3">
-            <button 
-              type="submit" 
-              disabled={saving} 
+            <button
+              type="submit"
+              disabled={saving}
               className="flex-1 lg:flex-none btn-primary justify-center"
             >
               {saving ? (
@@ -249,8 +355,8 @@ export default function EditarRotaPage() {
                 </>
               )}
             </button>
-            <Link 
-              href={`/admin/rotas/${rotaId}`} 
+            <Link
+              href={`/admin/rotas/${rotaId}`}
               className="btn-secondary hidden lg:inline-flex"
             >
               Cancelar

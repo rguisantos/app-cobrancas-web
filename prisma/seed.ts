@@ -49,9 +49,9 @@ async function main() {
 
   // Rotas de exemplo
   const rotas = [
-    { id: 'rota_1', descricao: 'Linha Centro' },
-    { id: 'rota_2', descricao: 'Linha Norte' },
-    { id: 'rota_3', descricao: 'Linha Sul' },
+    { id: 'rota_1', descricao: 'Linha Centro', cor: '#2563EB', regiao: 'Centro', ordem: 1 },
+    { id: 'rota_2', descricao: 'Linha Norte', cor: '#16A34A', regiao: 'Zona Norte', ordem: 2 },
+    { id: 'rota_3', descricao: 'Linha Sul', cor: '#7C3AED', regiao: 'Zona Sul', ordem: 3 },
   ]
   for (const rota of rotas) {
     await prisma.rota.upsert({

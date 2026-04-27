@@ -96,7 +96,7 @@ const ALLOWED_FIELDS: Record<string, Set<string>> = {
     'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId'
   ]),
   rota: new Set([
-    'descricao', 'status',
+    'descricao', 'status', 'cor', 'regiao', 'ordem', 'observacao',
     'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId'
   ]),
   usuario: new Set([

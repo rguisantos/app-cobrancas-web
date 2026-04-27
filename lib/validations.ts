@@ -14,11 +14,19 @@ const dateStringToDate = z.string().transform((v) => new Date(v))
 export const rotaCreateSchema = z.object({
   descricao: z.string().min(1, 'Descrição é obrigatória').max(100, 'Descrição deve ter no máximo 100 caracteres'),
   status: z.enum(['Ativo', 'Inativo']).default('Ativo'),
+  cor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Cor deve ser um hexadecimal válido (ex: #2563EB)').default('#2563EB'),
+  regiao: z.string().max(100, 'Região deve ter no máximo 100 caracteres').optional().nullable(),
+  ordem: z.number().int().min(0, 'Ordem deve ser um número positivo').default(0),
+  observacao: z.string().max(500, 'Observação deve ter no máximo 500 caracteres').optional().nullable(),
 })
 
 export const rotaUpdateSchema = z.object({
   descricao: z.string().min(1, 'Descrição é obrigatória').max(100, 'Descrição deve ter no máximo 100 caracteres').optional(),
   status: z.enum(['Ativo', 'Inativo']).optional(),
+  cor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Cor deve ser um hexadecimal válido').optional(),
+  regiao: z.string().max(100, 'Região deve ter no máximo 100 caracteres').optional().nullable(),
+  ordem: z.number().int().min(0, 'Ordem deve ser um número positivo').optional(),
+  observacao: z.string().max(500, 'Observação deve ter no máximo 500 caracteres').optional().nullable(),
 })
 
 // ─── Cliente ────────────────────────────────────────────────
@@ -45,7 +53,7 @@ export const clienteCreateSchema = z.object({
   bairro: z.string().min(1, 'Bairro é obrigatório'),
   cidade: z.string().min(1, 'Cidade é obrigatória'),
   estado: z.string().min(1, 'Estado é obrigatório'),
-  rotaId: z.string().min(1, 'Rota é obrigatória'),
+  rotaId: z.string().optional().nullable(),
   latitude: z.number().nullable().optional(),
   longitude: z.number().nullable().optional(),
   status: z.string().default('Ativo'),

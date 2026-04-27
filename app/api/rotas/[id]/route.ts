@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma'
 import { getAuthSession, getUserRotaIds, unauthorized, notFound, forbidden, serverError } from '@/lib/api-helpers'
 import { rotaUpdateSchema } from '@/lib/validations'
 
+// ─── GET /api/rotas/[id] ─────────────────────────────────────
+// Detalhes da rota com clientes vinculados e cobradores.
+
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await getAuthSession()
@@ -61,6 +64,10 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   }
 }
 
+// ─── PUT /api/rotas/[id] ─────────────────────────────────────
+// Atualiza dados da rota. Apenas Administradores.
+// Se a descrição mudar, atualiza rotaNome nos clientes vinculados.
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await getAuthSession()
@@ -80,13 +87,26 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: firstError }, { status: 400 })
     }
 
-    const { descricao, status } = parsed.data
+    const { descricao, status, cor, regiao, ordem, observacao } = parsed.data
 
     // Verificar se a rota existe
     const rotaExistente = await prisma.rota.findFirst({
       where: { id, deletedAt: null },
     })
     if (!rotaExistente) return notFound('Rota não encontrada')
+
+    // Se está inativando, verificar se há clientes ativos vinculados
+    if (status === 'Inativo' && rotaExistente.status === 'Ativo') {
+      const clientesAtivos = await prisma.cliente.count({
+        where: { rotaId: id, deletedAt: null, status: 'Ativo' },
+      })
+      if (clientesAtivos > 0) {
+        return NextResponse.json(
+          { error: `Esta rota possui ${clientesAtivos} cliente(s) ativo(s). Desvincule ou inative os clientes antes de inativar a rota.` },
+          { status: 409 },
+        )
+      }
+    }
 
     // Verificar unicidade da descrição (se foi alterada)
     if (descricao && descricao !== rotaExistente.descricao) {
@@ -111,6 +131,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data: {
         ...(descricao !== undefined && { descricao }),
         ...(status !== undefined && { status }),
+        ...(cor !== undefined && { cor }),
+        ...(regiao !== undefined && { regiao }),
+        ...(ordem !== undefined && { ordem }),
+        ...(observacao !== undefined && { observacao }),
         version: { increment: 1 },
         deviceId: 'web',
         needsSync: true,
@@ -131,6 +155,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return serverError()
   }
 }
+
+// ─── DELETE /api/rotas/[id] ──────────────────────────────────
+// Soft delete da rota, desvincula clientes e remove UsuarioRota.
+// Apenas Administradores.
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

@@ -2,8 +2,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { getAuthSession, getUserRotaIds, unauthorized } from '@/lib/api-helpers'
 
 export async function GET(req: NextRequest) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
   try {
     const { searchParams } = new URL(req.url)
     const hoje = new Date()

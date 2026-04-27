@@ -19,6 +19,13 @@ model Rota {
   id           String    @id @default(uuid())
   descricao    String
   status       String    @default("Ativo")  // 'Ativo' | 'Inativo'
+
+  // Identificação visual e operacional
+  cor          String    @default("#2563EB")  // Cor hexadecimal para identificação visual
+  regiao       String?   // Região/zona (ex: "Zona Norte", "Centro")
+  ordem        Int       @default(0)         // Ordem de prioridade para cobrança
+  observacao   String?                        // Anotações operacionais
+
   // Sync
   syncStatus   String    @default("synced")
   lastSyncedAt String?
@@ -75,7 +82,7 @@ model Cliente {
   estado            String    // Sigla: "MS"
   
   // Vínculo com Rota
-  rotaId            String
+  rotaId            String?   // Nullable — cliente pode ficar sem rota vinculada
   rotaNome          String?   // Para exibição fácil
   
   // Coordenadas geográficas
@@ -98,7 +105,7 @@ model Cliente {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  rota      Rota       @relation(fields: [rotaId], references: [id])
+  rota      Rota?      @relation(fields: [rotaId], references: [id])
   locacoes  Locacao[]
   cobrancas Cobranca[]
 

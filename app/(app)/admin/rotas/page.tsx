@@ -5,7 +5,7 @@ import { getSession } from '@/lib/auth'
 import Header from '@/components/layout/header'
 import { StatusRotaBadge } from '@/components/ui/badge'
 import EmptyState from '@/components/ui/empty-state'
-import { MapPin, Users, Edit, UserCheck } from 'lucide-react'
+import { MapPin, Users, Edit, UserCheck, Palette } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Rotas' }
 
@@ -16,13 +16,13 @@ export default async function RotasPage() {
     where: { deletedAt: null },
     include: {
       _count: {
-        select: { 
+        select: {
           clientes: { where: { deletedAt: null } },
           usuarioRotas: true,
-        }
-      }
+        },
+      },
     },
-    orderBy: { descricao: 'asc' }
+    orderBy: [{ ordem: 'asc' }, { descricao: 'asc' }],
   })
 
   const podeEditar = session?.user.tipoPermissao === 'Administrador'
@@ -42,10 +42,10 @@ export default async function RotasPage() {
 
       {rotas.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-          <EmptyState 
-            icon="🗺️" 
-            title="Nenhuma rota cadastrada" 
-            description="As rotas são usadas para organizar clientes por região."
+          <EmptyState
+            icon="🗺️"
+            title="Nenhuma rota cadastrada"
+            description="As rotas são usadas para organizar clientes por região e definir áreas de cobrança."
             action={podeEditar && (
               <Link href="/admin/rotas/novo" className="btn-primary">
                 Criar primeira rota
@@ -64,14 +64,22 @@ export default async function RotasPage() {
               <div className="p-5">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/30 group-hover:shadow-md transition-shadow">
+                    <div
+                      className="w-11 h-11 rounded-xl flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow"
+                      style={{ backgroundColor: rota.cor || '#2563EB' }}
+                    >
                       <MapPin className="w-5 h-5 text-white" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-slate-900 group-hover:text-blue-600 transition-colors">
                         {rota.descricao}
                       </h3>
-                      <StatusRotaBadge status={rota.status} />
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <StatusRotaBadge status={rota.status} />
+                        {rota.regiao && (
+                          <span className="text-xs text-slate-400">{rota.regiao}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {podeEditar && (
@@ -82,7 +90,7 @@ export default async function RotasPage() {
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex items-center gap-4 text-sm">
                   <div className="flex items-center gap-1.5 text-slate-500">
                     <Users className="w-4 h-4" />
@@ -97,6 +105,11 @@ export default async function RotasPage() {
                         <strong className="text-slate-900">{rota._count.usuarioRotas}</strong> cobrador{rota._count.usuarioRotas !== 1 ? 'es' : ''}
                       </span>
                     </div>
+                  )}
+                  {rota.ordem > 0 && (
+                    <span className="text-xs text-slate-400">
+                      Ordem: {rota.ordem}
+                    </span>
                   )}
                 </div>
               </div>

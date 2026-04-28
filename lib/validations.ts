@@ -123,6 +123,77 @@ export const locacaoCreateSchema = z.object({
 
 export const locacaoUpdateSchema = locacaoCreateSchema.partial().omit({ id: true })
 
+// ─── Locação — Status Transitions ───────────────────────────
+
+/** Locação status values */
+export const LOCACAO_STATUS = ['Ativa', 'Finalizada', 'Cancelada'] as const
+export type LocacaoStatus = (typeof LOCACAO_STATUS)[number]
+
+/**
+ * Allowed status transitions map.
+ * Key = current status, Value = array of statuses that can be transitioned TO.
+ */
+export const LOCACAO_STATUS_TRANSITIONS: Record<LocacaoStatus, LocacaoStatus[]> = {
+  Ativa: ['Finalizada', 'Cancelada'],
+  Finalizada: [],    // No transitions allowed from Finalizada
+  Cancelada: [],     // No transitions allowed from Cancelada
+}
+
+/**
+ * Validates whether a status transition is allowed.
+ * Returns true if the transition is valid, false otherwise.
+ */
+export function isStatusTransitionAllowed(currentStatus: string, newStatus: string): boolean {
+  const allowed = LOCACAO_STATUS_TRANSITIONS[currentStatus as LocacaoStatus]
+  if (!allowed) return false
+  return allowed.includes(newStatus as LocacaoStatus)
+}
+
+/**
+ * Zod schema for validating status transitions on locação updates.
+ * Use this when updating the status field of an existing locação.
+ */
+export const locacaoStatusTransitionSchema = z.object({
+  status: z.enum(LOCACAO_STATUS),
+}).refine(
+  (data) => data.status !== undefined,
+  { message: 'Status é obrigatório', path: ['status'] },
+)
+
+// ─── Locação — Relocar ──────────────────────────────────────
+
+export const relocarSchema = z.object({
+  novoClienteId:       z.string().min(1, 'Novo cliente é obrigatório'),
+  novoClienteNome:     z.string().min(1, 'Nome do novo cliente é obrigatório'),
+  formaPagamento:      z.enum(['Periodo', 'PercentualPagar', 'PercentualReceber'], {
+    errorMap: () => ({ message: 'Forma de pagamento inválida' }),
+  }),
+  numeroRelogio:       z.string().min(1, 'Número do relógio é obrigatório'),
+  precoFicha:          z.number().positive('Preço da ficha deve ser positivo'),
+  percentualEmpresa:   z.number().min(0, 'Percentual mínimo é 0').max(100, 'Percentual máximo é 100'),
+  percentualCliente:   z.number().min(0, 'Percentual mínimo é 0').max(100, 'Percentual máximo é 100'),
+  periodicidade:       z.enum(['Mensal', 'Semanal', 'Quinzenal', 'Diária']).optional().nullable(),
+  valorFixo:           z.number().positive('Valor fixo deve ser positivo').optional().nullable(),
+  motivoRelocacao:     z.string().min(3, 'Motivo da relocação deve ter pelo menos 3 caracteres'),
+  observacao:          z.string().optional().nullable(),
+  trocaPano:           z.boolean().optional(),
+})
+
+// ─── Locação — Enviar para Estoque ──────────────────────────
+
+export const enviarEstoqueSchema = z.object({
+  estabelecimento: z.string().min(1, 'Selecione o estabelecimento'),
+  motivo:          z.string().min(3, 'Informe o motivo (mínimo 3 caracteres)'),
+  observacao:      z.string().optional().nullable(),
+})
+
+// ─── Locação — Finalizar ────────────────────────────────────
+
+export const finalizarLocacaoSchema = z.object({
+  motivo:     z.string().min(3, 'Informe o motivo (mínimo 3 caracteres)'),
+  observacao: z.string().optional().nullable(),
+})
+
 // ─── Cobrança ───────────────────────────────────────────────
 
 export const cobrancaCreateSchema = z.object({
@@ -254,6 +325,9 @@ export type MetaCreateInput = z.infer<typeof metaCreateSchema>
 export type MetaUpdateInput = z.infer<typeof metaUpdateSchema>
 export type RotaCreateInput = z.infer<typeof rotaCreateSchema>
 export type RotaUpdateInput = z.infer<typeof rotaUpdateSchema>
+export type RelocarInput = z.infer<typeof relocarSchema>
+export type EnviarEstoqueInput = z.infer<typeof enviarEstoqueSchema>
+export type FinalizarLocacaoInput = z.infer<typeof finalizarLocacaoSchema>
 export type LoginInput = z.infer<typeof loginSchema>
 export type TrocarSenhaInput = z.infer<typeof trocarSenhaSchema>
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>

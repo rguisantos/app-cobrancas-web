@@ -1,13 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, notFound, serverError, forbidden } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, notFound, forbidden, validateBody, handleApiError, ApiError } from '@/lib/api-helpers'
+import { locacaoUpdateSchema } from '@/lib/validations'
+import { validarTransicaoStatus } from '@/lib/locacao-service'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await getAuthSession()
   if (!session) return unauthorized()
-  const locacao = await prisma.locacao.findFirst({ where: { id, deletedAt: null }, include: { cliente: true, produto: true, cobrancas: { orderBy: { createdAt: 'desc' }, take: 10 } } })
+
+  const locacao = await prisma.locacao.findFirst({
+    where: { id, deletedAt: null },
+    include: {
+      cliente: {
+        select: {
+          id: true,
+          nomeExibicao: true,
+          identificador: true,
+          telefonePrincipal: true,
+          rotaId: true,
+          status: true,
+        },
+      },
+      produto: true,
+      cobrancas: {
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      },
+    },
+  })
+
   if (!locacao) return notFound('Locação não encontrada')
+
   return NextResponse.json(locacao)
 }
 
@@ -23,17 +47,63 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
   try {
     const body = await req.json()
-    const allowed = ['status','dataFim','observacao','formaPagamento','precoFicha',
-                     'percentualEmpresa','percentualCliente','periodicidade','valorFixo',
-                     'dataPrimeiraCobranca','ultimaLeituraRelogio','dataUltimaCobranca',
-                     'trocaPano','dataUltimaManutencao','numeroRelogio']
-    const data: Record<string, any> = {}
-    for (const key of allowed) {
-      if (key in body) data[key] = body[key]
+
+    // Use Zod schema validation instead of whitelist approach
+    const data = validateBody(locacaoUpdateSchema, body)
+
+    // Fetch existing locação to validate status transitions
+    const locacaoAtual = await prisma.locacao.findFirst({
+      where: { id, deletedAt: null },
+    })
+
+    if (!locacaoAtual) {
+      throw new ApiError(404, 'Locação não encontrada')
     }
-    return NextResponse.json(await prisma.locacao.update({
+
+    // Validate status transition if status is being changed
+    if (data.status && data.status !== locacaoAtual.status) {
+      validarTransicaoStatus(locacaoAtual.status, data.status)
+    }
+
+    // Only allow updating these specific fields (whitelist of updatable fields)
+    const allowedFields = [
+      'status', 'dataFim', 'observacao', 'formaPagamento', 'precoFicha',
+      'percentualEmpresa', 'percentualCliente', 'periodicidade', 'valorFixo',
+      'dataPrimeiraCobranca', 'ultimaLeituraRelogio', 'dataUltimaCobranca',
+      'trocaPano', 'dataUltimaManutencao', 'numeroRelogio',
+    ]
+
+    const updateData: Record<string, unknown> = {}
+    for (const key of allowedFields) {
+      if (key in data) {
+        updateData[key] = (data as Record<string, unknown>)[key]
+      }
+    }
+
+    const locacaoAtualizada = await prisma.locacao.update({
       where: { id },
-      data: { ...data, version: { increment: 1 }, deviceId: 'web', needsSync: true },
-    }))
-  } catch (err) { console.error(err); return serverError() }
+      data: {
+        ...updateData,
+        version: { increment: 1 },
+        deviceId: 'web',
+        needsSync: true,
+      },
+    })
+
+    // Register change log for sync
+    await prisma.changeLog.create({
+      data: {
+        entityId: id,
+        entityType: 'locacao',
+        operation: 'update',
+        changes: { ...updateData, realizadoPor: session.user.id },
+        deviceId: 'web',
+        synced: false,
+      },
+    })
+
+    return NextResponse.json(locacaoAtualizada)
+  } catch (err) {
+    return handleApiError(err)
+  }
 }

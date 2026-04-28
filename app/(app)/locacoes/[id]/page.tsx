@@ -8,7 +8,7 @@ import { StatusLocacaoBadge, StatusPagamentoBadge } from '@/components/ui/badge'
 import { formatarMoeda } from '@/shared/types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ArrowLeft, Edit, ArrowRightCircle, Package, Eye, User, DollarSign, Calendar, TrendingUp, Clock, FileText, MapPin } from 'lucide-react'
+import { ArrowLeft, Edit, ArrowRightCircle, Package, Eye, User, DollarSign, Calendar, TrendingUp, Clock, FileText, MapPin, Wrench, Plus, CheckCircle, XCircle } from 'lucide-react'
 
 export const metadata: Metadata = { title: 'Detalhes da Locação' }
 
@@ -49,6 +49,14 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
             </Link>
             {locacao.status === 'Ativa' && podeEditar && (
               <>
+                <Link href={`/locacoes/${id}/editar`} className="btn-secondary text-sm bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200">
+                  <Edit className="w-4 h-4" />
+                  <span className="hidden sm:inline">Editar</span>
+                </Link>
+                <Link href={`/cobrancas/nova?locacaoId=${id}`} className="btn-secondary text-sm bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200">
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Nova Cobrança</span>
+                </Link>
                 <Link href={`/locacoes/${id}/relocar`} className="btn-secondary text-sm">
                   <ArrowRightCircle className="w-4 h-4" />
                   <span className="hidden sm:inline">Relocar</span>
@@ -103,42 +111,92 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
                     <span className="text-sm font-medium text-slate-900">{format(new Date(locacao.dataFim), 'dd/MM/yyyy', { locale: ptBR })}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-500">Forma de Pagamento</span>
-                  <span className="text-sm font-medium text-slate-900">{locacao.formaPagamento}</span>
-                </div>
+                {locacao.dataPrimeiraCobranca && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Data Primeira Cobrança</span>
+                    <span className="text-sm font-medium text-slate-900">{format(new Date(locacao.dataPrimeiraCobranca), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-500">Número do Relógio</span>
                   <span className="text-lg font-mono font-bold text-slate-900">{locacao.produto?.numeroRelogio || locacao.numeroRelogio}</span>
                 </div>
                 
-                {locacao.formaPagamento !== 'Periodo' && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-500">Preço da Ficha</span>
-                      <span className="text-sm font-medium text-slate-900">{formatarMoeda(locacao.precoFicha)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-500">Percentual Empresa</span>
-                      <span className="text-sm font-medium text-slate-900">{locacao.percentualEmpresa}%</span>
-                    </div>
-                  </>
-                )}
-                
-                {locacao.formaPagamento === 'Periodo' && locacao.valorFixo && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-slate-500">Valor Fixo</span>
-                      <span className="text-lg font-bold text-emerald-700">{formatarMoeda(locacao.valorFixo)}</span>
-                    </div>
-                    {locacao.periodicidade && (
+                {/* Troca de Pano */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-slate-500">Troca de Pano</span>
+                  {locacao.trocaPano ? (
+                    <span className="inline-flex items-center gap-1 text-sm font-medium text-purple-700">
+                      <CheckCircle className="w-4 h-4" />
+                      Sim
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-sm text-slate-400">
+                      <XCircle className="w-4 h-4" />
+                      Não
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Financial Data Section */}
+              <div className="mt-6 pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  Dados Financeiros
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Forma de Pagamento</span>
+                    <span className="text-sm font-medium text-slate-900">{locacao.formaPagamento}</span>
+                  </div>
+                  
+                  {locacao.formaPagamento !== 'Periodo' && (
+                    <>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-500">Periodicidade</span>
-                        <span className="text-sm font-medium text-slate-900">{locacao.periodicidade}</span>
+                        <span className="text-sm text-slate-500">Preço da Ficha</span>
+                        <span className="text-sm font-bold text-slate-900">{formatarMoeda(locacao.precoFicha)}</span>
                       </div>
-                    )}
-                  </>
-                )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">Percentual Empresa</span>
+                        <span className="text-sm font-medium text-slate-900">{locacao.percentualEmpresa}%</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">Percentual Cliente</span>
+                        <span className="text-sm font-medium text-slate-900">{locacao.percentualCliente}%</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  {locacao.formaPagamento === 'Periodo' && locacao.valorFixo && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">Valor Fixo</span>
+                        <span className="text-lg font-bold text-emerald-700">{formatarMoeda(locacao.valorFixo)}</span>
+                      </div>
+                      {locacao.periodicidade && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-500">Periodicidade</span>
+                          <span className="text-sm font-medium text-slate-900">{locacao.periodicidade}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {locacao.ultimaLeituraRelogio !== null && locacao.ultimaLeituraRelogio !== undefined && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">Última Leitura Relógio</span>
+                      <span className="font-mono font-bold text-slate-900">{locacao.ultimaLeituraRelogio}</span>
+                    </div>
+                  )}
+
+                  {locacao.dataUltimaManutencao && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-500">Última Manutenção</span>
+                      <span className="text-sm font-medium text-slate-900">{format(new Date(locacao.dataUltimaManutencao), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {locacao.observacao && (
@@ -157,7 +215,18 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
                 <DollarSign className="w-5 h-5 text-amber-600" />
                 Histórico de Cobranças
               </h2>
-              <span className="text-sm text-slate-500">{locacao.cobrancas.length} cobrança(s)</span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500">{locacao.cobrancas.length} cobrança(s)</span>
+                {locacao.status === 'Ativa' && podeEditar && (
+                  <Link
+                    href={`/cobrancas/nova?locacaoId=${id}`}
+                    className="text-xs font-medium text-emerald-600 hover:text-emerald-800 flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Nova
+                  </Link>
+                )}
+              </div>
             </div>
             <div className="p-4 md:p-6">
               {locacao.cobrancas.length === 0 ? (
@@ -165,7 +234,16 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
                   <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
                     <DollarSign className="w-6 h-6 text-slate-400" />
                   </div>
-                  <p className="text-sm text-slate-500">Nenhuma cobrança registrada para esta locação</p>
+                  <p className="text-sm text-slate-500 mb-4">Nenhuma cobrança registrada para esta locação</p>
+                  {locacao.status === 'Ativa' && podeEditar && (
+                    <Link
+                      href={`/cobrancas/nova?locacaoId=${id}`}
+                      className="btn-primary text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Criar Primeira Cobrança
+                    </Link>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -297,6 +375,10 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
                   <span className="font-mono font-bold">{locacao.ultimaLeituraRelogio}</span>
                 </div>
               )}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Forma pgto</span>
+                <span className="font-medium">{locacao.formaPagamento}</span>
+              </div>
             </div>
           </section>
 
@@ -327,8 +409,22 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
       {locacao.status === 'Ativa' && podeEditar && (
         <div className="lg:hidden fixed bottom-4 right-4 flex flex-col gap-3">
           <Link
-            href={`/locacoes/${id}/relocar`}
+            href={`/locacoes/${id}/editar`}
+            className="w-14 h-14 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg hover:bg-amber-600 transition-colors"
+            title="Editar"
+          >
+            <Edit className="w-6 h-6" />
+          </Link>
+          <Link
+            href={`/cobrancas/nova?locacaoId=${id}`}
             className="w-14 h-14 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-lg hover:bg-emerald-700 transition-colors"
+            title="Nova Cobrança"
+          >
+            <Plus className="w-6 h-6" />
+          </Link>
+          <Link
+            href={`/locacoes/${id}/relocar`}
+            className="w-14 h-14 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors"
             title="Relocar"
           >
             <ArrowRightCircle className="w-6 h-6" />

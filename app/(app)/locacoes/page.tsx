@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Locações' }
 
 export default async function LocacoesPage({
   searchParams,
-}: { searchParams: Promise<{ status?: string; clienteId?: string; page?: string }> }) {
+}: { searchParams: Promise<{ status?: string; clienteId?: string; formaPagamento?: string; produtoSearch?: string; page?: string }> }) {
   const params = await searchParams
   const session = await getSession()
   const page = Number(params.page || 1)
@@ -18,6 +18,10 @@ export default async function LocacoesPage({
   const where: any = { deletedAt: null }
   if (params.status) where.status = params.status
   if (params.clienteId) where.clienteId = params.clienteId
+  if (params.formaPagamento) where.formaPagamento = params.formaPagamento
+  if (params.produtoSearch) {
+    where.produtoIdentificador = { contains: params.produtoSearch }
+  }
 
   const [locacoes, total, clientes] = await Promise.all([
     prisma.locacao.findMany({
@@ -53,6 +57,8 @@ export default async function LocacoesPage({
     numeroRelogio: l.produto?.numeroRelogio || l.numeroRelogio,
     status: l.status,
     dataLocacao: l.dataLocacao,
+    valorFixo: l.valorFixo,
+    periodicidade: l.periodicidade,
   }))
 
   const clientesFormatados = clientes.map(c => ({
@@ -77,6 +83,8 @@ export default async function LocacoesPage({
         podeEditar={podeEditar || false}
         clienteIdFilter={params.clienteId}
         statusFilter={params.status}
+        formaPagamentoFilter={params.formaPagamento}
+        produtoSearch={params.produtoSearch}
       />
     </div>
   )

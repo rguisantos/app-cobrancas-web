@@ -3,10 +3,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Search, ArrowLeftRight, Loader2, ArrowRight } from 'lucide-react'
+import { ArrowLeft, Save, Search, ArrowLeftRight, Loader2, ArrowRight, DollarSign, Percent, Clock, TrendingUp, TrendingDown, User, Package, AlertTriangle, CheckCircle } from 'lucide-react'
 import Header from '@/components/layout/header'
 import { formatarMoeda } from '@/shared/types'
 import { useToast } from '@/components/ui/toaster'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
+import { LocacaoPagamentoForm, FORMA_OPTS, PERIODICIDADES } from '@/app/(app)/locacoes/components/LocacaoPagamentoForm'
+import type { FormaPagamento } from '@/app/(app)/locacoes/components/LocacaoPagamentoForm'
 
 interface Locacao {
   id: string
@@ -18,9 +21,11 @@ interface Locacao {
   numeroRelogio: string
   precoFicha: number
   percentualEmpresa: number
+  percentualCliente: number
   formaPagamento: string
   periodicidade?: string
   valorFixo?: number
+  observacao?: string
 }
 
 interface Cliente {
@@ -29,14 +34,6 @@ interface Cliente {
   cidade: string
   estado: string
 }
-
-const FORMA_PAGAMENTO_OPTIONS = [
-  { value: 'PercentualReceber', label: '% Receber', icon: '📈' },
-  { value: 'PercentualPagar', label: '% Pagar', icon: '📉' },
-  { value: 'Periodo', label: 'Período', icon: '📅' },
-]
-
-const PERIODICIDADES = ['Mensal', 'Semanal', 'Quinzenal', 'Diária']
 
 export default function RelocarProdutoPage() {
   const router = useRouter()
@@ -49,18 +46,21 @@ export default function RelocarProdutoPage() {
   const [locacao, setLocacao] = useState<Locacao | null>(null)
   const [buscaCliente, setBuscaCliente] = useState('')
   const [clientesBusca, setClientesBusca] = useState<Cliente[]>([])
+  const [recentClientes, setRecentClientes] = useState<Cliente[]>([])
   const [buscandoClientes, setBuscandoClientes] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [showConfirm, setShowConfirm] = useState(false)
   
   const [formData, setFormData] = useState({
     novoClienteId: '',
     novoClienteNome: '',
-    formaPagamento: 'PercentualReceber' as 'Periodo' | 'PercentualPagar' | 'PercentualReceber',
+    formaPagamento: 'PercentualReceber' as FormaPagamento,
     numeroRelogio: '',
     precoFicha: '',
     percentualEmpresa: '50',
     periodicidade: '',
     valorFixo: '',
+    dataPrimeiraCobranca: '',
     motivoRelocacao: '',
     observacao: '',
     trocaPano: false,
@@ -80,6 +80,7 @@ export default function RelocarProdutoPage() {
           formaPagamento: data.formaPagamento || 'PercentualReceber',
           periodicidade: data.periodicidade || '',
           valorFixo: data.valorFixo ? String(data.valorFixo) : '',
+          dataPrimeiraCobranca: data.dataPrimeiraCobranca || '',
         }))
         setLoadingData(false)
       })
@@ -88,6 +89,17 @@ export default function RelocarProdutoPage() {
         setLoadingData(false)
       })
   }, [locacaoId])
+
+  // Load recent clients
+  useEffect(() => {
+    fetch('/api/clientes?limit=5&status=Ativo')
+      .then(res => res.json())
+      .then(data => {
+        const list = data.data || data
+        setRecentClientes(list.slice(0, 5))
+      })
+      .catch(console.error)
+  }, [])
 
   // Buscar clientes
   const buscarClientes = useCallback(async (termo: string) => {
@@ -100,7 +112,7 @@ export default function RelocarProdutoPage() {
     try {
       const res = await fetch(`/api/clientes?search=${encodeURIComponent(termo)}`)
       const data = await res.json()
-      setClientesBusca(data.slice(0, 10))
+      setClientesBusca((data.data || data).slice(0, 10))
     } catch (err) {
       console.error(err)
     } finally {
@@ -136,10 +148,7 @@ export default function RelocarProdutoPage() {
 
   const percentualCliente = 100 - (parseFloat(formData.percentualEmpresa) || 0)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    // Validações
+  const handleValidate = (): boolean => {
     const newErrors: Record<string, string> = {}
     if (!formData.novoClienteId) {
       newErrors.novoClienteId = 'Selecione um cliente'
@@ -150,14 +159,39 @@ export default function RelocarProdutoPage() {
     if (!formData.numeroRelogio.trim()) {
       newErrors.numeroRelogio = 'Informe o número do relógio'
     }
-    
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors)
-      return
+
+    if (formData.formaPagamento !== 'Periodo') {
+      if (!formData.precoFicha || parseFloat(formData.precoFicha) <= 0) {
+        newErrors.precoFicha = 'Informe o preço da ficha'
+      }
+      const pct = parseFloat(formData.percentualEmpresa)
+      if (isNaN(pct) || pct < 0 || pct > 100) {
+        newErrors.percentualEmpresa = 'Percentual deve ser entre 0 e 100'
+      }
+    } else {
+      if (!formData.valorFixo || parseFloat(formData.valorFixo) <= 0) {
+        newErrors.valorFixo = 'Informe o valor fixo'
+      }
+      if (!formData.periodicidade) {
+        newErrors.periodicidade = 'Selecione a periodicidade'
+      }
     }
 
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmitClick = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (handleValidate()) {
+      setShowConfirm(true)
+    }
+  }
+
+  const handleConfirmRelocar = async () => {
     setLoading(true)
-    
+    setShowConfirm(false)
+
     try {
       const res = await fetch(`/api/locacoes/${locacaoId}/relocar`, {
         method: 'POST',
@@ -172,6 +206,7 @@ export default function RelocarProdutoPage() {
           percentualCliente,
           periodicidade: formData.periodicidade || undefined,
           valorFixo: formData.valorFixo ? parseFloat(formData.valorFixo) : undefined,
+          dataPrimeiraCobranca: formData.dataPrimeiraCobranca || undefined,
           motivoRelocacao: formData.motivoRelocacao,
           observacao: formData.observacao || undefined,
           trocaPano: formData.trocaPano,
@@ -179,7 +214,6 @@ export default function RelocarProdutoPage() {
       })
 
       if (res.ok) {
-        const data = await res.json()
         success(`Produto relocado com sucesso para ${formData.novoClienteNome}!`)
         router.push('/locacoes')
       } else {
@@ -211,6 +245,8 @@ export default function RelocarProdutoPage() {
     )
   }
 
+  const formaLabel = FORMA_OPTS.find(o => o.value === locacao.formaPagamento)?.label || locacao.formaPagamento
+
   return (
     <div>
       <Header
@@ -224,12 +260,12 @@ export default function RelocarProdutoPage() {
         }
       />
 
-      <form onSubmit={handleSubmit} className="max-w-4xl">
-        {/* Produto Atual */}
-        <div className="card p-6 mb-6 bg-primary-50 border-primary-200">
-          <div className="flex items-center gap-4">
+      <form onSubmit={handleSubmitClick} className="max-w-4xl space-y-6">
+        {/* Produto Atual & Resumo Financeiro */}
+        <div className="card p-6 bg-primary-50 border-primary-200">
+          <div className="flex items-center gap-4 mb-4">
             <div className="w-12 h-12 rounded-full bg-primary-100 flex items-center justify-center">
-              <span className="text-2xl">🎱</span>
+              <Package className="w-6 h-6 text-primary-700" />
             </div>
             <div className="flex-1">
               <p className="font-semibold text-primary-900">{locacao.produtoTipo} N° {locacao.produtoIdentificador}</p>
@@ -237,25 +273,65 @@ export default function RelocarProdutoPage() {
             </div>
             <ArrowRight className="w-6 h-6 text-primary-400" />
           </div>
+          {/* Financial Summary of current locação */}
+          <div className="mt-4 pt-4 border-t border-primary-200">
+            <p className="text-xs font-medium text-primary-700 uppercase tracking-wider mb-3">Dados financeiros atuais</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 bg-white/60 rounded-lg">
+                <span className="text-xs text-primary-600">Forma Pgto</span>
+                <p className="font-medium text-primary-900 text-sm">{formaLabel}</p>
+              </div>
+              {locacao.formaPagamento !== 'Periodo' ? (
+                <>
+                  <div className="p-3 bg-white/60 rounded-lg">
+                    <span className="text-xs text-primary-600">Preço Ficha</span>
+                    <p className="font-bold text-primary-900 text-sm">{formatarMoeda(locacao.precoFicha)}</p>
+                  </div>
+                  <div className="p-3 bg-white/60 rounded-lg">
+                    <span className="text-xs text-primary-600">% Empresa</span>
+                    <p className="font-medium text-primary-900 text-sm">{locacao.percentualEmpresa}%</p>
+                  </div>
+                  <div className="p-3 bg-white/60 rounded-lg">
+                    <span className="text-xs text-primary-600">% Cliente</span>
+                    <p className="font-medium text-primary-900 text-sm">{locacao.percentualCliente}%</p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="p-3 bg-white/60 rounded-lg">
+                    <span className="text-xs text-primary-600">Valor Fixo</span>
+                    <p className="font-bold text-emerald-700 text-sm">{locacao.valorFixo ? formatarMoeda(locacao.valorFixo) : '—'}</p>
+                  </div>
+                  <div className="p-3 bg-white/60 rounded-lg">
+                    <span className="text-xs text-primary-600">Periodicidade</span>
+                    <p className="font-medium text-primary-900 text-sm">{locacao.periodicidade || '—'}</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Novo Cliente */}
-        <div className="card p-6 mb-6">
+        <div className="card p-6">
           <h2 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
             <Search className="w-5 h-5" />
             Buscar Novo Cliente
           </h2>
           
           <div className="relative mb-4">
-            <input
-              value={buscaCliente}
-              onChange={(e) => setBuscaCliente(e.target.value)}
-              className="input pl-10"
-              placeholder="Digite para buscar cliente..."
-            />
-            {buscandoClientes && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 animate-spin text-primary-500" />
-            )}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                value={buscaCliente}
+                onChange={(e) => setBuscaCliente(e.target.value)}
+                className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                placeholder="Digite para buscar cliente..."
+              />
+              {buscandoClientes && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 animate-spin text-primary-500" />
+              )}
+            </div>
             
             {/* Resultados da busca */}
             {clientesBusca.length > 0 && (
@@ -265,27 +341,52 @@ export default function RelocarProdutoPage() {
                     key={cliente.id}
                     type="button"
                     onClick={() => selecionarCliente(cliente)}
-                    className="w-full px-4 py-3 text-left hover:bg-slate-50 border-b last:border-b-0"
+                    className="w-full px-4 py-3 text-left hover:bg-slate-50 border-b last:border-b-0 flex items-center gap-3"
                   >
-                    <p className="font-medium">{cliente.nomeExibicao}</p>
-                    <p className="text-sm text-slate-500">{cliente.cidade} - {cliente.estado}</p>
+                    <User className="w-4 h-4 text-slate-400" />
+                    <div>
+                      <p className="font-medium">{cliente.nomeExibicao}</p>
+                      <p className="text-sm text-slate-500">{cliente.cidade} - {cliente.estado}</p>
+                    </div>
                   </button>
                 ))}
               </div>
             )}
           </div>
 
+          {/* Recent clients suggestion */}
+          {!formData.novoClienteId && !buscaCliente && recentClientes.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs text-slate-500 mb-2">Clientes recentes:</p>
+              <div className="flex flex-wrap gap-2">
+                {recentClientes.map(c => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => selecionarCliente(c)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all"
+                  >
+                    {c.nomeExibicao}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Cliente selecionado */}
           {formData.novoClienteId && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-600">Novo cliente selecionado:</p>
-              <p className="font-semibold text-green-900">{formData.novoClienteNome}</p>
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm text-green-600">Novo cliente selecionado:</p>
+                <p className="font-semibold text-green-900">{formData.novoClienteNome}</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setFormData(prev => ({ ...prev, novoClienteId: '', novoClienteNome: '' }))}
-                className="text-sm text-red-600 hover:underline mt-1"
+                className="text-sm text-red-600 hover:underline"
               >
-                Remover seleção
+                Remover
               </button>
             </div>
           )}
@@ -293,156 +394,73 @@ export default function RelocarProdutoPage() {
         </div>
 
         {/* Forma de Pagamento */}
-        <div className="card p-6 mb-6">
-          <h2 className="font-semibold text-slate-900 mb-4">💰 Forma de Pagamento</h2>
-          
-          <div className="flex gap-3 mb-4">
-            {FORMA_PAGAMENTO_OPTIONS.map(opt => (
-              <label
-                key={opt.value}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border cursor-pointer transition-all ${
-                  formData.formaPagamento === opt.value
-                    ? 'border-primary-500 bg-primary-50 text-primary-700'
-                    : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="formaPagamento"
-                  value={opt.value}
-                  checked={formData.formaPagamento === opt.value}
-                  onChange={handleChange}
-                  className="sr-only"
-                />
-                <span>{opt.icon}</span>
-                <span className="font-medium">{opt.label}</span>
-              </label>
-            ))}
+        <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-amber-600" />
+              Forma de Pagamento
+            </h2>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="label">Número do Relógio *</label>
-              <input
-                name="numeroRelogio"
-                value={formData.numeroRelogio}
-                onChange={handleChange}
-                className="input"
-                placeholder="00000"
-              />
-              {errors.numeroRelogio && <p className="text-red-500 text-xs mt-1">{errors.numeroRelogio}</p>}
-            </div>
-            
-            {formData.formaPagamento !== 'Periodo' ? (
-              <>
-                <div>
-                  <label className="label">Preço da Ficha (R$) *</label>
-                  <input
-                    name="precoFicha"
-                    value={formData.precoFicha}
-                    onChange={handleChange}
-                    className="input"
-                    placeholder="3,00"
-                    type="number"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <label className="label">% Empresa *</label>
-                  <input
-                    name="percentualEmpresa"
-                    value={formData.percentualEmpresa}
-                    onChange={handleChange}
-                    className="input"
-                    placeholder="50"
-                    type="number"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                <div>
-                  <label className="label">% Cliente (automático)</label>
-                  <input
-                    value={percentualCliente}
-                    className="input bg-slate-50"
-                    disabled
-                  />
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <label className="label">Periodicidade *</label>
-                  <select
-                    name="periodicidade"
-                    value={formData.periodicidade}
-                    onChange={handleChange}
-                    className="input"
-                  >
-                    <option value="">Selecione</option>
-                    {PERIODICIDADES.map(p => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Valor Fixo (R$) *</label>
-                  <input
-                    name="valorFixo"
-                    value={formData.valorFixo}
-                    onChange={handleChange}
-                    className="input"
-                    placeholder="150,00"
-                    type="number"
-                    step="0.01"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+          <LocacaoPagamentoForm
+            formData={{
+              formaPagamento: formData.formaPagamento,
+              precoFicha: formData.precoFicha,
+              percentualEmpresa: formData.percentualEmpresa,
+              periodicidade: formData.periodicidade,
+              valorFixo: formData.valorFixo,
+              dataPrimeiraCobranca: formData.dataPrimeiraCobranca,
+              numeroRelogio: formData.numeroRelogio,
+            }}
+            errors={errors}
+            onChange={handleChange}
+          />
+        </section>
 
         {/* Motivo */}
-        <div className="card p-6 mb-6">
+        <div className="card p-6">
           <h2 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
             <ArrowLeftRight className="w-5 h-5" />
             Motivo da Relocação
           </h2>
           
           <div>
-            <label className="label">Motivo *</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Motivo <span className="text-red-500">*</span></label>
             <textarea
               name="motivoRelocacao"
               value={formData.motivoRelocacao}
               onChange={handleChange}
-              className="input min-h-[80px]"
+              className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all resize-none min-h-[80px]"
               placeholder="Ex: Cliente solicitou mudança, produto apresentou defeito no local atual..."
             />
             {errors.motivoRelocacao && <p className="text-red-500 text-xs mt-1">{errors.motivoRelocacao}</p>}
           </div>
           
           <div className="mt-4">
-            <label className="label">Observação</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">Observação</label>
             <textarea
               name="observacao"
               value={formData.observacao}
               onChange={handleChange}
-              className="input min-h-[60px]"
+              className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all resize-none min-h-[60px]"
               placeholder="Informações adicionais..."
             />
           </div>
           
           <div className="mt-4">
-            <label className="flex items-center gap-3 cursor-pointer">
+            <label className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+              formData.trocaPano 
+                ? 'border-purple-500 bg-purple-50' 
+                : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+            }`}>
               <input
                 type="checkbox"
                 checked={formData.trocaPano}
                 onChange={(e) => setFormData(prev => ({ ...prev, trocaPano: e.target.checked }))}
-                className="w-5 h-5 rounded border-slate-300"
+                className="w-5 h-5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 mt-0.5"
               />
               <div>
-                <span className="font-medium">Troca de pano realizada</span>
-                <p className="text-sm text-slate-500">Marque se houve troca de pano na relocação</p>
+                <span className="font-medium text-slate-900">Troca de pano realizada</span>
+                <p className="text-sm text-slate-500 mt-1">Marque se houve troca de pano na relocação</p>
               </div>
             </label>
           </div>
@@ -465,6 +483,19 @@ export default function RelocarProdutoPage() {
           <Link href={`/locacoes/${locacaoId}`} className="btn-secondary">Cancelar</Link>
         </div>
       </form>
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={handleConfirmRelocar}
+        title="Confirmar Relocação"
+        message={`Tem certeza que deseja relocar ${locacao.produtoTipo} N° ${locacao.produtoIdentificador} de ${locacao.clienteNome} para ${formData.novoClienteNome}? A locação atual será finalizada e uma nova será criada.`}
+        confirmText="Confirmar Relocação"
+        cancelText="Cancelar"
+        variant="warning"
+        isLoading={loading}
+      />
     </div>
   )
 }

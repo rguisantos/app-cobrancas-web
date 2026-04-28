@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { logger } from '@/lib/logger'
 
 export async function GET() {
   try {
@@ -10,25 +11,25 @@ export async function GET() {
       return NextResponse.json({ error: 'Acesso negado' }, { status: 403 })
     }
 
-    const conflicts = await prisma.syncConflict.findMany({
-      where: { resolvedAt: null },
-      orderBy: { createdAt: 'desc' },
-    })
+    const [conflicts, resolvedCount] = await Promise.all([
+      prisma.syncConflict.findMany({
+        where: { resolvedAt: null },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.syncConflict.count({
+        where: { resolvedAt: { not: null } },
+      }),
+    ])
 
-    // Get count of resolved conflicts for stats
-    const resolvedCount = await prisma.syncConflict.count({
-      where: { resolvedAt: { not: null } },
-    })
-
-    return NextResponse.json({ 
+    return NextResponse.json({
       conflicts,
       stats: {
         unresolved: conflicts.length,
         resolved: resolvedCount,
-      }
+      },
     })
   } catch (error) {
-    console.error('[admin/sync/conflicts]', error)
+    logger.error('[admin/sync/conflicts] Erro:', error)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 }

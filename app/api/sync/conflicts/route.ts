@@ -1,7 +1,8 @@
-// GET /api/sync/conflicts — Lista conflitos pendentes do dispositivo autenticado
+// GET /api/sync/conflicts — Lista conflitos pendentes do dispositivo autenticado (mobile JWT)
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extrairToken, verificarToken } from '@/lib/jwt'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 const querySchema = z.object({
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
       deviceId: searchParams.get('deviceId') || undefined,
     })
 
-    // FIX: aplicar filtro de deviceId — cada dispositivo só vê seus próprios conflitos
+    // Cada dispositivo só vê seus próprios conflitos
     const conflicts = await prisma.syncConflict.findMany({
       where: {
         resolvedAt: null,
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ conflicts })
   } catch (error) {
-    console.error('[sync/conflicts]', error)
+    logger.error('[sync/conflicts] Erro:', error)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 }

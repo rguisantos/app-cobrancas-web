@@ -1,6 +1,8 @@
 // POST /api/dispositivos/status — Mobile verifica se dispositivo precisa de ativação
+// Refatorado: usa helpers centralizados e logger padronizado
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { logger } from '@/lib/logger'
+import { findDispositivo } from '@/lib/dispositivo-helpers'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -9,77 +11,43 @@ const schema = z.object({
 
 export async function POST(req: NextRequest) {
   const requestId = `${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
-  console.log(`\n[DISPOSITIVOS/STATUS:${requestId}] ========== STATUS CHECK START ==========`)
-  console.log(`[DISPOSITIVOS/STATUS:${requestId}] Timestamp: ${new Date().toISOString()}`)
+  logger.debug(`[dispositivos/status:${requestId}] Verificação de status`)
 
   try {
     const body = await req.json()
     const data = schema.parse(body)
-    console.log(`[DISPOSITIVOS/STATUS:${requestId}] DeviceKey: ${data.deviceKey?.substring(0, 20) || 'não fornecida'}...`)
 
     // Se não tem deviceKey, precisa de ativação
     if (!data.deviceKey) {
-      console.log(`[DISPOSITIVOS/STATUS:${requestId}] Sem deviceKey - precisa ativação`)
-      console.log(`[DISPOSITIVOS/STATUS:${requestId}] ========== STATUS CHECK END (200) ==========\n`)
-      return NextResponse.json({
-        needsActivation: true,
-      })
+      logger.debug(`[dispositivos/status:${requestId}] Sem deviceKey - precisa ativação`)
+      return NextResponse.json({ needsActivation: true })
     }
 
-    // Buscar dispositivo pela deviceKey (chave técnica gerada pelo app após ativação)
-    // NOTA: O campo 'chave' é o ID legível (DEV-XXXXXX), 'deviceKey' é a chave técnica
-    const dispositivo = await prisma.dispositivo.findUnique({
-      where: { deviceKey: data.deviceKey },
-    })
+    // Buscar dispositivo (centralizado com fallback)
+    const dispositivo = await findDispositivo(data.deviceKey)
 
-    // Se não encontrou por deviceKey, tentar buscar por chave (para compatibilidade com versões antigas)
-    let dispositivoFinal = dispositivo;
-    if (!dispositivoFinal) {
-      dispositivoFinal = await prisma.dispositivo.findUnique({
-        where: { chave: data.deviceKey },
-      })
-      if (dispositivoFinal) {
-        console.log(`[DISPOSITIVOS/STATUS:${requestId}] Encontrado pela chave (legado) em vez de deviceKey`)
-      }
+    if (!dispositivo) {
+      logger.debug(`[dispositivos/status:${requestId}] Dispositivo não encontrado - precisa ativação`)
+      return NextResponse.json({ needsActivation: true })
     }
 
-    console.log(`[DISPOSITIVOS/STATUS:${requestId}] Buscando por deviceKey: ${data.deviceKey?.substring(0, 50)}...`)
-    console.log(`[DISPOSITIVOS/STATUS:${requestId}] Dispositivo encontrado:`, dispositivoFinal ? { id: dispositivoFinal.id, nome: dispositivoFinal.nome, status: dispositivoFinal.status, deviceKey: dispositivoFinal.deviceKey?.substring(0, 50) } : null)
+    logger.debug(`[dispositivos/status:${requestId}] Dispositivo encontrado: ${dispositivo.nome} (status: ${dispositivo.status})`)
 
-    if (!dispositivoFinal) {
-      console.log(`[DISPOSITIVOS/STATUS:${requestId}] Dispositivo não encontrado - precisa ativação`)
-      console.log(`[DISPOSITIVOS/STATUS:${requestId}] ========== STATUS CHECK END (200) ==========\n`)
-      return NextResponse.json({
-        needsActivation: true,
-      })
-    }
-
-    console.log(`[DISPOSITIVOS/STATUS:${requestId}] Dispositivo encontrado: ${dispositivoFinal.nome} (status: ${dispositivoFinal.status})`)
-
-    const needsActivation = dispositivoFinal.status !== 'ativo'
-
-    console.log(`[DISPOSITIVOS/STATUS:${requestId}] needsActivation: ${needsActivation}`)
-    console.log(`[DISPOSITIVOS/STATUS:${requestId}] ========== STATUS CHECK END (200) ==========\n`)
+    const needsActivation = dispositivo.status !== 'ativo'
 
     return NextResponse.json({
       needsActivation,
-      dispositivoId: dispositivoFinal.id,
-      status: dispositivoFinal.status,
+      dispositivoId: dispositivo.id,
+      status: dispositivo.status,
     })
   } catch (err) {
     if (err instanceof z.ZodError) {
-      console.error(`[DISPOSITIVOS/STATUS:${requestId}] ❌ Erro de validação:`, err.errors)
-      console.log(`[DISPOSITIVOS/STATUS:${requestId}] ========== STATUS CHECK END (400) ==========\n`)
       return NextResponse.json(
         { success: false, error: 'Dados inválidos', details: err.errors },
         { status: 400 }
       )
     }
-    console.error(`[DISPOSITIVOS/STATUS:${requestId}] ❌ Erro interno:`, err)
-    console.log(`[DISPOSITIVOS/STATUS:${requestId}] ========== STATUS CHECK END (500) ==========\n`)
-    return NextResponse.json(
-      { success: false, error: 'Erro interno' },
-      { status: 500 }
-    )
+    logger.error('[dispositivos/status] Erro interno:', err)
+    return NextResponse.json({ success: false, error: 'Erro interno' }, { status: 500 })
   }
 }

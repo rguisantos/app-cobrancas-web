@@ -1,22 +1,9 @@
-// POST /api/sync/conflict/resolve — Resolve um conflito de sincronização
+// POST /api/sync/conflict/resolve — Resolve um conflito de sincronização (mobile JWT)
+// Refatorado: usa resolvedor centralizado (elimina ~95% de duplicação)
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { extrairToken, verificarToken } from '@/lib/jwt'
-import { z } from 'zod'
-
-const schema = z.object({
-  // Support both Portuguese and English field names
-  conflitoId: z.string().optional(),
-  conflictId: z.string().optional(),
-  estrategia: z.enum(['local', 'remote', 'newest', 'manual']).optional(),
-  resolution: z.enum(['local', 'remote', 'newest', 'manual']).optional(),
-  versaoFinal: z.any().optional(),
-  manualData: z.any().optional(),
-}).transform((data) => ({
-  conflitoId: data.conflitoId || data.conflictId || '',
-  estrategia: data.estrategia || data.resolution || 'newest',
-  versaoFinal: data.versaoFinal || data.manualData,
-}))
+import { resolveConflict, conflictResolveSchema } from '@/lib/sync-conflict-resolver'
+import { logger } from '@/lib/logger'
 
 export async function POST(req: NextRequest) {
   const token = extrairToken(req.headers.get('Authorization'))
@@ -26,95 +13,23 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const { conflitoId, estrategia, versaoFinal } = schema.parse(body)
+    const input = conflictResolveSchema.parse(body)
 
-    if (!conflitoId) {
-      return NextResponse.json({ error: 'ID do conflito é obrigatório' }, { status: 400 })
+    const result = await resolveConflict(input)
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.status || 400 }
+      )
     }
-
-    const conflito = await prisma.syncConflict.findUnique({
-      where: { id: conflitoId },
-    })
-
-    if (!conflito) {
-      return NextResponse.json({ error: 'Conflito não encontrado' }, { status: 404 })
-    }
-
-    if (conflito.resolution) {
-      return NextResponse.json({ error: 'Conflito já resolvido' }, { status: 400 })
-    }
-
-    // Determinar versão final baseado na estratégia
-    let versao: any
-    switch (estrategia) {
-      case 'local':
-        versao = conflito.localVersion
-        break
-      case 'remote':
-        versao = conflito.remoteVersion
-        break
-      case 'newest':
-        const localDate = new Date((conflito.localVersion as any).updatedAt)
-        const remoteDate = new Date((conflito.remoteVersion as any).updatedAt)
-        versao = localDate > remoteDate ? conflito.localVersion : conflito.remoteVersion
-        break
-      case 'manual':
-        versao = versaoFinal
-        break
-    }
-
-    // Aplicar versão no banco
-    const entityTableMap: Record<string, string> = {
-      cliente: 'cliente',
-      produto: 'produto',
-      locacao: 'locacao',
-      cobranca: 'cobranca',
-      rota: 'rota',
-    }
-
-    // Campos proibidos — nunca devem ser sobrescritos via resolução de conflito
-    const CAMPOS_PROIBIDOS = new Set([
-      'id', 'createdAt', 'deletedAt', 'senha',
-      'deviceId', 'syncStatus', 'needsSync', 'version',
-    ])
-
-    const tableName = entityTableMap[conflito.entityType]
-    if (tableName && versao) {
-      const repo = (prisma as any)[tableName]
-      if (repo) {
-        // Filtrar campos proibidos para evitar mass assignment
-        const dadosFiltrados: Record<string, any> = {}
-        for (const [k, v] of Object.entries(versao as Record<string, any>)) {
-          if (!CAMPOS_PROIBIDOS.has(k)) dadosFiltrados[k] = v
-        }
-
-        await repo.update({
-          where: { id: conflito.entityId },
-          data: {
-            ...dadosFiltrados,
-            version: { increment: 1 },
-            syncStatus: 'synced',
-            needsSync: true, // Marcar para sincronizar com outros dispositivos
-          },
-        })
-      }
-    }
-
-    // Marcar conflito como resolvido
-    await prisma.syncConflict.update({
-      where: { id: conflitoId },
-      data: {
-        resolution: estrategia,
-        resolvedAt: new Date(),
-      },
-    })
 
     return NextResponse.json({ success: true, message: 'Conflito resolvido' })
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: 'Dados inválidos', details: error.errors }, { status: 400 })
+    if (error instanceof Error && error.name === 'ZodError') {
+      return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
     }
-    console.error('[sync/conflict/resolve]', error)
+    logger.error('[sync/conflict/resolve] Erro:', error)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
   }
 }

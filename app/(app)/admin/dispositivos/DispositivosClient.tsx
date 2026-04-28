@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, Loader2, Key, Copy, Check, Eye, EyeOff, Smartphone, Tablet, Monitor, Trash2, RefreshCw, Wifi, WifiOff, X, AlertTriangle, MoreVertical, Clock, CheckCircle2, XCircle, SmartphoneIcon } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Loader2, Key, Copy, Check, Eye, EyeOff, Smartphone, Tablet, Monitor, Trash2, RefreshCw, Wifi, WifiOff, X, AlertTriangle, MoreVertical, Clock, CheckCircle2, XCircle, SmartphoneIcon, Search, Filter } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/components/ui/toaster';
+
+// ── Types ──────────────────────────────────────────────────────────────
 
 interface Dispositivo {
   id: string;
@@ -22,13 +24,62 @@ interface Dispositivo {
 
 interface DispositivosClientProps {
   dispositivosIniciais: Dispositivo[];
+  totalInicial: number;
 }
+
+// ── Confirmation Modal ─────────────────────────────────────────────────
+
+interface ConfirmModalProps {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  confirmVariant?: 'danger' | 'warning' | 'primary';
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+function ConfirmModal({ open, title, message, confirmLabel, confirmVariant = 'danger', onConfirm, onCancel }: ConfirmModalProps) {
+  if (!open) return null;
+
+  const variantStyles = {
+    danger: 'bg-red-600 hover:bg-red-700',
+    warning: 'bg-amber-600 hover:bg-amber-700',
+    primary: 'bg-blue-600 hover:bg-blue-700',
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-slide-up">
+        <div className="flex items-center gap-3 mb-4">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+            confirmVariant === 'danger' ? 'bg-red-100' : confirmVariant === 'warning' ? 'bg-amber-100' : 'bg-blue-100'
+          }`}>
+            <AlertTriangle className={`w-5 h-5 ${
+              confirmVariant === 'danger' ? 'text-red-600' : confirmVariant === 'warning' ? 'text-amber-600' : 'text-blue-600'
+            }`} />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+        </div>
+        <p className="text-sm text-slate-600 mb-6">{message}</p>
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 btn-secondary justify-center py-2.5">Cancelar</button>
+          <button onClick={onConfirm} className={`flex-1 text-white rounded-xl py-2.5 font-medium transition-colors ${variantStyles[confirmVariant]}`}>
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ─────────────────────────────────────────────────────
 
 function gerarSenhaNumerica(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-export default function DispositivosClient({ dispositivosIniciais }: DispositivosClientProps) {
+export default function DispositivosClient({ dispositivosIniciais, totalInicial }: DispositivosClientProps) {
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>(dispositivosIniciais);
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,15 +87,24 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
   const [showSenha, setShowSenha] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const { error: toastError } = useToast();
-  
+
+  // Filters
+  const [busca, setBusca] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState<string>('todos');
+  const [filtroTipo, setFiltroTipo] = useState<string>('todos');
+
+  // Confirmation modal
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalProps | null>(null);
+
   // Form state
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState('Celular');
   const [senhaGerada, setSenhaGerada] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Atualizar timestamp a cada minuto para status online
+  const { error: toastError, success: toastSuccess } = useToast();
+
+  // Atualizar timestamp a cada minuto
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(interval);
@@ -59,6 +119,14 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
     }
   }, [activeMenu]);
 
+  // Filtrar dispositivos localmente
+  const dispositivosFiltrados = dispositivos.filter(d => {
+    const matchBusca = !busca || d.nome.toLowerCase().includes(busca.toLowerCase()) || d.chave.toLowerCase().includes(busca.toLowerCase());
+    const matchStatus = filtroStatus === 'todos' || d.status === filtroStatus;
+    const matchTipo = filtroTipo === 'todos' || d.tipo === filtroTipo;
+    return matchBusca && matchStatus && matchTipo;
+  });
+
   const handleNovoDispositivo = () => {
     setNome('');
     setTipo('Celular');
@@ -69,32 +137,22 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
 
   const handleSalvar = async () => {
     const newErrors: Record<string, string> = {};
-    if (!nome.trim()) {
-      newErrors.nome = 'Nome é obrigatório';
-    }
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
+    if (!nome.trim()) newErrors.nome = 'Nome é obrigatório';
+    if (Object.keys(newErrors).length > 0) { setErrors(newErrors); return; }
 
     setLoading(true);
     try {
       const res = await fetch('/api/dispositivos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome: nome.trim(),
-          tipo,
-          senhaNumerica: senhaGerada
-        })
+        body: JSON.stringify({ nome: nome.trim(), tipo, senhaNumerica: senhaGerada }),
       });
-
       if (!res.ok) throw new Error('Erro ao criar dispositivo');
-
       const novo = await res.json();
       setDispositivos([novo, ...dispositivos]);
       setShowModal(false);
-    } catch (error) {
+      toastSuccess('Dispositivo criado com sucesso!');
+    } catch {
       toastError('Erro ao criar dispositivo');
     } finally {
       setLoading(false);
@@ -103,58 +161,90 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
 
   const handleRegenerarSenha = async (id: string) => {
     setActiveMenu(null);
-    if (!confirm('Regenerar senha de acesso? Isso permitirá reativar o dispositivo com a nova senha.')) return;
-    
-    try {
-      const novaSenha = gerarSenhaNumerica();
-      const res = await fetch(`/api/dispositivos/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ senhaNumerica: novaSenha })
-      });
-
-      if (!res.ok) throw new Error('Erro');
-
-      setDispositivos(dispositivos.map(d => 
-        d.id === id ? { ...d, senhaNumerica: novaSenha } : d
-      ));
-    } catch {
-      toastError('Erro ao regenerar senha');
-    }
+    setConfirmModal({
+      open: true,
+      title: 'Regenerar Senha',
+      message: 'Isso permitirá reativar o dispositivo com a nova senha. A senha anterior será invalidada.',
+      confirmLabel: 'Regenerar',
+      confirmVariant: 'warning',
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          const novaSenha = gerarSenhaNumerica();
+          const res = await fetch(`/api/dispositivos/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ senhaNumerica: novaSenha }),
+          });
+          if (!res.ok) throw new Error('Erro');
+          setDispositivos(dispositivos.map(d => d.id === id ? { ...d, senhaNumerica: novaSenha } : d));
+          toastSuccess('Senha regenerada com sucesso!');
+        } catch {
+          toastError('Erro ao regenerar senha');
+        }
+      },
+      onCancel: () => setConfirmModal(null),
+    });
   };
 
   const handleToggleStatus = async (id: string, currentStatus: string) => {
     setActiveMenu(null);
     const novoStatus = currentStatus === 'ativo' ? 'inativo' : 'ativo';
-    
-    try {
-      const res = await fetch(`/api/dispositivos/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: novoStatus })
-      });
+    const action = novoStatus === 'inativo' ? 'Desativar' : 'Ativar';
 
-      if (!res.ok) throw new Error('Erro');
-
-      setDispositivos(dispositivos.map(d => 
-        d.id === id ? { ...d, status: novoStatus } : d
-      ));
-    } catch {
-      toastError('Erro ao alterar status');
-    }
+    setConfirmModal({
+      open: true,
+      title: `${action} Dispositivo`,
+      message: `Deseja ${action.toLowerCase()} este dispositivo? ${novoStatus === 'inativo' ? 'Ele não poderá mais sincronizar dados.' : 'Ele voltará a sincronizar dados.'}`,
+      confirmLabel: action,
+      confirmVariant: novoStatus === 'inativo' ? 'danger' : 'primary',
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          const res = await fetch(`/api/dispositivos/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: novoStatus }),
+          });
+          if (!res.ok) throw new Error('Erro');
+          setDispositivos(dispositivos.map(d => d.id === id ? { ...d, status: novoStatus } : d));
+          toastSuccess(`Dispositivo ${novoStatus === 'ativo' ? 'ativado' : 'desativado'} com sucesso!`);
+        } catch {
+          toastError('Erro ao alterar status');
+        }
+      },
+      onCancel: () => setConfirmModal(null),
+    });
   };
 
   const handleExcluir = async (id: string) => {
     setActiveMenu(null);
-    if (!confirm('Excluir este dispositivo? Ele não poderá mais sincronizar dados.')) return;
-    
-    try {
-      const res = await fetch(`/api/dispositivos/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Erro');
-      setDispositivos(dispositivos.filter(d => d.id !== id));
-    } catch {
-      toastError('Erro ao excluir');
-    }
+    setConfirmModal({
+      open: true,
+      title: 'Excluir Dispositivo',
+      message: 'O dispositivo será desativado e seus dados de vinculação serão removidos. Esta ação não pode ser desfeita.',
+      confirmLabel: 'Excluir',
+      confirmVariant: 'danger',
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          const res = await fetch(`/api/dispositivos/${id}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const data = await res.json();
+            if (data.pendingChanges) {
+              toastError(`Dispositivo possui ${data.pendingChanges} mudança(s) pendente(s). Resolva antes de excluir.`);
+              return;
+            }
+            throw new Error('Erro');
+          }
+          setDispositivos(dispositivos.map(d => d.id === id ? { ...d, status: 'inativo', deviceKey: null, deviceName: null, senhaNumerica: null } : d));
+          toastSuccess('Dispositivo desativado com sucesso!');
+        } catch {
+          toastError('Erro ao excluir');
+        }
+      },
+      onCancel: () => setConfirmModal(null),
+    });
   };
 
   const copiar = async (texto: string, id: string) => {
@@ -173,7 +263,7 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
 
   const isOnline = (ultimaSync: string | null) => {
     if (!ultimaSync) return false;
-    return (now - new Date(ultimaSync).getTime()) < 1000 * 60 * 30; // 30 min
+    return (now - new Date(ultimaSync).getTime()) < 1000 * 60 * 30;
   };
 
   const formatLastSync = (ultimaSync: string | null) => {
@@ -183,41 +273,77 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
 
   return (
     <>
-      {/* Botão adicionar - fixo em mobile */}
-      <div className="flex justify-end mb-6">
-        <button
-          onClick={handleNovoDispositivo}
-          className="btn-primary w-full sm:w-auto justify-center"
-        >
+      {/* Filters + Add Button */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="flex-1 flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar por nome ou chave..."
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+            />
+          </div>
+          <select
+            value={filtroStatus}
+            onChange={e => setFiltroStatus(e.target.value)}
+            className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 outline-none"
+          >
+            <option value="todos">Todos</option>
+            <option value="ativo">Ativos</option>
+            <option value="inativo">Inativos</option>
+          </select>
+          <select
+            value={filtroTipo}
+            onChange={e => setFiltroTipo(e.target.value)}
+            className="hidden sm:block px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:border-blue-500 outline-none"
+          >
+            <option value="todos">Todos tipos</option>
+            <option value="Celular">Celular</option>
+            <option value="Tablet">Tablet</option>
+            <option value="Desktop">Desktop</option>
+          </select>
+        </div>
+        <button onClick={handleNovoDispositivo} className="btn-primary w-full sm:w-auto justify-center whitespace-nowrap">
           <Plus className="w-5 h-5" />
           <span>Novo Dispositivo</span>
         </button>
       </div>
 
-      {/* Lista de dispositivos - Cards responsivos otimizados para mobile */}
+      {/* Result count */}
+      {(busca || filtroStatus !== 'todos' || filtroTipo !== 'todos') && (
+        <p className="text-sm text-slate-500 mb-4">
+          {dispositivosFiltrados.length} de {dispositivos.length} dispositivo(s)
+        </p>
+      )}
+
+      {/* Lista de dispositivos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {dispositivos.length === 0 && (
+        {dispositivosFiltrados.length === 0 && (
           <div className="col-span-full card p-8 sm:p-12 text-center">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
               <Smartphone className="w-8 h-8 sm:w-10 sm:h-10 text-slate-400" />
             </div>
-            <p className="text-slate-500 font-medium text-lg">Nenhum dispositivo registrado</p>
-            <p className="text-sm text-slate-400 mt-2">Clique em &quot;Novo Dispositivo&quot; para começar</p>
+            <p className="text-slate-500 font-medium text-lg">
+              {dispositivos.length === 0 ? 'Nenhum dispositivo registrado' : 'Nenhum dispositivo encontrado'}
+            </p>
+            <p className="text-sm text-slate-400 mt-2">
+              {dispositivos.length === 0 ? 'Clique em "Novo Dispositivo" para começar' : 'Tente ajustar os filtros'}
+            </p>
           </div>
         )}
-        
-        {dispositivos.map(d => {
+
+        {dispositivosFiltrados.map(d => {
           const online = isOnline(d.ultimaSincronizacao);
-          
+
           return (
-            <div 
-              key={d.id} 
-              className="card overflow-hidden"
-            >
-              {/* Card Header com status visual */}
+            <div key={d.id} className="card overflow-hidden">
+              {/* Card Header */}
               <div className={`px-4 py-3 sm:px-5 sm:py-4 flex items-center justify-between ${
-                online 
-                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-100' 
+                online
+                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-100'
                   : d.status === 'ativo' && d.ativado
                     ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100'
                     : d.status === 'ativo' && !d.ativado
@@ -228,103 +354,41 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
                   <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
                     online ? 'bg-green-200' : d.ativado ? 'bg-blue-200' : 'bg-amber-200'
                   }`}>
-                    {online ? (
-                      <Wifi className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
-                    ) : d.ativado ? (
-                      <SmartphoneIcon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-700" />
-                    ) : (
-                      <Key className="w-5 h-5 sm:w-6 sm:h-6 text-amber-700" />
-                    )}
+                    {online ? <Wifi className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
+                      : d.ativado ? <SmartphoneIcon className="w-5 h-5 sm:w-6 sm:h-6 text-blue-700" />
+                      : <Key className="w-5 h-5 sm:w-6 sm:h-6 text-amber-700" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="font-semibold text-slate-900 truncate text-base sm:text-lg">{d.nome}</h3>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium ${
-                        d.status === 'ativo' 
-                          ? 'bg-green-200 text-green-800' 
-                          : 'bg-red-200 text-red-800'
+                        d.status === 'ativo' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
                       }`}>
-                        {d.status === 'ativo' ? (
-                          <>
-                            <CheckCircle2 className="w-3 h-3 mr-1" />
-                            Ativo
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="w-3 h-3 mr-1" />
-                            Inativo
-                          </>
-                        )}
+                        {d.status === 'ativo' ? <><CheckCircle2 className="w-3 h-3 mr-1" />Ativo</> : <><XCircle className="w-3 h-3 mr-1" />Inativo</>}
                       </span>
-                      {d.ativado && (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
-                          Ativado
-                        </span>
-                      )}
-                      {!d.ativado && d.senhaNumerica && (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
-                          <Key className="w-3 h-3 mr-1" />
-                          Aguardando ativação
-                        </span>
-                      )}
-                      {online && (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse" />
-                          Online
-                        </span>
-                      )}
+                      {d.ativado && <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium"><CheckCircle2 className="w-3 h-3 mr-1" />Ativado</span>}
+                      {!d.ativado && d.senhaNumerica && <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium"><Key className="w-3 h-3 mr-1" />Aguardando</span>}
+                      {online && <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium"><span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1 animate-pulse" />Online</span>}
                     </div>
                   </div>
                 </div>
-                
-                {/* Menu de ações - sempre visível em mobile */}
+
+                {/* Menu */}
                 <div className="relative flex-shrink-0 ml-2">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveMenu(activeMenu === d.id ? null : d.id);
-                    }}
-                    className="p-2 hover:bg-white/50 rounded-lg transition-colors"
-                  >
+                  <button onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === d.id ? null : d.id); }} className="p-2 hover:bg-white/50 rounded-lg transition-colors">
                     <MoreVertical className="w-5 h-5 text-slate-500" />
                   </button>
-                  
                   {activeMenu === d.id && (
-                    <div 
-                      className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-200 py-2 min-w-[180px] z-20"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        onClick={() => handleToggleStatus(d.id, d.status)}
-                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-3 text-slate-700"
-                      >
-                        {d.status === 'ativo' ? (
-                          <>
-                            <XCircle className="w-4 h-4 text-orange-500" />
-                            Desativar
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="w-4 h-4 text-green-500" />
-                            Ativar
-                          </>
-                        )}
+                    <div className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-slate-200 py-2 min-w-[180px] z-20" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => handleToggleStatus(d.id, d.status)} className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-3 text-slate-700">
+                        {d.status === 'ativo' ? <><XCircle className="w-4 h-4 text-orange-500" />Desativar</> : <><CheckCircle2 className="w-4 h-4 text-green-500" />Ativar</>}
                       </button>
-                      <button
-                        onClick={() => handleRegenerarSenha(d.id)}
-                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-3 text-slate-700"
-                      >
-                        <RefreshCw className="w-4 h-4 text-blue-500" />
-                        {d.ativado ? 'Nova Senha (Reativar)' : 'Regenerar Senha'}
+                      <button onClick={() => handleRegenerarSenha(d.id)} className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-3 text-slate-700">
+                        <RefreshCw className="w-4 h-4 text-blue-500" />{d.ativado ? 'Nova Senha (Reativar)' : 'Regenerar Senha'}
                       </button>
                       <hr className="my-2 border-slate-100" />
-                      <button
-                        onClick={() => handleExcluir(d.id)}
-                        className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-3 text-red-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Excluir
+                      <button onClick={() => handleExcluir(d.id)} className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 flex items-center gap-3 text-red-600">
+                        <Trash2 className="w-4 h-4" />Excluir
                       </button>
                     </div>
                   )}
@@ -333,63 +397,37 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
 
               {/* Card Body */}
               <div className="p-4 sm:p-5 space-y-4">
-                {/* Chave de ativação - permanece sempre a mesma */}
+                {/* Chave de ativação */}
                 <div>
                   <p className="text-xs text-slate-500 mb-1.5 font-medium uppercase tracking-wide">Chave de Ativação</p>
                   <div className="flex items-center gap-2">
-                    <code className="bg-blue-50 border border-blue-200 px-3 py-2 rounded-lg text-sm font-mono text-blue-700 flex-1 break-all">
-                      {d.chave}
-                    </code>
-                    <button 
-                      onClick={() => copiar(d.chave, `chave-${d.id}`)} 
-                      className="p-2.5 hover:bg-blue-50 rounded-lg transition-colors flex-shrink-0 active:scale-95 border border-transparent hover:border-blue-200"
-                      title="Copiar chave"
-                    >
-                      {copiedId === `chave-${d.id}` 
-                        ? <Check className="w-5 h-5 text-green-500" /> 
-                        : <Copy className="w-5 h-5 text-blue-500" />
-                      }
+                    <code className="bg-blue-50 border border-blue-200 px-3 py-2 rounded-lg text-sm font-mono text-blue-700 flex-1 break-all">{d.chave}</code>
+                    <button onClick={() => copiar(d.chave, `chave-${d.id}`)} className="p-2.5 hover:bg-blue-50 rounded-lg transition-colors flex-shrink-0 active:scale-95 border border-transparent hover:border-blue-200" title="Copiar chave">
+                      {copiedId === `chave-${d.id}` ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 text-blue-500" />}
                     </button>
                   </div>
                 </div>
 
-                {/* Senha de Acesso (apenas para dispositivos não ativados ou com senha regenerada) */}
+                {/* Senha de Acesso */}
                 {d.senhaNumerica ? (
                   <div>
-                    <p className="text-xs text-slate-500 mb-1.5 font-medium uppercase tracking-wide">
-                      {d.ativado ? 'Nova Senha de Reativação' : 'Senha de Acesso'}
-                    </p>
+                    <p className="text-xs text-slate-500 mb-1.5 font-medium uppercase tracking-wide">{d.ativado ? 'Nova Senha de Reativação' : 'Senha de Acesso'}</p>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg px-3 py-2.5 flex items-center justify-between">
-                        <code className="font-mono text-xl sm:text-2xl font-bold tracking-widest text-amber-800">
-                          {showSenha === d.id ? d.senhaNumerica : '••• •••'}
-                        </code>
+                        <code className="font-mono text-xl sm:text-2xl font-bold tracking-widest text-amber-800">{showSenha === d.id ? d.senhaNumerica : '••• •••'}</code>
                         <div className="flex gap-1">
-                          <button 
-                            onClick={() => setShowSenha(showSenha === d.id ? null : d.id)} 
-                            className="p-2 hover:bg-amber-100 rounded-lg transition-colors active:scale-95"
-                          >
-                            {showSenha === d.id 
-                              ? <EyeOff className="w-5 h-5 text-amber-600" /> 
-                              : <Eye className="w-5 h-5 text-amber-600" />
-                            }
+                          <button onClick={() => setShowSenha(showSenha === d.id ? null : d.id)} className="p-2 hover:bg-amber-100 rounded-lg transition-colors active:scale-95">
+                            {showSenha === d.id ? <EyeOff className="w-5 h-5 text-amber-600" /> : <Eye className="w-5 h-5 text-amber-600" />}
                           </button>
-                          <button 
-                            onClick={() => copiar(d.senhaNumerica!, `senha-${d.id}`)} 
-                            className="p-2 hover:bg-amber-100 rounded-lg transition-colors active:scale-95"
-                          >
-                            {copiedId === `senha-${d.id}` 
-                              ? <Check className="w-5 h-5 text-green-500" /> 
-                              : <Copy className="w-5 h-5 text-amber-600" />
-                            }
+                          <button onClick={() => copiar(d.senhaNumerica!, `senha-${d.id}`)} className="p-2 hover:bg-amber-100 rounded-lg transition-colors active:scale-95">
+                            {copiedId === `senha-${d.id}` ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 text-amber-600" />}
                           </button>
                         </div>
                       </div>
                     </div>
                     {!d.ativado && (
                       <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
-                        <AlertTriangle className="w-3.5 h-3.5" />
-                        Use esta senha para ativar o dispositivo no app mobile
+                        <AlertTriangle className="w-3.5 h-3.5" />Use esta senha para ativar o dispositivo no app mobile
                       </p>
                     )}
                   </div>
@@ -397,21 +435,13 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
                   <div>
                     <p className="text-xs text-slate-500 mb-1.5 font-medium uppercase tracking-wide">Senha de Acesso</p>
                     <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-500 flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <Key className="w-4 h-4" />
-                        {d.ativado ? 'Senha já utilizada' : 'Senha não gerada'}
-                      </span>
-                      <button
-                        onClick={() => handleRegenerarSenha(d.id)}
-                        className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        Gerar senha
-                      </button>
+                      <span className="flex items-center gap-2"><Key className="w-4 h-4" />{d.ativado ? 'Senha já utilizada' : 'Senha não gerada'}</span>
+                      <button onClick={() => handleRegenerarSenha(d.id)} className="text-xs text-blue-600 hover:text-blue-700 font-medium">Gerar senha</button>
                     </div>
                   </div>
                 )}
 
-                {/* Dispositivo/Aparelho (após ativação) */}
+                {/* Aparelho vinculado */}
                 {d.ativado && d.deviceName && (
                   <div>
                     <p className="text-xs text-slate-500 mb-1.5 font-medium uppercase tracking-wide">Aparelho Vinculado</p>
@@ -437,54 +467,21 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
           <div className="bg-white w-full sm:max-w-md sm:rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto animate-slide-up">
-            {/* Header */}
             <div className="px-4 py-4 sm:px-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
               <h2 className="text-lg font-semibold text-slate-900">Novo Dispositivo</h2>
-              <button 
-                onClick={() => setShowModal(false)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-slate-400" />
-              </button>
+              <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-lg transition-colors"><X className="w-5 h-5 text-slate-400" /></button>
             </div>
-            
-            {/* Content */}
             <div className="p-4 sm:p-6 space-y-5">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                  Nome do Dispositivo <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={nome}
-                  onChange={(e) => {
-                    setNome(e.target.value);
-                    setErrors(prev => ({ ...prev, nome: '' }));
-                  }}
-                  placeholder="Ex: iPhone do João, Tablet do Caixa"
-                  className={`w-full px-4 py-3 rounded-xl border outline-none transition-all text-base ${
-                    errors.nome 
-                      ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' 
-                      : 'border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
-                  }`}
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Nome do Dispositivo <span className="text-red-500">*</span></label>
+                <input type="text" value={nome} onChange={e => { setNome(e.target.value); setErrors(prev => ({ ...prev, nome: '' })); }} placeholder="Ex: iPhone do João, Tablet do Caixa" className={`w-full px-4 py-3 rounded-xl border outline-none transition-all text-base ${errors.nome ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'}`} />
                 {errors.nome && <p className="text-red-500 text-sm mt-1.5">{errors.nome}</p>}
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Tipo de Dispositivo</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {['Celular', 'Tablet', 'Desktop'].map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setTipo(t)}
-                      className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1.5 ${
-                        tipo === t 
-                          ? 'border-blue-500 bg-blue-50 text-blue-700' 
-                          : 'border-slate-200 hover:border-slate-300 text-slate-600'
-                      }`}
-                    >
+                  {['Celular', 'Tablet', 'Desktop'].map(t => (
+                    <button key={t} type="button" onClick={() => setTipo(t)} className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-1.5 ${tipo === t ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 hover:border-slate-300 text-slate-600'}`}>
                       {t === 'Celular' && <Smartphone className="w-6 h-6" />}
                       {t === 'Tablet' && <Tablet className="w-6 h-6" />}
                       {t === 'Desktop' && <Monitor className="w-6 h-6" />}
@@ -493,23 +490,14 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
                   ))}
                 </div>
               </div>
-
               <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
                     <p className="text-sm text-amber-700 font-medium mb-2">Senha de Acesso Gerada</p>
-                    <code className="font-mono text-3xl sm:text-4xl font-bold tracking-widest text-amber-800">
-                      {senhaGerada}
-                    </code>
+                    <code className="font-mono text-3xl sm:text-4xl font-bold tracking-widest text-amber-800">{senhaGerada}</code>
                   </div>
-                  <button 
-                    onClick={() => copiar(senhaGerada, 'nova-senha')} 
-                    className="p-3 hover:bg-amber-100 rounded-xl transition-colors active:scale-95 flex-shrink-0"
-                  >
-                    {copiedId === 'nova-senha' 
-                      ? <Check className="w-6 h-6 text-green-500" /> 
-                      : <Copy className="w-6 h-6 text-amber-600" />
-                    }
+                  <button onClick={() => copiar(senhaGerada, 'nova-senha')} className="p-3 hover:bg-amber-100 rounded-xl transition-colors active:scale-95 flex-shrink-0">
+                    {copiedId === 'nova-senha' ? <Check className="w-6 h-6 text-green-500" /> : <Copy className="w-6 h-6 text-amber-600" />}
                   </button>
                 </div>
                 <div className="mt-4 flex items-start gap-2 text-sm text-amber-700 bg-amber-100/50 rounded-lg p-3">
@@ -518,82 +506,41 @@ export default function DispositivosClient({ dispositivosIniciais }: Dispositivo
                 </div>
               </div>
             </div>
-
-            {/* Footer */}
             <div className="px-4 py-4 sm:px-6 border-t border-slate-100 flex flex-col sm:flex-row gap-3 sticky bottom-0 bg-white">
-              <button
-                onClick={() => setShowModal(false)}
-                className="flex-1 btn-secondary justify-center py-3"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSalvar}
-                disabled={loading}
-                className="flex-1 btn-primary justify-center py-3"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Criando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Plus className="w-5 h-5" />
-                    <span>Criar Dispositivo</span>
-                  </>
-                )}
+              <button onClick={() => setShowModal(false)} className="flex-1 btn-secondary justify-center py-3">Cancelar</button>
+              <button onClick={handleSalvar} disabled={loading} className="flex-1 btn-primary justify-center py-3">
+                {loading ? <><Loader2 className="w-5 h-5 animate-spin" /><span>Criando...</span></> : <><Plus className="w-5 h-5" /><span>Criar Dispositivo</span></>}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Info box - How to activate */}
+      {/* Confirmation Modal */}
+      <ConfirmModal {...(confirmModal || { open: false, title: '', message: '', confirmLabel: '', onConfirm: () => {}, onCancel: () => {} })} />
+
+      {/* Info box */}
       <div className="mt-8 card overflow-hidden">
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-4">
-          <h3 className="font-semibold text-white flex items-center gap-2 text-lg">
-            <Smartphone className="w-5 h-5" />
-            Como funciona a ativação?
-          </h3>
+          <h3 className="font-semibold text-white flex items-center gap-2 text-lg"><Smartphone className="w-5 h-5" />Como funciona a ativação?</h3>
         </div>
         <div className="p-5">
           <div className="grid gap-4">
-            <div key="1" className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                1
-              </div>
-              <div>
-                <p className="text-slate-700 font-medium">Crie o dispositivo no painel web</p>
-                <p className="text-sm text-slate-500">Anote a <strong>chave</strong> (DEV-XXXXXX) e a <strong>senha de 6 dígitos</strong></p>
-              </div>
+            <div className="flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">1</div>
+              <div><p className="text-slate-700 font-medium">Crie o dispositivo no painel web</p><p className="text-sm text-slate-500">Anote a <strong>chave</strong> (DEV-XXXXXX) e a <strong>senha de 6 dígitos</strong></p></div>
             </div>
-            <div key="2" className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                2
-              </div>
-              <div>
-                <p className="text-slate-700 font-medium">No app mobile, toque em &quot;Novo Dispositivo&quot;</p>
-                <p className="text-sm text-slate-500">Digite a chave e a senha de 6 dígitos</p>
-              </div>
+            <div className="flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">2</div>
+              <div><p className="text-slate-700 font-medium">No app mobile, toque em &quot;Novo Dispositivo&quot;</p><p className="text-sm text-slate-500">Digite a chave e a senha de 6 dígitos</p></div>
             </div>
-            <div key="3" className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                3
-              </div>
-              <div>
-                <p className="text-slate-700 font-medium">Pronto! Dispositivo ativado</p>
-                <p className="text-sm text-slate-500">A <strong>chave permanece a mesma</strong> para futuras sincronizações</p>
-              </div>
+            <div className="flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold flex-shrink-0">3</div>
+              <div><p className="text-slate-700 font-medium">Pronto! Dispositivo ativado</p><p className="text-sm text-slate-500">A <strong>chave permanece a mesma</strong> para futuras sincronizações</p></div>
             </div>
-            <div key="4" className="flex items-start gap-4">
-              <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                💡
-              </div>
-              <div>
-                <p className="text-slate-700 font-medium">Precisa reativar?</p>
-                <p className="text-sm text-slate-500">Clique em &quot;Nova Senha&quot; no menu do dispositivo para gerar uma nova senha de ativação</p>
-              </div>
+            <div className="flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-sm font-bold flex-shrink-0">4</div>
+              <div><p className="text-slate-700 font-medium">Precisa reativar?</p><p className="text-sm text-slate-500">Clique em &quot;Nova Senha&quot; no menu do dispositivo para gerar uma nova senha de ativação</p></div>
             </div>
           </div>
         </div>

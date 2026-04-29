@@ -8,6 +8,21 @@ import DispositivosClient from './DispositivosClient'
 
 export const metadata: Metadata = { title: 'Dispositivos Móveis' }
 
+function calcularEstatisticas(dispositivos: { status: string; ativado: boolean; ultimaSincronizacao: Date | null }[]) {
+  const totalAtivos = dispositivos.filter(d => d.status === 'ativo').length
+  const totalInativos = dispositivos.filter(d => d.status !== 'ativo').length
+  const totalAtivados = dispositivos.filter(d => d.ativado).length
+
+  // Online = última sincronização nos últimos 30 minutos
+  const ONLINE_THRESHOLD_MS = 30 * 60 * 1000
+  const cutoffTime = new Date(Date.now() - ONLINE_THRESHOLD_MS)
+  const totalOnline = dispositivos.filter(d =>
+    d.ultimaSincronizacao && new Date(d.ultimaSincronizacao) >= cutoffTime
+  ).length
+
+  return { totalAtivos, totalInativos, totalAtivados, totalOnline }
+}
+
 export default async function DispositivosPage() {
   const session = await getSession()
   if (!session?.user || session.user.tipoPermissao !== 'Administrador') redirect('/dashboard')
@@ -29,18 +44,7 @@ export default async function DispositivosPage() {
     },
   })
 
-  // Calcular estatísticas
-  const totalAtivos = dispositivos.filter(d => d.status === 'ativo').length
-  const totalInativos = dispositivos.filter(d => d.status !== 'ativo').length
-  const totalAtivados = dispositivos.filter(d => d.ativado).length
-
-  // Online = última sincronização nos últimos 30 minutos
-  const now = Date.now()
-  const ONLINE_THRESHOLD = 1000 * 60 * 30
-  const totalOnline = dispositivos.filter(d =>
-    d.ultimaSincronizacao &&
-    (now - new Date(d.ultimaSincronizacao).getTime()) < ONLINE_THRESHOLD
-  ).length
+  const { totalAtivos, totalInativos, totalOnline } = calcularEstatisticas(dispositivos)
 
   // Converter datas para string para serialização
   const dispositivosSerializados = dispositivos.map(d => ({

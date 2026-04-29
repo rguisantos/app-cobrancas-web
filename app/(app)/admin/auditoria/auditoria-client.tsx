@@ -82,6 +82,7 @@ export default function AuditoriaClient() {
 
   useEffect(() => {
     fetchLogs()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.page, entityType, operation])
 
   async function fetchLogs() {

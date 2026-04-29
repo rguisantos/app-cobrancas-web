@@ -399,7 +399,7 @@ export async function processPull(
       select: {
         id: true, nome: true, cpf: true, telefone: true, email: true,
         tipoPermissao: true, permissoesWeb: true, permissoesMobile: true,
-        rotasPermitidas: true, status: true, bloqueado: true,
+        rotasPermitidasRel: { select: { rotaId: true, usuarioId: true } }, status: true, bloqueado: true,
         dataUltimoAcesso: true, ultimoAcessoDispositivo: true,
         syncStatus: true, lastSyncedAt: true, needsSync: true,
         version: true, deviceId: true, createdAt: true, updatedAt: true,
@@ -447,12 +447,18 @@ export async function processPull(
   logger.info(`[sync/pull] hasMore: ${hasMore}, lastSyncAt: ${responseLastSyncAt}`)
   logger.info(`[sync/pull] ====== PULL CONCLUÍDO ======`)
 
+  // Transformar usuarios: derivar rotasPermitidas a partir de rotasPermitidasRel
+  const usuariosTransformed = usuarios.map(u => {
+    const { rotasPermitidasRel, ...rest } = u
+    return { ...rest, rotasPermitidas: rotasPermitidasRel.map((ur: { rotaId: string }) => ur.rotaId) }
+  })
+
   return {
     success: true,
     lastSyncAt: responseLastSyncAt,
     hasMore,
     isStale,
-    changes: { clientes, produtos, locacoes, cobrancas, rotas, usuarios },
+    changes: { clientes, produtos, locacoes, cobrancas, rotas, usuarios: usuariosTransformed },
     tiposProduto,
     descricoesProduto,
     tamanhosProduto,
@@ -539,7 +545,7 @@ export async function processSnapshot(deviceId: string): Promise<{
       select: {
         id: true, nome: true, cpf: true, telefone: true, email: true,
         tipoPermissao: true, permissoesWeb: true, permissoesMobile: true,
-        rotasPermitidas: true, status: true, bloqueado: true,
+        rotasPermitidasRel: { select: { rotaId: true, usuarioId: true } }, status: true, bloqueado: true,
         dataUltimoAcesso: true, ultimoAcessoDispositivo: true,
         syncStatus: true, lastSyncedAt: true, needsSync: true,
         version: true, deviceId: true, createdAt: true, updatedAt: true,
@@ -552,8 +558,14 @@ export async function processSnapshot(deviceId: string): Promise<{
 
   logger.info(`[sync/snapshot] Snapshot gerado: ${clientes.length} clientes, ${produtos.length} produtos, ${locacoes.length} locações, ${cobrancas.length} cobranças, ${rotas.length} rotas`)
 
+  // Transformar usuarios: derivar rotasPermitidas a partir de rotasPermitidasRel
+  const usuariosTransformed = usuarios.map(u => {
+    const { rotasPermitidasRel, ...rest } = u
+    return { ...rest, rotasPermitidas: rotasPermitidasRel.map((ur: { rotaId: string }) => ur.rotaId) }
+  })
+
   return {
-    clientes, produtos, locacoes, cobrancas, rotas, usuarios,
+    clientes, produtos, locacoes, cobrancas, rotas, usuarios: usuariosTransformed,
     tiposProduto, descricoesProduto, tamanhosProduto,
   }
 }

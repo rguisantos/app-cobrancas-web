@@ -51,7 +51,7 @@ export default async function ClientesPage({
     cidade: c.cidade,
     estado: c.estado,
     rotaDescricao: c.rota?.descricao,
-    rotaId: c.rotaId,
+    rotaId: c.rotaId ?? undefined,
     status: c.status,
   }))
 

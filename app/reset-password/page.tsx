@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Metadata } from 'next'
 import ResetPasswordForm from './reset-password-form'
 
@@ -20,7 +21,9 @@ export default function ResetPasswordPage() {
               Crie uma nova senha forte para sua conta.
             </p>
           </div>
-          <ResetPasswordForm />
+          <Suspense fallback={<div className="text-center text-slate-400">Carregando...</div>}>
+            <ResetPasswordForm />
+          </Suspense>
         </div>
 
         {/* Link para login */}

@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
 import { getAuthSession } from './api-helpers'
 
@@ -29,7 +30,7 @@ export async function registrarAuditoria(params: {
 
     if (!userId) {
       const session = await getAuthSession()
-      userId = session?.user?.id || null
+      userId = session?.user?.id || undefined
     }
 
     await prisma.logAuditoria.create({
@@ -38,9 +39,9 @@ export async function registrarAuditoria(params: {
         acao: params.acao,
         entidade: params.entidade,
         entidadeId: params.entidadeId,
-        detalhes: params.detalhes || null,
-        ip: params.ip || null,
-        userAgent: params.userAgent || null,
+        detalhes: params.detalhes ?? Prisma.JsonNull,
+        ip: params.ip || undefined,
+        userAgent: params.userAgent || undefined,
       },
     })
   } catch (error) {

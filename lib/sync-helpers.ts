@@ -85,7 +85,7 @@ export const ALLOWED_FIELDS: Record<string, Set<string>> = {
   usuario: new Set([
     'tipo', 'nome', 'cpf', 'telefone', 'email',
     // 'senha' REMOVIDO — senha nunca deve ser atualizada via sync
-    'tipoPermissao', 'permissoesWeb', 'permissoesMobile', 'rotasPermitidas',
+    'tipoPermissao', 'permissoesWeb', 'permissoesMobile',
     'status', 'bloqueado', 'dataUltimoAcesso', 'ultimoAcessoDispositivo',
     'syncStatus', 'lastSyncedAt', 'needsSync', 'version', 'deviceId',
   ]),
@@ -156,6 +156,8 @@ export function convertForPrisma(data: Record<string, any>): Record<string, any>
   if (typeof converted.permissoesMobile === 'string') {
     try { converted.permissoesMobile = JSON.parse(converted.permissoesMobile) } catch { converted.permissoesMobile = {} }
   }
+  // rotasPermitidas is now handled via UsuarioRota relation (rotasPermitidasRel)
+  // Mobile sync data with rotasPermitidas is converted separately in the sync engine
   if (typeof converted.rotasPermitidas === 'string') {
     try { converted.rotasPermitidas = JSON.parse(converted.rotasPermitidas) } catch { converted.rotasPermitidas = [] }
   }

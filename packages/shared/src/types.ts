@@ -437,6 +437,9 @@ export interface CobrancaView {
 export type TipoPermissaoUsuario = 'Administrador' | 'Secretario' | 'AcessoControlado';
 
 export interface PermissoesWeb {
+  // Legado (compatibilidade com dados antigos no banco)
+  todosCadastros?: boolean;
+
   // Cadastros
   clientes: boolean;
   produtos: boolean;

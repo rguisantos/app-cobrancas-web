@@ -18,15 +18,16 @@ async function main() {
   const senhaHash  = await bcrypt.hash(adminSenha, 12)
 
   const permissoesAdmin = {
-    todosCadastros: true,
-    locacaoRelocacaoEstoque: true,
-    relatorios: true,
+    clientes: true, produtos: true, rotas: true,
+    locacaoRelocacaoEstoque: true, cobrancas: true, manutencoes: true, relogios: true,
+    relatorios: true, dashboard: true, agenda: true, mapa: true,
+    adminCadastros: true, adminUsuarios: true, adminDispositivos: true, adminSincronizacao: true, adminAuditoria: true,
+    todosCadastros: true, // legado
   }
   const permissoesMobileAdmin = {
-    todosCadastros: true,
-    alteracaoRelogio: true,
-    locacaoRelocacaoEstoque: true,
-    cobrancasFaturas: true,
+    clientes: true, produtos: true,
+    alteracaoRelogio: true, locacaoRelocacaoEstoque: true, cobrancasFaturas: true, manutencoes: true,
+    relatorios: true, sincronizacao: true,
   }
 
   await prisma.usuario.upsert({

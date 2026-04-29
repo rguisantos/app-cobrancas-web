@@ -48,15 +48,16 @@ export async function POST(req: NextRequest) {
     const senhaHash = await hashSenha(adminSenha)
 
     const permissoesAdmin = {
-      todosCadastros: true,
-      locacaoRelocacaoEstoque: true,
-      relatorios: true,
+      clientes: true, produtos: true, rotas: true,
+      locacaoRelocacaoEstoque: true, cobrancas: true, manutencoes: true, relogios: true,
+      relatorios: true, dashboard: true, agenda: true, mapa: true,
+      adminCadastros: true, adminUsuarios: true, adminDispositivos: true, adminSincronizacao: true, adminAuditoria: true,
+      todosCadastros: true, // legado
     }
     const permissoesMobileAdmin = {
-      todosCadastros: true,
-      alteracaoRelogio: true,
-      locacaoRelocacaoEstoque: true,
-      cobrancasFaturas: true,
+      clientes: true, produtos: true,
+      alteracaoRelogio: true, locacaoRelocacaoEstoque: true, cobrancasFaturas: true, manutencoes: true,
+      relatorios: true, sincronizacao: true,
     }
 
     const usuario = await prisma.usuario.upsert({
@@ -70,7 +71,6 @@ export async function POST(req: NextRequest) {
         tipoPermissao: 'Administrador',
         permissoesWeb: permissoesAdmin,
         permissoesMobile: permissoesMobileAdmin,
-        rotasPermitidas: [],
         status: 'Ativo',
         deviceId: 'server',
         version: 1,

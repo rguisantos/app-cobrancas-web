@@ -40,7 +40,6 @@ async function main() {
       tipoPermissao: 'Administrador',
       permissoesWeb: permissoesAdmin,
       permissoesMobile: permissoesMobileAdmin,
-      rotasPermitidas: [],
       status: 'Ativo',
       deviceId: 'server',
     },

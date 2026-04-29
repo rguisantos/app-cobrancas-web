@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, serverError, forbidden } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, forbidden, serverError, validateBody, handleApiError } from '@/lib/api-helpers'
+import { estabelecimentoCreateSchema } from '@/lib/validations'
 
 // GET - Listar estabelecimentos
 export async function GET(req: NextRequest) {
@@ -8,22 +9,32 @@ export async function GET(req: NextRequest) {
   if (!session) return unauthorized()
 
   try {
-    const estabelecimentos = await prisma.estabelecimento.findMany({
-      where: { deletedAt: null },
-      orderBy: { nome: 'asc' },
-      select: {
-        id: true,
-        nome: true,
-        endereco: true,
-        observacao: true,
-        createdAt: true,
-      }
-    })
+    const { searchParams } = new URL(req.url)
+    const page = Number(searchParams.get('page') || 1)
+    const limit = Number(searchParams.get('limit') || 50)
 
-    return NextResponse.json(estabelecimentos)
+    const where = { deletedAt: null }
+
+    const [estabelecimentos, total] = await Promise.all([
+      prisma.estabelecimento.findMany({
+        where,
+        orderBy: { nome: 'asc' },
+        select: {
+          id: true,
+          nome: true,
+          endereco: true,
+          observacao: true,
+          createdAt: true,
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.estabelecimento.count({ where }),
+    ])
+
+    return NextResponse.json({ data: estabelecimentos, total, page, limit })
   } catch (err) {
-    console.error('Erro ao listar estabelecimentos:', err)
-    return serverError()
+    return handleApiError(err)
   }
 }
 
@@ -35,23 +46,19 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const nome = typeof body.nome === 'string' ? body.nome.trim() : ''
-    if (!nome || nome.length < 2) {
-      return NextResponse.json({ error: 'Nome deve ter pelo menos 2 caracteres' }, { status: 400 })
-    }
+    const data = validateBody(estabelecimentoCreateSchema, body)
 
     const item = await prisma.estabelecimento.create({
       data: {
-        nome,
-        endereco: typeof body.endereco === 'string' ? body.endereco.trim() || null : null,
-        observacao: typeof body.observacao === 'string' ? body.observacao.trim() || null : null,
+        nome: data.nome,
+        endereco: data.endereco || null,
+        observacao: data.observacao || null,
         deviceId: 'web',
         version: 1,
       }
     })
     return NextResponse.json(item, { status: 201 })
   } catch (err) {
-    console.error('[POST /estabelecimentos]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }

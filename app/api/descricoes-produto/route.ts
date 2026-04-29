@@ -1,29 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, serverError } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, forbidden, handleApiError } from '@/lib/api-helpers'
+import { atributoProdutoCreateSchema } from '@/lib/validations'
 
-// Aceita NextAuth session (web client) OU JWT Bearer (mobile)
-async function isAuthenticated(req: NextRequest): Promise<boolean> {
-  const { getServerSession } = await import('next-auth')
-  const { authOptions }      = await import('@/lib/auth')
-  const session = await getServerSession(authOptions)
-  if (session) return true
-  const { extrairToken, verificarToken } = await import('@/lib/jwt')
-  const token = extrairToken(req.headers.get('Authorization'))
-  return !!(token && verificarToken(token))
-}
+// Helper: aceita NextAuth session (web) OU JWT Bearer (mobile)
+async function getAuthenticatedSessionOrJWT(req: NextRequest) {
+  const session = await getAuthSession()
+  if (session) return { session, isAdmin: session.user.tipoPermissao === 'Administrador' }
 
-async function isAdmin(req: NextRequest): Promise<boolean> {
-  const { getServerSession } = await import('next-auth')
-  const { authOptions }      = await import('@/lib/auth')
-  const session = await getServerSession(authOptions)
-  if (session) return session.user.tipoPermissao === 'Administrador'
-  // Mobile: JWT não carrega tipoPermissao; atributos só criáveis por admin no web
-  return false
+  try {
+    const { extrairToken, verificarToken } = await import('@/lib/jwt')
+    const token = extrairToken(req.headers.get('Authorization'))
+    if (token && verificarToken(token)) {
+      return { session: null, isAdmin: false }
+    }
+  } catch {
+    // JWT import falhou, ignorar
+  }
+
+  return null
 }
 
 export async function GET(req: NextRequest) {
-  if (!await isAuthenticated(req)) return unauthorized()
+  const auth = await getAuthenticatedSessionOrJWT(req)
+  if (!auth) return unauthorized()
+
   try {
     const itens = await prisma.descricaoProduto.findMany({
       where: { deletedAt: null },
@@ -32,28 +33,26 @@ export async function GET(req: NextRequest) {
     })
     return NextResponse.json(itens)
   } catch (err) {
-    console.error('[GET /descricoes-produto]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }
 
 export async function POST(req: NextRequest) {
-  if (!await isAuthenticated(req)) return unauthorized()
-  if (!await isAdmin(req)) {
-    return NextResponse.json({ error: 'Apenas administradores podem criar atributos' }, { status: 403 })
+  const auth = await getAuthenticatedSessionOrJWT(req)
+  if (!auth) return unauthorized()
+  if (!auth.isAdmin) {
+    return forbidden('Apenas administradores podem criar atributos')
   }
+
   try {
     const body = await req.json()
-    const nome = typeof body.nome === 'string' ? body.nome.trim() : ''
-    if (!nome || nome.length < 2) {
-      return NextResponse.json({ error: 'Nome deve ter pelo menos 2 caracteres' }, { status: 400 })
-    }
+    const data = atributoProdutoCreateSchema.parse(body)
+
     const item = await prisma.descricaoProduto.create({
-      data: { nome, deviceId: 'web', version: 1 }
+      data: { nome: data.nome, deviceId: 'web', version: 1 }
     })
     return NextResponse.json(item, { status: 201 })
   } catch (err) {
-    console.error('[POST /descricoes-produto]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }

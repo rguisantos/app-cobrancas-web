@@ -1,17 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
-import { serverError, validateBody, ApiError } from '@/lib/api-helpers'
+import { getAuthSession, getUserRotaIds, unauthorized, forbidden, serverError, validateBody, handleApiError, ApiError } from '@/lib/api-helpers'
 import { metaCreateSchema } from '@/lib/validations'
 
 // GET /api/metas - List all metas with progress
 export async function GET(request: NextRequest) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
+  // Apenas admin e secretário podem ver metas
+  if (session.user.tipoPermissao === 'AcessoControlado') {
+    return forbidden('Sem permissão para visualizar metas')
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') // ativa | atingida | expirada
 
+    // Controle de acesso por rota
+    const userRotaIds = await getUserRotaIds(session)
+
+    const where: any = {}
+    if (status) where.status = status
+
+    // Se AcessoControlado (embora já bloqueado acima), filtrar por rota
+    if (userRotaIds !== null) {
+      where.OR = [
+        { rotaId: { in: userRotaIds } },
+        { rotaId: null }, // Metas globais visíveis para todos
+      ]
+    }
+
     const metas = await prisma.meta.findMany({
-      where: status ? { status } : undefined,
+      where,
       orderBy: { dataFim: 'desc' },
     })
 
@@ -93,13 +115,20 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(metasComProgresso)
   } catch (error) {
-    console.error('Erro ao buscar metas:', error)
-    return NextResponse.json({ error: 'Erro ao buscar metas' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
 // POST /api/metas - Create a new meta
 export async function POST(request: NextRequest) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
+  // Apenas admin pode criar metas
+  if (session.user.tipoPermissao !== 'Administrador') {
+    return forbidden('Apenas administradores podem criar metas')
+  }
+
   try {
     const body = await request.json()
     const data = validateBody(metaCreateSchema, body)
@@ -112,16 +141,12 @@ export async function POST(request: NextRequest) {
         dataInicio: data.dataInicio,
         dataFim: data.dataFim,
         rotaId: data.rotaId || null,
-        criadoPor: data.criadoPor || null,
+        criadoPor: data.criadoPor || session.user.id,
       },
     })
 
     return NextResponse.json(meta, { status: 201 })
   } catch (err) {
-    if (err instanceof ApiError) {
-      return NextResponse.json({ error: err.message, details: err.details }, { status: err.statusCode })
-    }
-    console.error('Erro ao criar meta:', err)
-    return serverError()
+    return handleApiError(err)
   }
 }

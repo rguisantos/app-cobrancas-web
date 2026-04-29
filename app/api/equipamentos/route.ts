@@ -5,9 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, forbidden, handleApiError } from '@/lib/api-helpers'
 import { logger } from '@/lib/logger'
 import { gerarSenhaNumerica } from '@/lib/dispositivo-helpers'
+import { validateBody } from '@/lib/api-helpers'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -21,11 +22,9 @@ const schema = z.object({
 // GET - Listar dispositivos (requer autenticação admin)
 export async function GET(req: NextRequest) {
   const session = await getAuthSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-  }
+  if (!session) return unauthorized()
   if (session.user.tipoPermissao !== 'Administrador') {
-    return NextResponse.json({ error: 'Acesso negado — apenas Administradores' }, { status: 403 })
+    return forbidden('Acesso negado — apenas Administradores')
   }
 
   logger.warn('[equipamentos] GET /api/equipamentos é legado — use GET /api/dispositivos')
@@ -50,14 +49,20 @@ export async function GET(req: NextRequest) {
       })),
     })
   } catch (err) {
-    logger.error('[equipamentos] Erro:', err)
-    return NextResponse.json({ success: false, error: 'Erro ao listar dispositivos' }, { status: 500 })
+    return handleApiError(err)
   }
 }
 
-// POST - Registrar/criar dispositivo (chamado pelo mobile — legado)
-// DEPRECATED: O mobile deve usar o fluxo de ativação com PIN (POST /api/dispositivos/ativar)
+// POST - Registrar/criar dispositivo (DEPRECATED — requer auth de admin)
+// O mobile deve usar o fluxo de ativação com PIN (POST /api/dispositivos/ativar)
 export async function POST(req: NextRequest) {
+  // SEGURANÇA: Agora requer autenticação de admin
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+  if (session.user.tipoPermissao !== 'Administrador') {
+    return forbidden('Use POST /api/dispositivos/ativar para ativar dispositivos')
+  }
+
   logger.warn('[equipamentos] POST /api/equipamentos é DEPRECATED — use POST /api/dispositivos/ativar')
 
   try {
@@ -111,10 +116,6 @@ export async function POST(req: NextRequest) {
     }, { status: 201 })
 
   } catch (err) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json({ success: false, error: 'Dados inválidos', details: err.errors }, { status: 400 })
-    }
-    logger.error('[equipamentos] Erro:', err)
-    return NextResponse.json({ success: false, error: 'Erro interno' }, { status: 500 })
+    return handleApiError(err)
   }
 }

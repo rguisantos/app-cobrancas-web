@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Search,
   Filter,
@@ -80,12 +80,7 @@ export default function AuditoriaClient() {
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetchLogs()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pagination.page, entityType, operation])
-
-  async function fetchLogs() {
+  const fetchLogs = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams({
@@ -108,11 +103,14 @@ export default function AuditoriaClient() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [pagination.page, entityType, operation, dataInicio, dataFim])
+
+  useEffect(() => {
+    fetchLogs()
+  }, [fetchLogs])
 
   function handleFilter() {
     setPagination(p => ({ ...p, page: 1 }))
-    fetchLogs()
   }
 
   const filteredLogs = searchTerm

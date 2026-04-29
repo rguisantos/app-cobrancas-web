@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, notFound, serverError, forbidden } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, notFound, serverError, forbidden, validateBody, handleApiError } from '@/lib/api-helpers'
+import { estabelecimentoUpdateSchema } from '@/lib/validations'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -14,8 +15,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     if (!item) return notFound('Estabelecimento não encontrado')
     return NextResponse.json(item)
   } catch (err) {
-    console.error('[GET /estabelecimentos/id]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }
 
@@ -26,32 +26,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (session.user.tipoPermissao !== 'Administrador') return forbidden()
 
   try {
-    const body = await req.json()
-    const nome = typeof body.nome === 'string' ? body.nome.trim() : ''
-    if (!nome || nome.length < 2) {
-      return NextResponse.json({ error: 'Nome deve ter pelo menos 2 caracteres' }, { status: 400 })
-    }
-
     const existing = await prisma.estabelecimento.findFirst({ where: { id, deletedAt: null } })
     if (!existing) return notFound('Estabelecimento não encontrado')
 
-    const data: Record<string, any> = {
-      nome,
+    const body = await req.json()
+    const data = validateBody(estabelecimentoUpdateSchema, body)
+
+    const updateData: Record<string, any> = {
       version: { increment: 1 },
       deviceId: 'web',
       needsSync: true,
     }
-    if (body.endereco !== undefined) data.endereco = String(body.endereco).trim() || null
-    if (body.observacao !== undefined) data.observacao = String(body.observacao).trim() || null
+    if (data.nome !== undefined) updateData.nome = data.nome
+    if (data.endereco !== undefined) updateData.endereco = data.endereco || null
+    if (data.observacao !== undefined) updateData.observacao = data.observacao || null
 
     const item = await prisma.estabelecimento.update({
       where: { id },
-      data,
+      data: updateData,
     })
     return NextResponse.json(item)
   } catch (err) {
-    console.error('[PUT /estabelecimentos/id]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }
 
@@ -75,7 +71,6 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     })
     return NextResponse.json({ success: true })
   } catch (err) {
-    console.error('[DELETE /estabelecimentos/id]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }

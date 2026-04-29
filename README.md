@@ -1149,10 +1149,14 @@ O middleware protege todas as rotas autenticadas:
 |----------|---------------|
 | Senha hasheada | bcrypt com 12 rounds |
 | Senha removida do retorno | `senha` nunca retornado nas APIs |
-| Soft delete | `deletedAt` em todas as entidades |
-| Validação de input | Zod schemas nas APIs |
-| Transações atômicas | Prisma `$transaction()` |
+| Soft delete | `deletedAt` em todas as entidades sincronizáveis |
+| Validação de input | Zod schemas centralizados em `lib/validations.ts` |
+| Transações atômicas | Prisma `$transaction()` em operações críticas |
 | Verificação de FK | Antes de inserir no sync |
+| Auth em todas as APIs | `getAuthSession()` em todos os endpoints CRUD |
+| Rota-filtering | AcessoControlado só vê dados das rotas atribuídas |
+| Mass assignment | Schemas Zod protegem contra campos indesejados no UPDATE |
+| Equipamentos legado | POST agora requer auth de admin |
 
 ### ⚠️ Rate Limiting
 
@@ -1413,35 +1417,44 @@ Configurar no app mobile (`app.json` ou `.env`):
 
 ---
 
-#### 4. POST de Cobrança sem Validação
-
-**Problema:** `/api/cobrancas` (POST) não valida schema com Zod.
-
-**Impacto:** Dados inválidos podem ser inseridos diretamente.
-
-**Solução Recomendada:** Adicionar validação Zod similar ao relocar/enviar-estoque.
-
----
-
-#### 5. Atualização de UsuarioRota sem Transação
-
-**Problema:** `deleteMany` + `createMany` em operações separadas.
-
-**Impacto:** Falha parcial deixa usuário sem rotas.
-
-**Solução Recomendada:** Envolver em `$transaction()`.
-
----
-
 ### ⚠️ Melhorias Recomendadas
 
 | Item | Prioridade | Descrição |
 |------|------------|-----------|
 | Rate Limiting | Alta | Implementar em `/api/auth/login` e `/api/sync/*` |
 | Paginação no PULL | Média | Limitar registros por sincronização |
-| Validação no PUT de Locação | Alta | Adicionar schema Zod |
 | Campos de data como DateTime | Média | Migrar campos String para DateTime |
 | PRAGMA journal_mode=WAL | Baixa | Melhorar performance SQLite no mobile |
+| Sync fields em Manutencao/Meta | Média | Adicionar syncStatus, version, deviceId aos modelos |
+
+---
+
+## Histórico de Refatoração
+
+### Fase 1 — Áreas Core (Concluída)
+- **Clientes**: API com Zod, auth, rota-filtering, batch, paginação
+- **Cobranças**: API com Zod, auth, rota-filtering, batch, recibo térmico
+- **Rotas**: API com Zod, auth, CRUD completo, vinculação de usuários
+- **Locações**: API com Zod, auth, relocar, enviar-estoque, transações atômicas
+- **Produtos**: API com Zod, auth, batch, filtros avançados
+- **Usuários**: API com auth granular, CRUD completo, permissões
+
+### Fase 2 — Áreas Administrativas (Concluída)
+- **Dispositivos**: CRUD completo, ativação com PIN, status de sincronização
+- **Sincronização**: Push/Pull com motor próprio, resolução de conflitos
+- **Relatórios**: 14 tipos de relatório com exportação
+
+### Fase 3 — Refatoração de Segurança e Consistência (Concluída)
+- **Metas**: Auth adicionada, mass assignment corrigido, Zod validation
+- **Mapa**: Auth adicionada, rota-filtering para AcessoControlado
+- **Agenda**: Auth adicionada, rota-filtering para AcessoControlado
+- **Auditoria**: Auth adicionada, handleApiError centralizado
+- **Manutenções**: manutencaoUpdateSchema via Zod, transação atômica
+- **Histórico Relógio**: Zod centralizado em validations.ts, handleApiError
+- **Estabelecimentos**: Zod schemas, paginação, handleApiError
+- **Tipos/Descrições/Tamanhos Produto**: Auth consistente (NextAuth + JWT), Zod schemas
+- **Notificações**: handleApiError centralizado
+- **Equipamentos POST**: Auth de admin adicionada (antes era sem auth)
 
 ---
 

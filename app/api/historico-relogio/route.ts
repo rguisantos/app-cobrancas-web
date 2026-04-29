@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, forbidden, serverError, badRequest } from '@/lib/api-helpers'
-import { z } from 'zod'
-
-const createSchema = z.object({
-  produtoId: z.string().min(1, 'Produto é obrigatório'),
-  relogioNovo: z.string().min(1, 'Novo relógio é obrigatório'),
-  motivo: z.string().min(1, 'Motivo é obrigatório'),
-})
+import { getAuthSession, unauthorized, forbidden, serverError, badRequest, validateBody, handleApiError } from '@/lib/api-helpers'
+import { historicoRelogioCreateSchema } from '@/lib/validations'
 
 export async function GET(req: NextRequest) {
   const session = await getAuthSession()
@@ -76,7 +70,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const data = createSchema.parse(body)
+    const data = validateBody(historicoRelogioCreateSchema, body)
 
     // Buscar produto atual para obter o relogioAnterior
     const produto = await prisma.produto.findFirst({
@@ -124,13 +118,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(historico, { status: 201 })
   } catch (err) {
-    if (err instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Dados inválidos', details: err.errors },
-        { status: 400 }
-      )
-    }
-    console.error('[POST /historico-relogio]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }

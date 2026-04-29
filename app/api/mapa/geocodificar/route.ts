@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getAuthSession, unauthorized, forbidden, handleApiError } from '@/lib/api-helpers'
 
-// Geocodificar endereços dos clientes usando Nominatim (OpenStreetMap) - Gratuito
+// POST /api/mapa/geocodificar — Geocodificar endereços usando Nominatim (OpenStreetMap)
 export async function POST(request: NextRequest) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+  if (session.user.tipoPermissao !== 'Administrador') {
+    return forbidden('Apenas administradores podem geocodificar endereços')
+  }
+
   try {
     const body = await request.json()
     const { clienteId, forcar } = body
@@ -111,7 +118,7 @@ export async function POST(request: NextRequest) {
           // Atualizar cliente com coordenadas
           await prisma.cliente.update({
             where: { id: cliente.id },
-            data: { latitude: lat, longitude: lng },
+            data: { latitude: lat, longitude: lng, needsSync: true, version: { increment: 1 }, deviceId: 'web' },
           })
 
           resultados.push({
@@ -142,7 +149,7 @@ export async function POST(request: NextRequest) {
 
               await prisma.cliente.update({
                 where: { id: cliente.id },
-                data: { latitude: lat, longitude: lng },
+                data: { latitude: lat, longitude: lng, needsSync: true, version: { increment: 1 }, deviceId: 'web' },
               })
 
               resultados.push({
@@ -191,10 +198,6 @@ export async function POST(request: NextRequest) {
       resultados,
     })
   } catch (error) {
-    console.error('Erro na geocodificação:', error)
-    return NextResponse.json(
-      { error: 'Erro na geocodificação' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }

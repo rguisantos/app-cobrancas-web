@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import { getAuthSession, getUserRotaIds, unauthorized, handleApiError } from '@/lib/api-helpers'
 
+// GET /api/agenda — Buscar eventos da agenda
 export async function GET(request: NextRequest) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
   try {
     const { searchParams } = new URL(request.url)
     const mes = searchParams.get('mes') // formato: 2024-01
@@ -24,13 +29,35 @@ export async function GET(request: NextRequest) {
       dataFim = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
     }
 
-    const rotaFilter = rotaId
-      ? Prisma.sql`AND cl."rotaId" = ${rotaId}`
-      : Prisma.empty
+    // Controle de acesso por rota
+    const userRotaIds = await getUserRotaIds(session)
 
-    const rotaFilterManut = rotaId
-      ? Prisma.sql`AND l."clienteId" IN (SELECT id FROM clientes WHERE "rotaId" = ${rotaId})`
-      : Prisma.empty
+    // Se AcessoControlado sem rotas, retornar vazio
+    if (userRotaIds !== null && userRotaIds.length === 0) {
+      return NextResponse.json({ eventos: [], stats: { totalVencimentos: 0, totalRecebidos: 0, totalPendente: 0, taxaAdimplencia: 100 } })
+    }
+
+    // Filtro de rota: query param OU restrição do usuário
+    let rotaFilter: Prisma.Sql
+    let rotaFilterManut: Prisma.Sql
+
+    if (userRotaIds !== null) {
+      // AcessoControlado: filtrar pelas rotas do usuário
+      if (rotaId && !userRotaIds.includes(rotaId)) {
+        return NextResponse.json({ eventos: [], stats: { totalVencimentos: 0, totalRecebidos: 0, totalPendente: 0, taxaAdimplencia: 100 } })
+      }
+      const rotaIds = rotaId ? [rotaId] : userRotaIds
+      rotaFilter = Prisma.sql`AND cl."rotaId" IN (${Prisma.join(rotaIds)})`
+      rotaFilterManut = Prisma.sql`AND l."clienteId" IN (SELECT id FROM clientes WHERE "rotaId" IN (${Prisma.join(rotaIds)}))`
+    } else {
+      // Admin/Secretário: filtro opcional por rota
+      rotaFilter = rotaId
+        ? Prisma.sql`AND cl."rotaId" = ${rotaId}`
+        : Prisma.empty
+      rotaFilterManut = rotaId
+        ? Prisma.sql`AND l."clienteId" IN (SELECT id FROM clientes WHERE "rotaId" = ${rotaId})`
+        : Prisma.empty
+    }
 
     interface AgendaEvent {
       id: string
@@ -169,10 +196,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ eventos, stats })
   } catch (error) {
-    console.error('Erro ao buscar agenda:', error)
-    return NextResponse.json(
-      { error: 'Erro ao buscar agenda' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }

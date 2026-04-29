@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, notFound, serverError, forbidden } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, notFound, serverError, forbidden, handleApiError } from '@/lib/api-helpers'
+import { atributoProdutoUpdateSchema } from '@/lib/validations'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -14,8 +15,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     if (!item) return notFound('Tipo de produto não encontrado')
     return NextResponse.json(item)
   } catch (err) {
-    console.error('[GET /tipos-produto/id]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }
 
@@ -26,19 +26,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (session.user.tipoPermissao !== 'Administrador') return forbidden()
 
   try {
-    const body = await req.json()
-    const nome = typeof body.nome === 'string' ? body.nome.trim() : ''
-    if (!nome || nome.length < 2) {
-      return NextResponse.json({ error: 'Nome deve ter pelo menos 2 caracteres' }, { status: 400 })
-    }
-
     const existing = await prisma.tipoProduto.findFirst({ where: { id, deletedAt: null } })
     if (!existing) return notFound('Tipo de produto não encontrado')
+
+    const body = await req.json()
+    const data = atributoProdutoUpdateSchema.parse(body)
 
     const item = await prisma.tipoProduto.update({
       where: { id },
       data: {
-        nome,
+        nome: data.nome,
         version: { increment: 1 },
         deviceId: 'web',
         needsSync: true,
@@ -46,8 +43,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     })
     return NextResponse.json(item)
   } catch (err) {
-    console.error('[PUT /tipos-produto/id]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }
 
@@ -71,7 +67,6 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     })
     return NextResponse.json({ success: true })
   } catch (err) {
-    console.error('[DELETE /tipos-produto/id]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }

@@ -1,15 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
+import { getAuthSession, getUserRotaIds, unauthorized, handleApiError } from '@/lib/api-helpers'
 
+// GET /api/mapa — Buscar dados do mapa (clientes com coordenadas)
 export async function GET(request: NextRequest) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
   try {
     const { searchParams } = new URL(request.url)
     const rotaId = searchParams.get('rotaId')
 
-    const rotaFilter = rotaId
-      ? Prisma.sql`AND c."rotaId" = ${rotaId}`
-      : Prisma.empty
+    // Controle de acesso por rota
+    const userRotaIds = await getUserRotaIds(session)
+
+    // Se AcessoControlado sem rotas atribuídas, retornar vazio
+    if (userRotaIds !== null && userRotaIds.length === 0) {
+      return NextResponse.json({ clientes: [], rotas: [] })
+    }
+
+    // Filtro de rota: query param OU restrição do usuário
+    let rotaFilter: Prisma.Sql
+    if (userRotaIds !== null) {
+      // AcessoControlado: filtrar pelas rotas do usuário
+      if (rotaId && !userRotaIds.includes(rotaId)) {
+        return NextResponse.json({ clientes: [], rotas: [] })
+      }
+      const rotaIds = rotaId ? [rotaId] : userRotaIds
+      rotaFilter = Prisma.sql`AND c."rotaId" IN (${Prisma.join(rotaIds)})`
+    } else {
+      // Admin/Secretário: filtro opcional por rota
+      rotaFilter = rotaId
+        ? Prisma.sql`AND c."rotaId" = ${rotaId}`
+        : Prisma.empty
+    }
 
     const clientes = await prisma.$queryRaw<any[]>(Prisma.sql`
       SELECT
@@ -49,6 +74,17 @@ export async function GET(request: NextRequest) {
       ORDER BY r.descricao, c."nomeExibicao"
     `)
 
+    // Filtro de rotas para a query de resumo
+    let rotaFilterRotas: Prisma.Sql
+    if (userRotaIds !== null) {
+      const rotaIds = rotaId ? [rotaId] : userRotaIds
+      rotaFilterRotas = Prisma.sql`AND r.id IN (${Prisma.join(rotaIds)})`
+    } else {
+      rotaFilterRotas = rotaId
+        ? Prisma.sql`AND r.id = ${rotaId}`
+        : Prisma.empty
+    }
+
     const rotas = await prisma.$queryRaw<any[]>(Prisma.sql`
       SELECT 
         r.id, 
@@ -59,17 +95,13 @@ export async function GET(request: NextRequest) {
       FROM rotas r
       LEFT JOIN clientes c ON c."rotaId" = r.id AND c."deletedAt" IS NULL AND c.latitude IS NOT NULL
       WHERE r."deletedAt" IS NULL
-      ${rotaId ? Prisma.sql`AND r.id = ${rotaId}` : Prisma.empty}
+        ${rotaFilterRotas}
       GROUP BY r.id, r.descricao
       ORDER BY r.descricao
     `)
 
     return NextResponse.json({ clientes, rotas })
   } catch (error) {
-    console.error('Erro ao buscar dados do mapa:', error)
-    return NextResponse.json(
-      { error: 'Erro ao buscar dados do mapa' },
-      { status: 500 }
-    )
+    return handleApiError(error)
   }
 }

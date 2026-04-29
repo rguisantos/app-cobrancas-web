@@ -283,6 +283,38 @@ export const metaUpdateSchema = z.object({
   { message: 'Data de fim deve ser posterior à data de início', path: ['dataFim'] },
 )
 
+// ─── Estabelecimento ───────────────────────────────────────
+
+export const estabelecimentoCreateSchema = z.object({
+  nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100, 'Nome deve ter no máximo 100 caracteres'),
+  endereco: z.string().max(200, 'Endereço deve ter no máximo 200 caracteres').optional().nullable(),
+  observacao: z.string().max(500, 'Observação deve ter no máximo 500 caracteres').optional().nullable(),
+})
+
+export const estabelecimentoUpdateSchema = z.object({
+  nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100, 'Nome deve ter no máximo 100 caracteres').optional(),
+  endereco: z.string().max(200, 'Endereço deve ter no máximo 200 caracteres').optional().nullable(),
+  observacao: z.string().max(500, 'Observação deve ter no máximo 500 caracteres').optional().nullable(),
+})
+
+// ─── Histórico Relógio ──────────────────────────────────────
+
+export const historicoRelogioCreateSchema = z.object({
+  produtoId: z.string().min(1, 'Produto é obrigatório'),
+  relogioNovo: z.string().min(1, 'Novo relógio é obrigatório'),
+  motivo: z.string().min(1, 'Motivo é obrigatório'),
+})
+
+// ─── Atributo de Produto (Tipos/Descrições/Tamanhos) ────────
+
+export const atributoProdutoCreateSchema = z.object({
+  nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100, 'Nome deve ter no máximo 100 caracteres'),
+})
+
+export const atributoProdutoUpdateSchema = z.object({
+  nome: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100, 'Nome deve ter no máximo 100 caracteres'),
+})
+
 // ─── Autenticação ───────────────────────────────────────────
 
 export const loginSchema = z.object({
@@ -328,6 +360,11 @@ export type RotaUpdateInput = z.infer<typeof rotaUpdateSchema>
 export type RelocarInput = z.infer<typeof relocarSchema>
 export type EnviarEstoqueInput = z.infer<typeof enviarEstoqueSchema>
 export type FinalizarLocacaoInput = z.infer<typeof finalizarLocacaoSchema>
+export type EstabelecimentoCreateInput = z.infer<typeof estabelecimentoCreateSchema>
+export type EstabelecimentoUpdateInput = z.infer<typeof estabelecimentoUpdateSchema>
+export type HistoricoRelogioCreateInput = z.infer<typeof historicoRelogioCreateSchema>
+export type AtributoProdutoCreateInput = z.infer<typeof atributoProdutoCreateSchema>
+export type AtributoProdutoUpdateInput = z.infer<typeof atributoProdutoUpdateSchema>
 export type LoginInput = z.infer<typeof loginSchema>
 export type TrocarSenhaInput = z.infer<typeof trocarSenhaSchema>
 export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>

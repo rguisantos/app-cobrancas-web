@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, forbidden, serverError, badRequest, validateBody, ApiError } from '@/lib/api-helpers'
-import { manutencaoCreateSchema } from '@/lib/validations'
+import { getAuthSession, unauthorized, forbidden, notFound, serverError, badRequest, validateBody, handleApiError, ApiError } from '@/lib/api-helpers'
+import { manutencaoCreateSchema, manutencaoUpdateSchema } from '@/lib/validations'
 
 export async function GET(req: NextRequest) {
   const session = await getAuthSession()
@@ -98,49 +98,38 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const manutencao = await prisma.manutencao.create({
-      data: {
-        produtoId: data.produtoId,
-        produtoIdentificador,
-        produtoTipo,
-        clienteId,
-        clienteNome,
-        locacaoId,
-        cobrancaId: data.cobrancaId,
-        tipo: data.tipo,
-        descricao: data.descricao,
-        data: data.data,
-        registradoPor: data.registradoPor || session.user.id,
-      },
-    })
-
-    // Se tipo for 'manutencao', atualizar o produto
-    if (data.tipo === 'manutencao') {
-      await prisma.produto.update({
+    // Criar manutenção e atualizar produto em transação
+    const [manutencao] = await prisma.$transaction([
+      prisma.manutencao.create({
+        data: {
+          produtoId: data.produtoId,
+          produtoIdentificador,
+          produtoTipo,
+          clienteId,
+          clienteNome,
+          locacaoId,
+          cobrancaId: data.cobrancaId,
+          tipo: data.tipo,
+          descricao: data.descricao,
+          data: data.data,
+          registradoPor: data.registradoPor || session.user.id,
+        },
+      }),
+      // Atualizar produto conforme tipo de manutenção
+      prisma.produto.update({
         where: { id: data.produtoId },
         data: {
           dataUltimaManutencao: data.data,
-          statusProduto: 'Manutenção',
+          ...(data.tipo === 'manutencao' ? { statusProduto: 'Manutenção' } : {}),
+          needsSync: true,
+          version: { increment: 1 },
+          deviceId: 'web',
         },
-      })
-    }
-
-    // Se tipo for 'trocaPano', atualizar a dataUltimaManutencao do produto
-    if (data.tipo === 'trocaPano') {
-      await prisma.produto.update({
-        where: { id: data.produtoId },
-        data: {
-          dataUltimaManutencao: data.data,
-        },
-      })
-    }
+      }),
+    ])
 
     return NextResponse.json(manutencao, { status: 201 })
   } catch (err) {
-    if (err instanceof ApiError) {
-      return NextResponse.json({ error: err.message, details: err.details }, { status: err.statusCode })
-    }
-    console.error('[POST /manutencoes]', err)
-    return serverError()
+    return handleApiError(err)
   }
 }

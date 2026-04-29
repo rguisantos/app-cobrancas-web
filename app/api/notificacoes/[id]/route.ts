@@ -2,7 +2,7 @@
 // DELETE /api/notificacoes/[id] — Excluir notificação
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAuthSession, unauthorized, notFound } from '@/lib/api-helpers'
+import { getAuthSession, unauthorized, notFound, handleApiError } from '@/lib/api-helpers'
 
 export async function PUT(
   req: NextRequest,
@@ -28,8 +28,7 @@ export async function PUT(
 
     return NextResponse.json(updated)
   } catch (error) {
-    console.error('[PUT /api/notificacoes/[id]]', error)
-    return NextResponse.json({ error: 'Erro ao atualizar notificação' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -54,7 +53,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('[DELETE /api/notificacoes/[id]]', error)
-    return NextResponse.json({ error: 'Erro ao excluir notificação' }, { status: 500 })
+    return handleApiError(error)
   }
 }

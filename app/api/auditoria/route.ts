@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@prisma/client'
+import { getAuthSession, unauthorized, handleApiError } from '@/lib/api-helpers'
 
+// GET /api/auditoria — Listar logs de auditoria
 export async function GET(request: NextRequest) {
+  const session = await getAuthSession()
+  if (!session) return unauthorized()
+
   try {
     const { searchParams } = new URL(request.url)
     const entityType = searchParams.get('entityType')
@@ -54,8 +58,7 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Erro ao buscar auditoria:', error)
-    return NextResponse.json({ error: 'Erro ao buscar logs de auditoria' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 

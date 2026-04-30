@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useCepLookup } from './useCepLookup'
 import { formatCPF, formatCNPJ, formatPhone, formatRG, formatCEP, unmask } from '@/lib/utils/masks'
+import { extractArray } from '@/lib/utils'
 import type { TipoPessoa } from '@cobrancas/shared'
 
 // Types for the supporting data
@@ -159,8 +160,8 @@ export function useClienteForm(options: UseClienteFormOptions = {}): UseClienteF
 
     Promise.all(promises)
       .then(async (results) => {
-        setRotas(results[0])
-        setEstados(results[1])
+        setRotas(extractArray(results[0]))
+        setEstados(extractArray(results[1]))
 
         // If editing, populate form with existing data
         if (clienteId && results[2]) {

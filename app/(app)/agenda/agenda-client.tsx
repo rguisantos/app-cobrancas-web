@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, addMonths, subMonths, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import { extractArray } from '@/lib/utils'
 
 interface AgendaEvent {
   id: string
@@ -80,7 +81,7 @@ export default function AgendaClient() {
   useEffect(() => {
     fetch('/api/rotas')
       .then(r => r.ok ? r.json() : [])
-      .then(data => setRotas(Array.isArray(data) ? data : data.rotas || []))
+      .then(data => setRotas(extractArray(data)))
       .catch(() => {})
   }, [])
 

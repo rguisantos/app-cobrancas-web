@@ -14,6 +14,7 @@ import {
   Clock,
   X,
 } from 'lucide-react'
+import { extractArray } from '@/lib/utils'
 
 interface Meta {
   id: string
@@ -55,7 +56,7 @@ export default function MetasClient() {
     fetchMetas()
     fetch('/api/rotas')
       .then(r => r.ok ? r.json() : [])
-      .then(d => setRotas(Array.isArray(d) ? d : d.rotas || []))
+      .then(d => setRotas(extractArray(d)))
       .catch(() => {})
   }, [])
 

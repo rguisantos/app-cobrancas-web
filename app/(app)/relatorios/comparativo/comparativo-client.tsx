@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Loader2,
 } from 'lucide-react'
+import { extractArray } from '@/lib/utils'
 import {
   BarChart,
   Bar,
@@ -52,7 +53,7 @@ export default function ComparativoClient() {
   useState(() => {
     fetch('/api/rotas')
       .then(r => r.ok ? r.json() : [])
-      .then(d => setRotas(Array.isArray(d) ? d : d.rotas || []))
+      .then(d => setRotas(extractArray(d)))
       .catch(() => {})
   })
 

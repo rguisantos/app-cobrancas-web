@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react'
 import Header from '@/components/layout/header'
 import { useToast } from '@/components/ui/toaster'
 import UsuarioForm, { UsuarioFormData } from '@/components/usuarios/UsuarioForm'
+import { extractArray } from '@/lib/utils'
 
 interface Rota {
   id: string
@@ -21,7 +22,7 @@ export default function NovoUsuarioPage() {
   useEffect(() => {
     fetch('/api/rotas?status=Ativo')
       .then(res => res.json())
-      .then(data => setRotas(data))
+      .then(data => setRotas(extractArray(data)))
       .catch(console.error)
   }, [])
 

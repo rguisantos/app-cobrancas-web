@@ -7,6 +7,7 @@ import { ReportFilters, FilterConfig } from '../components/report-filters'
 import { exportarCSV } from '../components/csv-export'
 import { ChartCard } from '../components/chart-card'
 import { formatarMoeda } from '@/shared/types'
+import { extractArray } from '@/lib/utils'
 import { DollarSign, TrendingUp, CheckCircle, AlertTriangle } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -33,11 +34,8 @@ export default function FinanceiroPage() {
     try {
       const res = await fetch('/api/rotas')
       const json = await res.json()
-      if (Array.isArray(json)) {
-        setRotaOptions(json.map((r: any) => ({ value: String(r.id), label: r.descricao })))
-      } else if (json.rotas) {
-        setRotaOptions(json.rotas.map((r: any) => ({ value: String(r.id), label: r.descricao })))
-      }
+      const rotasList = extractArray(json)
+      setRotaOptions(rotasList.map((r: any) => ({ value: String(r.id), label: r.descricao })))
     } catch {}
   }
 

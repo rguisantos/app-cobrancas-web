@@ -7,6 +7,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react'
 import Header from '@/components/layout/header'
 import { useToast } from '@/components/ui/toaster'
 import UsuarioForm, { UsuarioFormData } from '@/components/usuarios/UsuarioForm'
+import { extractArray } from '@/lib/utils'
 
 interface Rota {
   id: string
@@ -28,7 +29,7 @@ export default function EditarUsuarioPage() {
       fetch(`/api/usuarios/${id}`).then(res => res.json()),
     ])
       .then(([rotasData, usuarioData]) => {
-        setRotas(rotasData)
+        setRotas(extractArray(rotasData))
         // Map rotasPermitidasRel to rotasPermitidas (array of IDs)
         const rotasPermitidas = usuarioData.rotasPermitidasRel
           ? usuarioData.rotasPermitidasRel.map((r: any) => r.rotaId)

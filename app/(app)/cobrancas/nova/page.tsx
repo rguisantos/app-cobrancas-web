@@ -3,12 +3,28 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Calculator, Loader2, FileText, Hash, DollarSign, Calendar, User, Package, Wrench } from 'lucide-react'
+import {
+  ArrowLeft, Save, Calculator, Loader2, FileText, Hash, DollarSign,
+  Calendar, User, Package, Wrench, MapPin, ChevronDown, ChevronRight,
+  AlertCircle, CheckCircle2, Clock
+} from 'lucide-react'
 import Header from '@/components/layout/header'
 import { formatarMoeda } from '@/shared/types'
 import { useToast } from '@/components/ui/toaster'
 
-interface Locacao {
+// ============================================================================
+// TIPOS
+// ============================================================================
+
+interface Rota {
+  id: string
+  descricao: string
+  cor: string
+  regiao: string | null
+  _count?: { clientes: number }
+}
+
+interface LocacaoPorRota {
   id: string
   clienteId: string
   clienteNome: string
@@ -18,19 +34,42 @@ interface Locacao {
   numeroRelogio: string
   precoFicha: number
   percentualEmpresa: number
-  ultimaLeituraRelogio: number | null
   status: string
+  dataLocacao: string
+  saldoDevedor: number
+  cliente?: { nomeExibicao: string; rotaId: string }
 }
+
+interface ClienteGrupo {
+  clienteId: string
+  clienteNome: string
+  locacoes: LocacaoPorRota[]
+}
+
+// ============================================================================
+// COMPONENTE PRINCIPAL
+// ============================================================================
 
 export default function NovaCobrancaPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const locacaoIdPreSelect = searchParams.get('locacaoId')
 
-  const [loading, setLoading] = useState(false)
-  const [locacoes, setLocacoes] = useState<Locacao[]>([])
-  const [locacaoSelecionada, setLocacaoSelecionada] = useState<Locacao | null>(null)
   const { warning, error: toastError } = useToast()
+  const [loading, setLoading] = useState(false)
+  const [loadingRotas, setLoadingRotas] = useState(true)
+  const [loadingClientes, setLoadingClientes] = useState(false)
+
+  // Etapa 1: Rotas
+  const [rotas, setRotas] = useState<Rota[]>([])
+  const [rotaSelecionada, setRotaSelecionada] = useState<string>('')
+
+  // Etapa 2: Clientes com locações
+  const [clientes, setClientes] = useState<ClienteGrupo[]>([])
+  const [clienteExpandido, setClienteExpandido] = useState<string | null>(null)
+
+  // Etapa 3: Locação selecionada
+  const [locacaoSelecionada, setLocacaoSelecionada] = useState<LocacaoPorRota | null>(null)
 
   const [formData, setFormData] = useState({
     locacaoId: locacaoIdPreSelect || '',
@@ -55,19 +94,61 @@ export default function NovaCobrancaPage() {
     totalComSaldoAnterior: 0
   })
 
+  // ==========================================================================
+  // EFFECTS
+  // ==========================================================================
+
+  // Carregar rotas ao montar
   useEffect(() => {
-    fetch('/api/locacoes?status=Ativa&limit=1000')
+    fetch('/api/rotas?status=Ativo&limit=100')
       .then(res => res.json())
       .then(data => {
-        const locacoesData = data.data || data
-        setLocacoes(locacoesData)
+        const rotasData = data.data || data
+        setRotas(rotasData)
+      })
+      .catch(err => {
+        console.error('Erro ao buscar rotas:', err)
+        toastError('Erro ao carregar rotas')
+      })
+      .finally(() => setLoadingRotas(false))
+  }, [])
+
+  // Quando selecionar rota, buscar clientes/locações
+  useEffect(() => {
+    if (!rotaSelecionada) {
+      setClientes([])
+      setClienteExpandido(null)
+      return
+    }
+
+    setLoadingClientes(true)
+    setClienteExpandido(null)
+    setLocacaoSelecionada(null)
+
+    fetch(`/api/locacoes/por-rota?rotaId=${rotaSelecionada}`)
+      .then(res => res.json())
+      .then(data => {
+        const clientesData = data.data || []
+        setClientes(clientesData)
+
+        // Se veio locacaoIdPreSelect, tentar pré-selecionar
         if (locacaoIdPreSelect) {
-          const loc = locacoesData.find((l: Locacao) => l.id === locacaoIdPreSelect)
-          if (loc) setLocacaoSelecionada(loc)
+          for (const cl of clientesData) {
+            const loc = cl.locacoes.find((l: LocacaoPorRota) => l.id === locacaoIdPreSelect)
+            if (loc) {
+              setClienteExpandido(cl.clienteId)
+              handleSelectLocacao(loc)
+              break
+            }
+          }
         }
       })
-      .catch(console.error)
-  }, [locacaoIdPreSelect])
+      .catch(err => {
+        console.error('Erro ao buscar clientes:', err)
+        toastError('Erro ao carregar clientes')
+      })
+      .finally(() => setLoadingClientes(false))
+  }, [rotaSelecionada]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Buscar saldo devedor da cobrança anterior quando locação for selecionada
   useEffect(() => {
@@ -94,13 +175,13 @@ export default function NovaCobrancaPage() {
       })
   }, [locacaoSelecionada])
 
+  // Recalcular quando inputs mudam
   useEffect(() => {
     if (!locacaoSelecionada) {
       setCalculos({ fichasRodadas: 0, totalBruto: 0, subtotalAposDescontos: 0, valorPercentual: 0, totalClientePaga: 0, totalComSaldoAnterior: 0 })
       return
     }
 
-    // numeroRelogio é o valor atual do relógio (mesmo na locação e no produto)
     const relogioAnterior = parseFloat(locacaoSelecionada.numeroRelogio) || 0
     const relogioAtual = parseFloat(formData.relogioAtual) || 0
     const fichasRodadas = Math.max(0, relogioAtual - relogioAnterior)
@@ -109,9 +190,7 @@ export default function NovaCobrancaPage() {
     const descontoPartidasQtd = parseFloat(formData.descontoPartidasQtd) || 0
     const descontoPartidasValor = descontoPartidasQtd * locacaoSelecionada.precoFicha
     const descontoDinheiro = parseFloat(formData.descontoDinheiro) || 0
-    
-    // Desconto Partidas reduz o subtotal (antes do percentual)
-    // Desconto Dinheiro reduz o líquido do cliente (após o percentual)
+
     const subtotalAposDescontos = totalBruto - descontoPartidasValor
     const valorPercentual = subtotalAposDescontos * (locacaoSelecionada.percentualEmpresa / 100)
     const totalClientePaga = subtotalAposDescontos - valorPercentual - descontoDinheiro
@@ -127,12 +206,18 @@ export default function NovaCobrancaPage() {
     })
   }, [locacaoSelecionada, formData.relogioAtual, formData.descontoPartidasQtd, formData.descontoDinheiro, saldoAnterior])
 
-  const handleLocacaoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const locacaoId = e.target.value
-    const loc = locacoes.find(l => l.id === locacaoId)
-    setLocacaoSelecionada(loc || null)
+  // ==========================================================================
+  // HANDLERS
+  // ==========================================================================
+
+  const handleSelectLocacao = (loc: LocacaoPorRota) => {
+    setLocacaoSelecionada(loc)
     setSaldoAnterior(0)
-    setFormData(prev => ({ ...prev, locacaoId }))
+    setFormData(prev => ({ ...prev, locacaoId: loc.id, relogioAtual: '', valorRecebido: '' }))
+    // Scroll para a seção de relógio
+    setTimeout(() => {
+      document.getElementById('secao-relogio')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -144,7 +229,6 @@ export default function NovaCobrancaPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Proteção contra duplo clique
     if (loading) return
 
     if (!locacaoSelecionada) {
@@ -152,7 +236,6 @@ export default function NovaCobrancaPage() {
       return
     }
 
-    // numeroRelogio é o valor atual do relógio (mesmo na locação e no produto)
     const relogioAnterior = parseFloat(locacaoSelecionada.numeroRelogio) || 0
     const relogioAtual = parseFloat(formData.relogioAtual) || 0
 
@@ -173,7 +256,7 @@ export default function NovaCobrancaPage() {
         body: JSON.stringify({
           locacaoId: formData.locacaoId,
           clienteId: locacaoSelecionada.clienteId,
-          clienteNome: locacaoSelecionada.clienteNome,
+          clienteNome: locacaoSelecionada.cliente?.nomeExibicao ?? locacaoSelecionada.clienteNome,
           produtoId: locacaoSelecionada.produtoId,
           produtoIdentificador: locacaoSelecionada.produtoIdentificador,
           dataInicio: formData.dataInicio || new Date().toISOString().split('T')[0],
@@ -200,8 +283,6 @@ export default function NovaCobrancaPage() {
       })
 
       if (res.ok) {
-        // No need to call PUT /locacoes — the cobrança POST already propagates
-        // ultimaLeituraRelogio, dataUltimaCobranca, numeroRelogio, and trocaPano
         router.push('/cobrancas')
       } else {
         const errorData = await res.json()
@@ -213,6 +294,15 @@ export default function NovaCobrancaPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ==========================================================================
+  // RENDER HELPERS
+  // ==========================================================================
+
+  const statusLocacaoConfig: Record<string, { bg: string; text: string; label: string }> = {
+    Ativa: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', label: 'Ativa' },
+    Finalizada: { bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700', label: 'Finalizada' },
   }
 
   return (
@@ -229,89 +319,280 @@ export default function NovaCobrancaPage() {
       />
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Selecionar Locação */}
+
+        {/* ================================================================ */}
+        {/* ETAPA 1: Selecionar Rota                                        */}
+        {/* ================================================================ */}
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+          <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-indigo-50">
             <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-blue-600" />
-              Selecionar Locação
+              <MapPin className="w-5 h-5 text-blue-600" />
+              Selecionar Rota
             </h2>
+            <p className="text-xs text-slate-500 mt-0.5">Escolha a rota para ver os clientes e locações</p>
           </div>
           <div className="p-4 md:p-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                Locação Ativa <span className="text-red-500">*</span>
-              </label>
-              <select
-                name="locacaoId"
-                value={formData.locacaoId}
-                onChange={handleLocacaoChange}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all bg-white"
-                required
-              >
-                <option value="">Selecione uma locação</option>
-                {locacoes.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.clienteNome} - {l.produtoTipo} N° {l.produtoIdentificador} (Relógio: {l.numeroRelogio})
-                  </option>
+            {loadingRotas ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                <span className="ml-2 text-slate-500">Carregando rotas...</span>
+              </div>
+            ) : rotas.length === 0 ? (
+              <div className="text-center py-8 text-slate-500">
+                <MapPin className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                <p>Nenhuma rota ativa encontrada</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {rotas.map(r => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => {
+                      setRotaSelecionada(r.id)
+                      setLocacaoSelecionada(null)
+                      setFormData(prev => ({ ...prev, locacaoId: '' }))
+                    }}
+                    className={`p-4 rounded-xl border-2 text-left transition-all ${
+                      rotaSelecionada === r.id
+                        ? 'border-blue-500 bg-blue-50 shadow-md ring-1 ring-blue-200'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-4 h-4 rounded-full flex-shrink-0 ring-2 ring-white shadow-sm"
+                        style={{ backgroundColor: r.cor || '#2563EB' }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-slate-900 truncate">{r.descricao}</p>
+                        {r.regiao && (
+                          <p className="text-xs text-slate-500 truncate">{r.regiao}</p>
+                        )}
+                      </div>
+                      {r._count && (
+                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full flex-shrink-0">
+                          {r._count.clientes} cliente{r._count.clientes !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  </button>
                 ))}
-              </select>
-            </div>
-
-            {locacaoSelecionada && (
-              <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                    <User className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-500">Cliente</span>
-                    <p className="font-medium text-slate-900">{locacaoSelecionada.clienteNome}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                    <Package className="w-5 h-5 text-purple-600" />
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-500">Produto</span>
-                    <p className="font-medium text-slate-900">{locacaoSelecionada.produtoTipo} N° {locacaoSelecionada.produtoIdentificador}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <Hash className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-500">Relógio Atual</span>
-                    <p className="font-mono font-bold text-slate-900">{locacaoSelecionada.numeroRelogio}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-500">Preço Ficha</span>
-                    <p className="font-medium text-slate-900">{formatarMoeda(locacaoSelecionada.precoFicha)}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-rose-100 flex items-center justify-center">
-                    <span className="text-sm font-bold text-rose-600">%</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-500">% Empresa</span>
-                    <p className="font-medium text-slate-900">{locacaoSelecionada.percentualEmpresa}%</p>
-                  </div>
-                </div>
               </div>
             )}
           </div>
         </section>
 
+        {/* ================================================================ */}
+        {/* ETAPA 2: Clientes e Locações da Rota                            */}
+        {/* ================================================================ */}
+        {rotaSelecionada && (
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-teal-50">
+              <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+                <User className="w-5 h-5 text-emerald-600" />
+                Clientes e Locações
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Selecione a locação para registrar a cobrança
+                {clientes.length > 0 && (
+                  <span className="ml-1 font-medium text-slate-700">
+                    — {clientes.length} cliente{clientes.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="p-4 md:p-6">
+              {loadingClientes ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+                  <span className="ml-2 text-slate-500">Carregando clientes...</span>
+                </div>
+              ) : clientes.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <User className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                  <p>Nenhum cliente com locação ativa nesta rota</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {clientes.map(cliente => {
+                    const isExpandido = clienteExpandido === cliente.clienteId
+                    const locacoesAtivas = cliente.locacoes.filter(l => l.status === 'Ativa').length
+                    const locacoesSaldo = cliente.locacoes.filter(l => l.saldoDevedor > 0).length
+                    const saldoTotal = cliente.locacoes.reduce((sum, l) => sum + l.saldoDevedor, 0)
+
+                    return (
+                      <div
+                        key={cliente.clienteId}
+                        className={`rounded-xl border-2 overflow-hidden transition-all ${
+                          isExpandido
+                            ? 'border-emerald-300 bg-emerald-50/30'
+                            : 'border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        {/* Header do Cliente */}
+                        <button
+                          type="button"
+                          onClick={() => setClienteExpandido(isExpandido ? null : cliente.clienteId)}
+                          className="w-full p-4 flex items-center gap-3 text-left"
+                        >
+                          {isExpandido ? (
+                            <ChevronDown className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                          ) : (
+                            <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                          )}
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+                            {cliente.clienteNome?.charAt(0)?.toUpperCase() ?? '?'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-slate-900 truncate">{cliente.clienteNome}</p>
+                            <div className="flex items-center gap-3 mt-0.5">
+                              <span className="text-xs text-emerald-600 font-medium">
+                                {locacoesAtivas} ativa{locacoesAtivas !== 1 ? 's' : ''}
+                              </span>
+                              {saldoTotal > 0 && (
+                                <span className="text-xs text-red-600 font-medium flex items-center gap-0.5">
+                                  <AlertCircle className="w-3 h-3" />
+                                  Deve {formatarMoeda(saldoTotal)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-xs text-slate-400 flex-shrink-0">
+                            {cliente.locacoes.length} locação{cliente.locacoes.length !== 1 ? 'ões' : ''}
+                          </span>
+                        </button>
+
+                        {/* Locações do Cliente */}
+                        {isExpandido && (
+                          <div className="px-4 pb-4 space-y-2">
+                            {cliente.locacoes.map(loc => {
+                              const isSelected = locacaoSelecionada?.id === loc.id
+                              const stConfig = statusLocacaoConfig[loc.status] || statusLocacaoConfig['Ativa']
+
+                              return (
+                                <button
+                                  key={loc.id}
+                                  type="button"
+                                  onClick={() => handleSelectLocacao(loc)}
+                                  className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
+                                    isSelected
+                                      ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-200'
+                                      : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                      loc.status === 'Ativa' ? 'bg-emerald-100' : 'bg-amber-100'
+                                    }`}>
+                                      <Package className={`w-4 h-4 ${
+                                        loc.status === 'Ativa' ? 'text-emerald-600' : 'text-amber-600'
+                                      }`} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono font-semibold text-slate-900">
+                                          {loc.produtoTipo} N° {loc.produtoIdentificador}
+                                        </span>
+                                        <span className={`text-xs px-1.5 py-0.5 rounded border ${stConfig.bg} ${stConfig.text}`}>
+                                          {stConfig.label}
+                                        </span>
+                                        {isSelected && (
+                                          <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-3 mt-0.5">
+                                        <span className="text-xs text-slate-500 flex items-center gap-1">
+                                          <Hash className="w-3 h-3" />
+                                          Relógio: {loc.numeroRelogio}
+                                        </span>
+                                        <span className="text-xs text-slate-500">
+                                          {formatarMoeda(loc.precoFicha)}/ficha
+                                        </span>
+                                        {loc.saldoDevedor > 0 && (
+                                          <span className="text-xs text-red-600 font-medium flex items-center gap-0.5">
+                                            <AlertCircle className="w-3 h-3" />
+                                            Deve {formatarMoeda(loc.saldoDevedor)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* ================================================================ */}
+        {/* ETAPA 3: Dados da Cobrança                                      */}
+        {/* ================================================================ */}
         {locacaoSelecionada && (
           <>
+            {/* Info da locação selecionada */}
+            <div id="secao-relogio" className="bg-blue-50 rounded-xl border border-blue-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                <span className="font-semibold text-blue-900">
+                  Locação selecionada: {locacaoSelecionada.produtoTipo} N° {locacaoSelecionada.produtoIdentificador}
+                </span>
+                <span className={`text-xs px-1.5 py-0.5 rounded border ${
+                  locacaoSelecionada.status === 'Ativa'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    : 'bg-amber-50 border-amber-200 text-amber-700'
+                }`}>
+                  {locacaoSelecionada.status}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-emerald-600" />
+                  <div>
+                    <span className="text-xs text-slate-500">Cliente</span>
+                    <p className="text-sm font-medium text-slate-900 truncate">{locacaoSelecionada.cliente?.nomeExibicao ?? locacaoSelecionada.clienteNome}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Hash className="w-4 h-4 text-blue-600" />
+                  <div>
+                    <span className="text-xs text-slate-500">Relógio</span>
+                    <p className="text-sm font-mono font-bold text-slate-900">{locacaoSelecionada.numeroRelogio}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-amber-600" />
+                  <div>
+                    <span className="text-xs text-slate-500">Preço Ficha</span>
+                    <p className="text-sm font-medium text-slate-900">{formatarMoeda(locacaoSelecionada.precoFicha)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-rose-600">%</span>
+                  <div>
+                    <span className="text-xs text-slate-500">% Empresa</span>
+                    <p className="text-sm font-medium text-slate-900">{locacaoSelecionada.percentualEmpresa}%</p>
+                  </div>
+                </div>
+                {locacaoSelecionada.saldoDevedor > 0 && (
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600" />
+                    <div>
+                      <span className="text-xs text-slate-500">Saldo Devedor</span>
+                      <p className="text-sm font-bold text-red-600">{formatarMoeda(locacaoSelecionada.saldoDevedor)}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Leitura do Relógio */}
             <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
@@ -385,7 +666,6 @@ export default function NovaCobrancaPage() {
                   </div>
                 </div>
 
-                {/* Indicador de fichas rodadas */}
                 <div className="mt-4 flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
                   <span className="text-sm text-purple-700">Fichas Rodadas (Atual - Anterior)</span>
                   <span className="text-xl font-bold text-purple-700">
@@ -552,8 +832,8 @@ export default function NovaCobrancaPage() {
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">Saldo Devedor</label>
                     <div className={`text-2xl font-bold mt-2 ${
-                      (calculos.totalComSaldoAnterior - (parseFloat(formData.valorRecebido) || 0)) > 0 
-                        ? 'text-red-600' 
+                      (calculos.totalComSaldoAnterior - (parseFloat(formData.valorRecebido) || 0)) > 0
+                        ? 'text-red-600'
                         : 'text-emerald-600'
                     }`}>
                       {formatarMoeda(Math.max(0, calculos.totalComSaldoAnterior - (parseFloat(formData.valorRecebido) || 0)))}

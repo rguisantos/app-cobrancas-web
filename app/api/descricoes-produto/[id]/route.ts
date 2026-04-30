@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, notFound, forbidden, handleApiError } from '@/lib/api-helpers'
 import { atributoProdutoUpdateSchema } from '@/lib/validations'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -41,6 +42,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         needsSync: true,
       },
     })
+
+    const campos: Record<string, any> = {}
+    if (data.nome !== existing.nome) campos.nome = { de: existing.nome, para: data.nome }
+
+    registrarAuditoria({
+      acao: 'editar_descricao_produto',
+      entidade: 'descricaoProduto',
+      entidadeId: id,
+      detalhes: { nome: existing.nome, campos },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
+
     return NextResponse.json(item)
   } catch (err) {
     return handleApiError(err)
@@ -65,6 +78,15 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
         version: { increment: 1 },
       },
     })
+
+    registrarAuditoria({
+      acao: 'excluir_descricao_produto',
+      entidade: 'descricaoProduto',
+      entidadeId: id,
+      detalhes: { nome: existing.nome, softDelete: true },
+      ...extractRequestInfo(_),
+    }).catch(() => {})
+
     return NextResponse.json({ success: true })
   } catch (err) {
     return handleApiError(err)

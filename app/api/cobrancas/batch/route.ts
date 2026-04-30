@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, forbidden, badRequest, serverError } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function POST(req: NextRequest) {
   const session = await getAuthSession()
@@ -33,6 +34,18 @@ export async function POST(req: NextRequest) {
           where: { id: { in: ids }, deletedAt: null },
           data: { deletedAt: new Date() },
         })
+
+        // Auditoria: exclusão em lote — registrar cada item
+        for (const cobrancaId of ids) {
+          registrarAuditoria({
+            acao: 'excluir_cobranca',
+            entidade: 'cobranca',
+            entidadeId: cobrancaId,
+            detalhes: { softDelete: true, batch: true },
+            ...extractRequestInfo(req),
+          }).catch(() => {})
+        }
+
         return NextResponse.json({
           success: true,
           action: 'delete',
@@ -61,6 +74,18 @@ export async function POST(req: NextRequest) {
           where: { id: { in: ids }, deletedAt: null },
           data: updateData,
         })
+
+        // Auditoria: alteração de status em lote — registrar cada item
+        for (const cobrancaId of ids) {
+          registrarAuditoria({
+            acao: 'alterar_status_cobranca',
+            entidade: 'cobranca',
+            entidadeId: cobrancaId,
+            detalhes: { novoStatus: data.status, batch: true },
+            ...extractRequestInfo(req),
+          }).catch(() => {})
+        }
+
         return NextResponse.json({
           success: true,
           action: 'updateStatus',

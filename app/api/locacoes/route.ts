@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getUserRotaIds, unauthorized, forbidden, validateBody, handleApiError } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { locacaoCreateSchema } from '@/lib/validations'
 import { criarLocacao } from '@/lib/locacao-service'
 
@@ -61,6 +62,14 @@ export async function POST(req: NextRequest) {
     const data = validateBody(locacaoCreateSchema, body)
 
     const locacao = await criarLocacao(data, session.user.id)
+
+    registrarAuditoria({
+      acao: 'criar_locacao',
+      entidade: 'locacao',
+      entidadeId: locacao.id,
+      detalhes: { clienteNome: (locacao as any).clienteNome, produtoIdentificador: (locacao as any).produtoIdentificador },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
 
     return NextResponse.json(locacao, { status: 201 })
   } catch (err) {

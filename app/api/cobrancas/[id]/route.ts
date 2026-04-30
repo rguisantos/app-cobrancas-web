@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, notFound, serverError, forbidden } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -152,6 +153,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       data: dadosAtualizacao,
     })
 
+    // Auditoria: edição de cobrança
+    registrarAuditoria({
+      acao: 'editar_cobranca',
+      entidade: 'cobranca',
+      entidadeId: id,
+      detalhes: { campos: Object.keys(body).filter((k: string) => !['id', 'version', 'needsSync', 'syncStatus', 'lastSyncedAt', 'deviceId'].includes(k)) },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
+
     return NextResponse.json(cobrancaAtualizada)
   } catch (err) {
     console.error(err)
@@ -209,6 +219,15 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
         syncStatus: 'pending',
       },
     })
+
+    // Auditoria: exclusão de cobrança
+    registrarAuditoria({
+      acao: 'excluir_cobranca',
+      entidade: 'cobranca',
+      entidadeId: id,
+      detalhes: { clienteNome: cobrancaExistente.clienteNome, softDelete: true },
+      ...extractRequestInfo(_),
+    }).catch(() => {})
 
     return NextResponse.json({ success: true })
   } catch (err) {

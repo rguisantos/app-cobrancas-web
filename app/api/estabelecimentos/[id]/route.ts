@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, notFound, serverError, forbidden, validateBody, handleApiError } from '@/lib/api-helpers'
 import { estabelecimentoUpdateSchema } from '@/lib/validations'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -45,6 +46,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       where: { id },
       data: updateData,
     })
+
+    const campos: Record<string, any> = {}
+    if (data.nome !== undefined && data.nome !== existing.nome) campos.nome = { de: existing.nome, para: data.nome }
+    if (data.endereco !== undefined) campos.endereco = true
+    if (data.observacao !== undefined) campos.observacao = true
+
+    registrarAuditoria({
+      acao: 'editar_estabelecimento',
+      entidade: 'estabelecimento',
+      entidadeId: id,
+      detalhes: { nome: existing.nome, campos },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
+
     return NextResponse.json(item)
   } catch (err) {
     return handleApiError(err)
@@ -69,6 +84,15 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
         version: { increment: 1 },
       },
     })
+
+    registrarAuditoria({
+      acao: 'excluir_estabelecimento',
+      entidade: 'estabelecimento',
+      entidadeId: id,
+      detalhes: { nome: existing.nome, softDelete: true },
+      ...extractRequestInfo(_),
+    }).catch(() => {})
+
     return NextResponse.json({ success: true })
   } catch (err) {
     return handleApiError(err)

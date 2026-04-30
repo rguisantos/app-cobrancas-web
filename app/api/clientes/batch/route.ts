@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, forbidden, badRequest, serverError } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function POST(req: NextRequest) {
   const session = await getAuthSession()
@@ -38,6 +39,15 @@ export async function POST(req: NextRequest) {
             version: { increment: 1 },
           },
         })
+
+        registrarAuditoria({
+          acao: 'excluir_cliente',
+          entidade: 'cliente',
+          entidadeId: ids.join(','),
+          detalhes: { acao: 'batch_delete', ids, count: result.count, softDelete: true },
+          ...extractRequestInfo(req),
+        }).catch(() => {})
+
         return NextResponse.json({
           success: true,
           action: 'delete',

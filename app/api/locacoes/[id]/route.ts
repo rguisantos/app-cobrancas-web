@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, notFound, forbidden, validateBody, handleApiError, ApiError } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { locacaoUpdateSchema } from '@/lib/validations'
 import { validarTransicaoStatus } from '@/lib/locacao-service'
 
@@ -175,6 +176,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         synced: false,
       },
     })
+
+    registrarAuditoria({
+      acao: 'editar_locacao',
+      entidade: 'locacao',
+      entidadeId: id,
+      detalhes: { campos: updateData },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
 
     return NextResponse.json(locacaoAtualizada)
   } catch (err) {

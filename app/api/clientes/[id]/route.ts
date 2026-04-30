@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, notFound, serverError, forbidden, validateBody, handleApiError } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { clienteUpdateSchema } from '@/lib/validations'
 
 /** Check if user has permission to modify clientes */
@@ -59,6 +60,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     })
 
+    registrarAuditoria({
+      acao: 'editar_cliente',
+      entidade: 'cliente',
+      entidadeId: id,
+      detalhes: { nomeExibicao: cliente.nomeExibicao, campos: Object.keys(body).filter(k => !['id', 'version', 'needsSync', 'syncStatus', 'lastSyncedAt', 'deviceId'].includes(k)) },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
+
     return NextResponse.json(cliente)
   } catch (err) {
     return handleApiError(err)
@@ -72,7 +81,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   if (!canModify(session)) return forbidden('Sem permissão para excluir clientes')
 
   try {
-    await prisma.cliente.update({
+    const cliente = await prisma.cliente.update({
       where: { id },
       data: {
         deletedAt: new Date(),
@@ -81,6 +90,15 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
         version: { increment: 1 },
       },
     })
+
+    registrarAuditoria({
+      acao: 'excluir_cliente',
+      entidade: 'cliente',
+      entidadeId: id,
+      detalhes: { nomeExibicao: cliente.nomeExibicao, softDelete: true },
+      ...extractRequestInfo(_),
+    }).catch(() => {})
+
     return NextResponse.json({ success: true })
   } catch {
     return serverError()

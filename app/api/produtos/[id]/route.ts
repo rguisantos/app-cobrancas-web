@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, notFound, serverError, forbidden, badRequest } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { z } from 'zod'
 
 // Schema de validação para atualização — todos os campos opcionais, mas validados se presentes
@@ -102,6 +103,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         needsSync: true,
       },
     })
+
+    registrarAuditoria({
+      acao: 'editar_produto',
+      entidade: 'produto',
+      entidadeId: id,
+      detalhes: { identificador: produto.identificador, campos: data },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
+
     return NextResponse.json(produtoAtualizado)
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -146,6 +156,15 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       where: { id },
       data: { deletedAt: new Date(), statusProduto: 'Inativo', needsSync: true, version: { increment: 1 } },
     })
+
+    registrarAuditoria({
+      acao: 'excluir_produto',
+      entidade: 'produto',
+      entidadeId: id,
+      detalhes: { identificador: produto.identificador, softDelete: true },
+      ...extractRequestInfo(_),
+    }).catch(() => {})
+
     return NextResponse.json({ success: true })
   } catch { return serverError() }
 }

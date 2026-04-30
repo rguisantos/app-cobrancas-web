@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, forbidden, serverError, validateBody, handleApiError } from '@/lib/api-helpers'
 import { estabelecimentoCreateSchema } from '@/lib/validations'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 // GET - Listar estabelecimentos
 export async function GET(req: NextRequest) {
@@ -57,6 +58,15 @@ export async function POST(req: NextRequest) {
         version: 1,
       }
     })
+
+    registrarAuditoria({
+      acao: 'criar_estabelecimento',
+      entidade: 'estabelecimento',
+      entidadeId: item.id,
+      detalhes: { nome: data.nome },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
+
     return NextResponse.json(item, { status: 201 })
   } catch (err) {
     return handleApiError(err)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, forbidden, serverError, badRequest } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { z } from 'zod'
 
 // ============================================================================
@@ -133,6 +134,15 @@ export async function POST(req: NextRequest) {
         version:    1,
       },
     })
+
+    registrarAuditoria({
+      acao: 'criar_produto',
+      entidade: 'produto',
+      entidadeId: produto.id,
+      detalhes: { identificador: produto.identificador, tipoNome: produto.tipoNome },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
+
     return NextResponse.json(produto, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {

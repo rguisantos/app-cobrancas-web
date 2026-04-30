@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getUserRotaIds, unauthorized, notFound, forbidden, serverError } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { rotaUpdateSchema } from '@/lib/validations'
 
 // ─── GET /api/rotas/[id] ─────────────────────────────────────
@@ -149,6 +150,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     }
 
+    registrarAuditoria({
+      acao: 'editar_rota',
+      entidade: 'rota',
+      entidadeId: id,
+      detalhes: { descricao: rotaExistente.descricao, campos: parsed.data },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
+
     return NextResponse.json(rota)
   } catch (err) {
     console.error('[PUT /rotas/id]', err)
@@ -200,6 +209,14 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
     await prisma.usuarioRota.deleteMany({
       where: { rotaId: id },
     })
+
+    registrarAuditoria({
+      acao: 'excluir_rota',
+      entidade: 'rota',
+      entidadeId: id,
+      detalhes: { descricao: rota.descricao, softDelete: true },
+      ...extractRequestInfo(_),
+    }).catch(() => {})
 
     return NextResponse.json({
       success: true,

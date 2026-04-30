@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, forbidden, handleApiError } from '@/lib/api-helpers'
 import { atributoProdutoCreateSchema } from '@/lib/validations'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 // Helper: aceita NextAuth session (web) OU JWT Bearer (mobile)
 async function getAuthenticatedSessionOrJWT(req: NextRequest) {
@@ -51,6 +52,15 @@ export async function POST(req: NextRequest) {
     const item = await prisma.descricaoProduto.create({
       data: { nome: data.nome, deviceId: 'web', version: 1 }
     })
+
+    registrarAuditoria({
+      acao: 'criar_descricao_produto',
+      entidade: 'descricaoProduto',
+      entidadeId: item.id,
+      detalhes: { nome: data.nome },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
+
     return NextResponse.json(item, { status: 201 })
   } catch (err) {
     return handleApiError(err)

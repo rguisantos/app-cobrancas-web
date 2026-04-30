@@ -202,19 +202,16 @@ export async function criarLocacao(data: LocacaoCreateInput, userId: string): Pr
 
   // 6. Audit log
   await registrarAuditoria({
-    acao: 'criar_usuario' as any, // Reusing existing action type — maps to "criar" context
+    acao: 'criar_locacao',
     entidade: 'locacao',
     entidadeId: locacao.id,
     detalhes: {
-      acao: 'criar_locacao',
-      clienteId: data.clienteId,
       clienteNome: data.clienteNome,
-      produtoId: data.produtoId,
       produtoIdentificador: data.produtoIdentificador,
       formaPagamento: data.formaPagamento,
     },
     usuarioId: userId,
-  })
+  }).catch(() => {})
 
   logger.info(`[locacao-service] Locação criada: ${locacao.id} — Produto ${data.produtoIdentificador} para cliente ${data.clienteNome}`)
 
@@ -370,20 +367,19 @@ export async function relocarProduto(
 
   // 5. Audit log (outside transaction — non-critical)
   await registrarAuditoria({
-    acao: 'editar_usuario' as any,
+    acao: 'relocar_locacao',
     entidade: 'locacao',
     entidadeId: locacaoId,
     detalhes: {
-      acao: 'relocacao',
       locacaoAntigaId: locacaoId,
       locacaoNovaId: resultado.id,
-      clienteAntigoId: locacaoAtual.clienteId,
-      clienteNovoId: data.novoClienteId,
+      clienteAntigoNome: locacaoAtual.clienteNome,
+      clienteNovoNome: data.novoClienteNome,
       motivo: data.motivoRelocacao,
       trocaPano: data.trocaPano || false,
     },
     usuarioId: userId,
-  })
+  }).catch(() => {})
 
   logger.info(
     `[locacao-service] Relocação: ${locacaoId} → ${resultado.id} — Produto ${locacaoAtual.produtoIdentificador} de ${locacaoAtual.clienteNome} para ${data.novoClienteNome}`,
@@ -500,18 +496,16 @@ export async function enviarParaEstoque(
 
   // 4. Audit log (outside transaction — non-critical)
   await registrarAuditoria({
-    acao: 'editar_usuario' as any,
+    acao: 'enviar_estoque',
     entidade: 'locacao',
     entidadeId: locacaoId,
     detalhes: {
-      acao: 'enviar_estoque',
       estabelecimento: data.estabelecimento,
       motivo: data.motivo,
-      produtoId: locacaoAtual.produtoId,
       produtoIdentificador: locacaoAtual.produtoIdentificador,
     },
     usuarioId: userId,
-  })
+  }).catch(() => {})
 
   logger.info(
     `[locacao-service] Produto enviado para estoque: ${locacaoAtual.produtoIdentificador} → ${data.estabelecimento} (locação ${locacaoId})`,
@@ -594,17 +588,17 @@ export async function finalizarLocacao(
 
   // 4. Audit log (outside transaction — non-critical)
   await registrarAuditoria({
-    acao: 'editar_usuario' as any,
+    acao: 'editar_locacao',
     entidade: 'locacao',
     entidadeId: locacaoId,
     detalhes: {
-      acao: 'finalizar',
+      acaoRealizada: 'finalizar',
       motivo: data.motivo,
-      clienteId: locacao.clienteId,
-      produtoId: locacao.produtoId,
+      clienteNome: locacao.clienteNome,
+      produtoIdentificador: locacao.produtoIdentificador,
     },
     usuarioId: userId,
-  })
+  }).catch(() => {})
 
   logger.info(`[locacao-service] Locação finalizada: ${locacaoId} — Motivo: ${data.motivo}`)
 

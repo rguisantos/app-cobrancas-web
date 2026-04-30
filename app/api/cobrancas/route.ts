@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getUserRotaIds, unauthorized, forbidden, serverError } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { z } from 'zod'
 
 // Schema explícito — sem mass assignment
@@ -238,6 +239,15 @@ export async function POST(req: NextRequest) {
       // Non-critical: cobrança was already created, propagation failure should not fail the request
       console.error('[POST /cobrancas] Erro ao propagar relógio/trocaPano:', propagationErr)
     }
+
+    // Auditoria: criação de cobrança
+    registrarAuditoria({
+      acao: 'criar_cobranca',
+      entidade: 'cobranca',
+      entidadeId: cobranca.id,
+      detalhes: { clienteNome: data.clienteNome, produtoIdentificador: data.produtoIdentificador, totalClientePaga: data.totalClientePaga, valorRecebido: data.valorRecebido, status: cobranca.status },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
 
     return NextResponse.json(cobranca, { status: 201 })
   } catch (err) {

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getUserRotaIds, unauthorized, serverError, validateBody, ApiError, handleApiError } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { clienteCreateSchema } from '@/lib/validations'
 
 export async function GET(req: NextRequest) {
@@ -67,6 +68,14 @@ export async function POST(req: NextRequest) {
         version:   1,
       },
     })
+
+    registrarAuditoria({
+      acao: 'criar_cliente',
+      entidade: 'cliente',
+      entidadeId: cliente.id,
+      detalhes: { nomeExibicao: cliente.nomeExibicao, identificador: cliente.identificador },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
 
     return NextResponse.json(cliente, { status: 201 })
   } catch (err) {

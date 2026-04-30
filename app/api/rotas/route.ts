@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getUserRotaIds, unauthorized, serverError, badRequest } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { rotaCreateSchema } from '@/lib/validations'
 
 // ─── GET /api/rotas ──────────────────────────────────────────
@@ -104,6 +105,14 @@ export async function POST(req: NextRequest) {
         version: 1,
       },
     })
+
+    registrarAuditoria({
+      acao: 'criar_rota',
+      entidade: 'rota',
+      entidadeId: rota.id,
+      detalhes: { descricao },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
 
     return NextResponse.json(rota, { status: 201 })
   } catch (err) {

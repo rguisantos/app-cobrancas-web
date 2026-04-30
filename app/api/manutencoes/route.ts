@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, forbidden, notFound, serverError, badRequest, validateBody, handleApiError, ApiError } from '@/lib/api-helpers'
 import { manutencaoCreateSchema, manutencaoUpdateSchema } from '@/lib/validations'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function GET(req: NextRequest) {
   const session = await getAuthSession()
@@ -127,6 +128,14 @@ export async function POST(req: NextRequest) {
         },
       }),
     ])
+
+    registrarAuditoria({
+      acao: 'criar_manutencao',
+      entidade: 'manutencao',
+      entidadeId: manutencao.id,
+      detalhes: { tipo: data.tipo, produtoIdentificador, clienteNome },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
 
     return NextResponse.json(manutencao, { status: 201 })
   } catch (err) {

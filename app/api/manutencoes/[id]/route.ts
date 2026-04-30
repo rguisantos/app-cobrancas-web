@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, forbidden, notFound, validateBody, handleApiError } from '@/lib/api-helpers'
 import { manutencaoUpdateSchema } from '@/lib/validations'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -81,6 +82,22 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     }
 
+    // Calcular campos alterados
+    const campos: Record<string, any> = {}
+    if (data.tipo !== undefined && data.tipo !== manutencaoExistente.tipo) campos.tipo = { de: manutencaoExistente.tipo, para: data.tipo }
+    if (data.descricao !== undefined && data.descricao !== manutencaoExistente.descricao) campos.descricao = true
+    if (data.data !== undefined) campos.data = true
+    if (data.clienteId !== undefined) campos.clienteId = true
+    if (data.clienteNome !== undefined) campos.clienteNome = true
+
+    registrarAuditoria({
+      acao: 'editar_manutencao',
+      entidade: 'manutencao',
+      entidadeId: id,
+      detalhes: { campos },
+      ...extractRequestInfo(req),
+    }).catch(() => {})
+
     return NextResponse.json(manutencaoAtualizada)
   } catch (err) {
     return handleApiError(err)
@@ -111,6 +128,14 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
         updatedAt: new Date(),
       },
     })
+
+    registrarAuditoria({
+      acao: 'excluir_manutencao',
+      entidade: 'manutencao',
+      entidadeId: id,
+      detalhes: { softDelete: true, produtoIdentificador: manutencaoExistente.produtoIdentificador, tipo: manutencaoExistente.tipo },
+      ...extractRequestInfo(_),
+    }).catch(() => {})
 
     return NextResponse.json({ success: true })
   } catch (err) {

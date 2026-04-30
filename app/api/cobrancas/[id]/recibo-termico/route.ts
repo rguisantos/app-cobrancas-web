@@ -51,6 +51,19 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
 
     if (!cobranca) return notFound('Cobranca nao encontrada')
 
+    // Buscar saldo anterior da cobrança anterior
+    const cobrancaAnterior = await prisma.cobranca.findFirst({
+      where: {
+        locacaoId: cobranca.locacaoId,
+        deletedAt: null,
+        id: { not: id },
+        createdAt: { lt: cobranca.createdAt }
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { saldoDevedorGerado: true }
+    })
+    const saldoAnterior = cobrancaAnterior?.saldoDevedorGerado ?? 0
+
     // 80mm thermal receipt: 72 points width (≈80mm at 72 DPI)
     const pageWidth = 72
     const marginX = 3
@@ -202,6 +215,30 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     })
     doc.setTextColor(0, 0, 0)
     y += 16
+
+    // Saldo Devedor Anterior
+    if (saldoAnterior > 0) {
+      doc.setTextColor(180, 120, 0)
+      doc.setFontSize(7)
+      doc.setFont('helvetica', 'bold')
+      doc.text('+ Saldo Anterior:', marginX, y)
+      doc.text(formatarMoeda(saldoAnterior), pageWidth - marginX, y, { align: 'right' })
+      doc.setTextColor(0, 0, 0)
+      y += 10
+
+      // Total a receber com saldo
+      doc.setFillColor(180, 0, 0)
+      doc.rect(marginX, y - 1, contentWidth, 12, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'bold')
+      doc.text('TOTAL A RECEBER', marginX + 2, y + 7)
+      doc.text(formatarMoeda(cobranca.totalClientePaga + saldoAnterior), pageWidth - marginX - 2, y + 7, {
+        align: 'right',
+      })
+      doc.setTextColor(0, 0, 0)
+      y += 16
+    }
 
     keyValue('Valor Recebido:', formatarMoeda(cobranca.valorRecebido))
 

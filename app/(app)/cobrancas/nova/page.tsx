@@ -44,12 +44,15 @@ export default function NovaCobrancaPage() {
     trocaPano: false,
   })
 
+  const [saldoAnterior, setSaldoAnterior] = useState(0)
+
   const [calculos, setCalculos] = useState({
     fichasRodadas: 0,
     totalBruto: 0,
     subtotalAposDescontos: 0,
     valorPercentual: 0,
-    totalClientePaga: 0
+    totalClientePaga: 0,
+    totalComSaldoAnterior: 0
   })
 
   useEffect(() => {
@@ -66,16 +69,41 @@ export default function NovaCobrancaPage() {
       .catch(console.error)
   }, [locacaoIdPreSelect])
 
+  // Buscar saldo devedor da cobrança anterior quando locação for selecionada
   useEffect(() => {
     if (!locacaoSelecionada) {
-      setCalculos({ fichasRodadas: 0, totalBruto: 0, subtotalAposDescontos: 0, valorPercentual: 0, totalClientePaga: 0 })
+      setSaldoAnterior(0)
+      return
+    }
+
+    fetch(`/api/cobrancas?locacaoId=${locacaoSelecionada.id}&limit=1`)
+      .then(res => res.json())
+      .then(data => {
+        const cobrancas = data.data || data
+        if (Array.isArray(cobrancas) && cobrancas.length > 0) {
+          const ultimaCobranca = cobrancas[0]
+          const saldo = ultimaCobranca.saldoDevedorGerado || 0
+          setSaldoAnterior(saldo > 0 ? saldo : 0)
+        } else {
+          setSaldoAnterior(0)
+        }
+      })
+      .catch(err => {
+        console.error('Erro ao buscar saldo anterior:', err)
+        setSaldoAnterior(0)
+      })
+  }, [locacaoSelecionada])
+
+  useEffect(() => {
+    if (!locacaoSelecionada) {
+      setCalculos({ fichasRodadas: 0, totalBruto: 0, subtotalAposDescontos: 0, valorPercentual: 0, totalClientePaga: 0, totalComSaldoAnterior: 0 })
       return
     }
 
     // numeroRelogio é o valor atual do relógio (mesmo na locação e no produto)
     const relogioAnterior = parseFloat(locacaoSelecionada.numeroRelogio) || 0
     const relogioAtual = parseFloat(formData.relogioAtual) || 0
-    const fichasRodadas = relogioAtual - relogioAnterior
+    const fichasRodadas = Math.max(0, relogioAtual - relogioAnterior)
     const totalBruto = fichasRodadas * locacaoSelecionada.precoFicha
 
     const descontoPartidasQtd = parseFloat(formData.descontoPartidasQtd) || 0
@@ -87,20 +115,23 @@ export default function NovaCobrancaPage() {
     const subtotalAposDescontos = totalBruto - descontoPartidasValor
     const valorPercentual = subtotalAposDescontos * (locacaoSelecionada.percentualEmpresa / 100)
     const totalClientePaga = subtotalAposDescontos - valorPercentual - descontoDinheiro
+    const totalComSaldoAnterior = Math.max(0, totalClientePaga) + saldoAnterior
 
     setCalculos({
       fichasRodadas,
       totalBruto,
       subtotalAposDescontos: Math.max(0, subtotalAposDescontos),
       valorPercentual: Math.max(0, valorPercentual),
-      totalClientePaga: Math.max(0, totalClientePaga)
+      totalClientePaga: Math.max(0, totalClientePaga),
+      totalComSaldoAnterior
     })
-  }, [locacaoSelecionada, formData.relogioAtual, formData.descontoPartidasQtd, formData.descontoDinheiro])
+  }, [locacaoSelecionada, formData.relogioAtual, formData.descontoPartidasQtd, formData.descontoDinheiro, saldoAnterior])
 
   const handleLocacaoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const locacaoId = e.target.value
     const loc = locacoes.find(l => l.id === locacaoId)
     setLocacaoSelecionada(loc || null)
+    setSaldoAnterior(0)
     setFormData(prev => ({ ...prev, locacaoId }))
   }
 
@@ -131,7 +162,7 @@ export default function NovaCobrancaPage() {
 
     try {
       const valorRecebido = parseFloat(formData.valorRecebido) || 0
-      const saldoDevedorGerado = Math.max(0, calculos.totalClientePaga - valorRecebido)
+      const saldoDevedorGerado = Math.max(0, calculos.totalComSaldoAnterior - valorRecebido)
 
       const res = await fetch('/api/cobrancas', {
         method: 'POST',
@@ -156,9 +187,10 @@ export default function NovaCobrancaPage() {
           subtotalAposDescontos: calculos.subtotalAposDescontos,
           valorPercentual: calculos.valorPercentual,
           totalClientePaga: calculos.totalClientePaga,
+          saldoAnterior,
           valorRecebido,
           saldoDevedorGerado: Math.max(0, saldoDevedorGerado),
-          status: valorRecebido >= calculos.totalClientePaga ? 'Pago' : (valorRecebido > 0 ? 'Parcial' : 'Pendente'),
+          status: valorRecebido >= calculos.totalComSaldoAnterior ? 'Pago' : (valorRecebido > 0 ? 'Parcial' : 'Pendente'),
           observacao: formData.observacao || null,
           trocaPano: formData.trocaPano,
         })
@@ -470,6 +502,18 @@ export default function NovaCobrancaPage() {
                     <span className="text-lg font-medium text-blue-900">Total Cliente Paga:</span>
                     <span className="text-3xl font-bold text-emerald-700">{formatarMoeda(calculos.totalClientePaga)}</span>
                   </div>
+                  {saldoAnterior > 0 && (
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="text-sm font-medium text-orange-700">+ Saldo Devedor Anterior:</span>
+                      <span className="text-xl font-bold text-orange-600">{formatarMoeda(saldoAnterior)}</span>
+                    </div>
+                  )}
+                  {saldoAnterior > 0 && (
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-orange-200">
+                      <span className="text-lg font-semibold text-red-900">Total a Receber (com saldo):</span>
+                      <span className="text-3xl font-bold text-red-700">{formatarMoeda(calculos.totalComSaldoAnterior)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </section>
@@ -505,12 +549,15 @@ export default function NovaCobrancaPage() {
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">Saldo Devedor</label>
                     <div className={`text-2xl font-bold mt-2 ${
-                      (calculos.totalClientePaga - (parseFloat(formData.valorRecebido) || 0)) > 0 
+                      (calculos.totalComSaldoAnterior - (parseFloat(formData.valorRecebido) || 0)) > 0 
                         ? 'text-red-600' 
                         : 'text-emerald-600'
                     }`}>
-                      {formatarMoeda(Math.max(0, calculos.totalClientePaga - (parseFloat(formData.valorRecebido) || 0)))}
+                      {formatarMoeda(Math.max(0, calculos.totalComSaldoAnterior - (parseFloat(formData.valorRecebido) || 0)))}
                     </div>
+                    {saldoAnterior > 0 && (
+                      <p className="text-xs text-orange-600 mt-1">Inclui saldo anterior de {formatarMoeda(saldoAnterior)}</p>
+                    )}
                   </div>
                 </div>
 

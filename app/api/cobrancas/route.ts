@@ -27,6 +27,7 @@ const createSchema = z.object({
   valorPercentual:      z.number(),
   totalClientePaga:     z.number(),
   valorRecebido:        z.number(),
+  saldoAnterior:        z.coerce.number().optional().default(0),
   saldoDevedorGerado:   z.number(),
   status:               z.enum(['Pago', 'Parcial', 'Pendente', 'Atrasado']).default('Pendente'),
   dataVencimento:       z.string().optional().nullable(),
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest) {
   if (!session) return unauthorized()
   const { searchParams } = new URL(req.url)
   const clienteId  = searchParams.get('clienteId')
+  const locacaoId  = searchParams.get('locacaoId')
   const status     = searchParams.get('status')
   const dataInicio = searchParams.get('dataInicio')
   const dataFim    = searchParams.get('dataFim')
@@ -46,6 +48,7 @@ export async function GET(req: NextRequest) {
   const limit = Number(searchParams.get('limit') || 20)
   const where: any = { deletedAt: null }
   if (clienteId)  where.clienteId = clienteId
+  if (locacaoId)  where.locacaoId = locacaoId
   if (status)     where.status    = status
   if (dataInicio || dataFim) {
     where.dataFim = {}
@@ -105,7 +108,10 @@ export async function POST(req: NextRequest) {
 
     const fichasRodadasCorreto = data.relogioAtual - relogioAnteriorCorreto
 
-    const { id, ...rest } = data
+    const { id, saldoAnterior, ...rest } = data
+
+    // saldoAnterior é runtime-only — não armazenar no DB
+    // saldoDevedorGerado já inclui o saldoAnterior no cálculo do frontend
 
     const cobranca = await prisma.cobranca.create({
       data: {

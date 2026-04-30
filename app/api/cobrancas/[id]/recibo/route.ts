@@ -52,6 +52,19 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
 
     if (!cobranca) return notFound('Cobranca nao encontrada')
 
+    // Buscar saldo anterior da cobrança anterior
+    const cobrancaAnterior = await prisma.cobranca.findFirst({
+      where: {
+        locacaoId: cobranca.locacaoId,
+        deletedAt: null,
+        id: { not: id },
+        createdAt: { lt: cobranca.createdAt }
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { saldoDevedorGerado: true }
+    })
+    const saldoAnterior = cobrancaAnterior?.saldoDevedorGerado ?? 0
+
     // Gerar PDF
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
     const pageWidth = doc.internal.pageSize.getWidth()
@@ -216,11 +229,19 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     )
 
     // Total com destaque
-    const totalRows = [
+    const totalRows: string[][] = [
       ['TOTAL CLIENTE PAGA', formatarMoeda(cobranca.totalClientePaga)],
+    ]
+
+    if (saldoAnterior > 0) {
+      totalRows.push(['+ Saldo Devedor Anterior', formatarMoeda(saldoAnterior)])
+      totalRows.push(['TOTAL A RECEBER (com saldo)', formatarMoeda(cobranca.totalClientePaga + saldoAnterior)])
+    }
+
+    totalRows.push(
       ['Valor Recebido', formatarMoeda(cobranca.valorRecebido)],
       ['Saldo Devedor', formatarMoeda(cobranca.saldoDevedorGerado ?? 0)],
-    ]
+    )
 
     autoTable(doc, {
       startY: y,
@@ -254,11 +275,21 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
         1: { cellWidth: 60, halign: 'right' },
       },
       didParseCell: (data) => {
-        // Destacar "TOTAL CLIENTE PAGA"
+        // Destacar "TOTAL CLIENTE PAGA" (sempre primeira linha)
         if (data.row.index === 0) {
           data.cell.styles.fillColor = [37, 99, 235]
           data.cell.styles.textColor = [255, 255, 255]
           data.cell.styles.fontSize = 13
+        }
+        // Destacar "TOTAL A RECEBER (com saldo)" - linha vermelha
+        if (saldoAnterior > 0 && data.row.index === 2) {
+          data.cell.styles.fillColor = [220, 38, 38]
+          data.cell.styles.textColor = [255, 255, 255]
+          data.cell.styles.fontSize = 13
+        }
+        // Destacar "Saldo Devedor" - última linha
+        if (data.row.index === totalRows.length - 1 && (cobranca.saldoDevedorGerado ?? 0) > 0) {
+          data.cell.styles.textColor = [220, 38, 38]
         }
       },
     })

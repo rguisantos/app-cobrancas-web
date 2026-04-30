@@ -52,6 +52,7 @@ interface Cobranca {
   totalClientePaga: number
   valorRecebido: number
   saldoDevedorGerado: number
+  saldoAnterior: number
   status: string
   createdAt: string | Date
   podeEditar?: boolean
@@ -208,13 +209,18 @@ function CobrancaCard({
           <div>
             <p className="text-xs text-slate-400 mb-0.5">Valor recebido</p>
             <p className="text-2xl font-bold text-emerald-600">{formatarMoeda(cobranca.valorRecebido)}</p>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               <p className="text-xs text-slate-500">
                 Total: {formatarMoeda(cobranca.totalClientePaga)}
               </p>
+              {cobranca.saldoAnterior > 0 && (
+                <p className="text-xs font-medium text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">
+                  + Saldo ant.: {formatarMoeda(cobranca.saldoAnterior)}
+                </p>
+              )}
               {cobranca.saldoDevedorGerado > 0 && (
                 <p className="text-xs font-medium text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
-                  Saldo: {formatarMoeda(cobranca.saldoDevedorGerado)}
+                  Deve: {formatarMoeda(cobranca.saldoDevedorGerado)}
                 </p>
               )}
             </div>
@@ -344,6 +350,11 @@ function CobrancasTable({
                 <td className="px-4 py-3.5 text-right text-slate-700 font-medium">{formatarMoeda(c.totalClientePaga)}</td>
                 <td className="px-4 py-3.5 text-right">
                   <span className="font-bold text-emerald-600 text-base">{formatarMoeda(c.valorRecebido)}</span>
+                  {c.saldoAnterior > 0 && (
+                    <p className="text-xs font-medium text-orange-500 mt-0.5">
+                      +Saldo ant.: {formatarMoeda(c.saldoAnterior)}
+                    </p>
+                  )}
                   {c.saldoDevedorGerado > 0 && (
                     <p className="text-xs font-medium text-red-500 bg-red-50 px-1.5 py-0.5 rounded inline-block ml-1">
                       -{formatarMoeda(c.saldoDevedorGerado)}

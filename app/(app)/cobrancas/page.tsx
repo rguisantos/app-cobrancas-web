@@ -28,7 +28,7 @@ export default async function CobrancasPage({
     ]
   }
 
-  const [cobrancas, total, resumo] = await Promise.all([
+  const [cobrancas, total, resumoRecebido] = await Promise.all([
     prisma.cobranca.findMany({
       where,
       include: { 
@@ -51,17 +51,56 @@ export default async function CobrancasPage({
       take: limit,
     }),
     prisma.cobranca.count({ where }),
+    // Total recebido é correto somar todas cobranças (sem dupla contagem)
     prisma.cobranca.aggregate({
       where: { deletedAt: null },
-      _sum: { valorRecebido: true, saldoDevedorGerado: true },
+      _sum: { valorRecebido: true },
     }),
   ])
+
+  // Saldo devedor REAL: somar apenas a ÚLTIMA cobrança de cada locação
+  // (o saldo da última já inclui saldos anteriores carregados)
+  const saldoDevedorReal = await prisma.$queryRaw<[{ total: bigint }]>`
+    SELECT COALESCE(SUM(ranked."saldoDevedorGerado"), 0) as total
+    FROM (
+      SELECT "saldoDevedorGerado",
+        ROW_NUMBER() OVER (PARTITION BY "locacaoId" ORDER BY "createdAt" DESC) as rn
+      FROM "Cobranca"
+      WHERE "deletedAt" IS NULL
+    ) ranked
+    WHERE ranked.rn = 1
+  `
+  const totalSaldoDevedor = Number(saldoDevedorReal[0]?.total ?? 0)
+
+  // Buscar saldo anterior para cada cobrança da página atual
+  const cobrancaIds = cobrancas.map(c => c.id)
+  const saldosAnteriores = await prisma.$queryRaw<
+    { cobrancaId: string; saldoAnterior: number }[]
+  >`
+    SELECT c1.id as "cobrancaId", COALESCE(c2."saldoDevedorGerado", 0) as "saldoAnterior"
+    FROM "Cobranca" c1
+    LEFT JOIN LATERAL (
+      SELECT c2."saldoDevedorGerado"
+      FROM "Cobranca" c2
+      WHERE c2."locacaoId" = c1."locacaoId"
+        AND c2."deletedAt" IS NULL
+        AND c2."createdAt" < c1."createdAt"
+      ORDER BY c2."createdAt" DESC
+      LIMIT 1
+    ) c2 ON true
+    WHERE c1.id = ANY(${cobrancaIds}::uuid[])
+      AND c1."deletedAt" IS NULL
+  `
+  const saldoAnteriorMap = new Map(
+    saldosAnteriores.map(s => [s.cobrancaId, Number(s.saldoAnterior)])
+  )
 
   const podeEditar = session?.user.permissoesWeb?.todosCadastros
 
   // Preparar dados para o cliente
   const cobrancasFormatadas = cobrancas.map(c => {
     const isUltima = c.locacao?.cobrancas?.[0]?.id === c.id && c.locacao?.status === 'Ativa'
+    const saldoAnterior = saldoAnteriorMap.get(c.id) ?? 0
     return {
       id: c.id,
       clienteId: c.clienteId,
@@ -76,6 +115,7 @@ export default async function CobrancasPage({
       totalClientePaga: c.totalClientePaga,
       valorRecebido: c.valorRecebido,
       saldoDevedorGerado: c.saldoDevedorGerado,
+      saldoAnterior,
       status: c.status,
       createdAt: c.createdAt,
       podeEditar: isUltima && podeEditar,
@@ -88,8 +128,8 @@ export default async function CobrancasPage({
       total={total}
       page={page}
       limit={limit}
-      totalRecebido={resumo._sum.valorRecebido ?? 0}
-      totalSaldoDevedor={resumo._sum.saldoDevedorGerado ?? 0}
+      totalRecebido={resumoRecebido._sum.valorRecebido ?? 0}
+      totalSaldoDevedor={totalSaldoDevedor}
       statusFilter={params.status}
       buscaFilter={params.busca}
     />

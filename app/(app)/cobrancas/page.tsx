@@ -1,12 +1,6 @@
 import { Metadata } from 'next'
-import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
-import Header from '@/components/layout/header'
-import { formatarMoeda } from '@/shared/types'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
-import { Eye, Edit, DollarSign, Clock, CheckCircle, AlertTriangle, XCircle, Inbox } from 'lucide-react'
 import { CobrancasClient } from './cobrancas-client'
 
 export const metadata: Metadata = { title: 'Cobranças' }
@@ -33,18 +27,6 @@ export default async function CobrancasPage({
       where,
       include: { 
         cliente: { select: { nomeExibicao: true, id: true } },
-        locacao: { 
-          select: { 
-            id: true,
-            status: true,
-            cobrancas: { 
-              where: { deletedAt: null },
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-              select: { id: true }
-            }
-          } 
-        }
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
@@ -60,46 +42,82 @@ export default async function CobrancasPage({
 
   // Saldo devedor REAL: somar apenas a ÚLTIMA cobrança de cada locação
   // (o saldo da última já inclui saldos anteriores carregados)
-  const saldoDevedorReal = await prisma.$queryRaw<[{ total: bigint }]>`
-    SELECT COALESCE(SUM(ranked."saldoDevedorGerado"), 0) as total
-    FROM (
-      SELECT "saldoDevedorGerado",
-        ROW_NUMBER() OVER (PARTITION BY "locacaoId" ORDER BY "createdAt" DESC) as rn
-      FROM "Cobranca"
-      WHERE "deletedAt" IS NULL
-    ) ranked
-    WHERE ranked.rn = 1
-  `
-  const totalSaldoDevedor = Number(saldoDevedorReal[0]?.total ?? 0)
+  // Buscar TODAS as cobranças agrupadas por locação para calcular saldo global
+  const todosSaldos = await prisma.cobranca.findMany({
+    where: { deletedAt: null },
+    select: { locacaoId: true, saldoDevedorGerado: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  })
 
-  // Buscar saldo anterior para cada cobrança da página atual
-  const cobrancaIds = cobrancas.map(c => c.id)
-  const saldosAnteriores = await prisma.$queryRaw<
-    { cobrancaId: string; saldoAnterior: number }[]
-  >`
-    SELECT c1.id as "cobrancaId", COALESCE(c2."saldoDevedorGerado", 0) as "saldoAnterior"
-    FROM "Cobranca" c1
-    LEFT JOIN LATERAL (
-      SELECT c2."saldoDevedorGerado"
-      FROM "Cobranca" c2
-      WHERE c2."locacaoId" = c1."locacaoId"
-        AND c2."deletedAt" IS NULL
-        AND c2."createdAt" < c1."createdAt"
-      ORDER BY c2."createdAt" DESC
-      LIMIT 1
-    ) c2 ON true
-    WHERE c1.id = ANY(${cobrancaIds}::uuid[])
-      AND c1."deletedAt" IS NULL
-  `
-  const saldoAnteriorMap = new Map(
-    saldosAnteriores.map(s => [s.cobrancaId, Number(s.saldoAnterior)])
-  )
+  // Para cada locação, apenas a primeira (mais recente) importa
+  const saldoGlobalPorLocacao = new Map<string, number>()
+  for (const s of todosSaldos) {
+    if (!saldoGlobalPorLocacao.has(s.locacaoId)) {
+      saldoGlobalPorLocacao.set(s.locacaoId, s.saldoDevedorGerado ?? 0)
+    }
+  }
+  const totalSaldoDevedor = Array.from(saldoGlobalPorLocacao.values()).reduce((sum, val) => sum + val, 0)
+
+  // Buscar dados auxiliares para as cobranças da página atual
+  const locacaoIds = [...new Set(cobrancas.map(c => c.locacaoId))]
+
+  // Saldo anterior + última cobrança por locação (mesma query)
+  const saldoAnteriorMap = new Map<string, number>()
+  const locacaoUltimaCobrancaId = new Map<string, string>()
+
+  if (locacaoIds.length > 0) {
+    const cobrancasPorLocacao = await prisma.cobranca.findMany({
+      where: { locacaoId: { in: locacaoIds }, deletedAt: null },
+      select: {
+        id: true,
+        locacaoId: true,
+        saldoDevedorGerado: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    // Agrupar por locação (já ordenado desc)
+    const porLocacao = new Map<string, typeof cobrancasPorLocacao>()
+    for (const cb of cobrancasPorLocacao) {
+      if (!porLocacao.has(cb.locacaoId)) porLocacao.set(cb.locacaoId, [])
+      porLocacao.get(cb.locacaoId)!.push(cb)
+    }
+
+    // Última cobrança por locação (primeiro elemento de cada lista)
+    for (const [locId, lista] of porLocacao) {
+      if (lista.length > 0) {
+        locacaoUltimaCobrancaId.set(locId, lista[0].id)
+      }
+    }
+
+    // Saldo anterior = saldoDevedorGerado da cobrança imediatamente anterior
+    for (const c of cobrancas) {
+      const lista = porLocacao.get(c.locacaoId) || []
+      const idx = lista.findIndex(cb => cb.id === c.id)
+      // lista está em ordem desc, então idx+1 é a cobrança anterior (mais velha)
+      if (idx >= 0 && idx < lista.length - 1) {
+        saldoAnteriorMap.set(c.id, lista[idx + 1].saldoDevedorGerado ?? 0)
+      } else {
+        saldoAnteriorMap.set(c.id, 0)
+      }
+    }
+  }
+
+  // Verificar status das locações para permissão de edição
+  const locacoesAtivas = locacaoIds.length > 0
+    ? await prisma.locacao.findMany({
+        where: { id: { in: locacaoIds }, status: 'Ativa', deletedAt: null },
+        select: { id: true },
+      })
+    : []
+  const locacoesAtivasSet = new Set(locacoesAtivas.map(l => l.id))
 
   const podeEditar = session?.user.permissoesWeb?.todosCadastros
 
-  // Preparar dados para o cliente
+  // Preparar dados para o cliente (garantir serialização JSON-safe)
   const cobrancasFormatadas = cobrancas.map(c => {
-    const isUltima = c.locacao?.cobrancas?.[0]?.id === c.id && c.locacao?.status === 'Ativa'
+    const isUltima = locacaoUltimaCobrancaId.get(c.locacaoId) === c.id && locacoesAtivasSet.has(c.locacaoId)
     const saldoAnterior = saldoAnteriorMap.get(c.id) ?? 0
     return {
       id: c.id,
@@ -117,7 +135,7 @@ export default async function CobrancasPage({
       saldoDevedorGerado: c.saldoDevedorGerado,
       saldoAnterior,
       status: c.status,
-      createdAt: c.createdAt,
+      createdAt: c.createdAt?.toISOString?.() ?? String(c.createdAt),
       podeEditar: isUltima && podeEditar,
     }
   })
@@ -128,7 +146,7 @@ export default async function CobrancasPage({
       total={total}
       page={page}
       limit={limit}
-      totalRecebido={resumoRecebido._sum.valorRecebido ?? 0}
+      totalRecebido={Number(resumoRecebido._sum.valorRecebido ?? 0)}
       totalSaldoDevedor={totalSaldoDevedor}
       statusFilter={params.status}
       buscaFilter={params.busca}

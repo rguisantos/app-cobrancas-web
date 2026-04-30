@@ -244,8 +244,8 @@ export default function NovaCobrancaPage() {
                     <Hash className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <span className="text-xs text-slate-500">Última Leitura</span>
-                    <p className="font-mono font-bold text-slate-900">{locacaoSelecionada.ultimaLeituraRelogio ?? 0}</p>
+                    <span className="text-xs text-slate-500">Relógio N°</span>
+                    <p className="font-mono font-bold text-slate-900">{locacaoSelecionada.numeroRelogio}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -282,7 +282,20 @@ export default function NovaCobrancaPage() {
                 </h2>
               </div>
               <div className="p-4 md:p-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                      Leitura Anterior
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={locacaoSelecionada.ultimaLeituraRelogio ?? 0}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 font-mono text-lg cursor-not-allowed"
+                      readOnly
+                    />
+                    <p className="text-xs text-slate-400 mt-1">Leitura da última cobrança</p>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
                       Leitura Atual <span className="text-red-500">*</span>
@@ -293,10 +306,14 @@ export default function NovaCobrancaPage() {
                       name="relogioAtual"
                       value={formData.relogioAtual}
                       onChange={handleChange}
+                      min={locacaoSelecionada.ultimaLeituraRelogio ?? 0}
                       className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all font-mono text-lg"
                       placeholder="Ex: 8500"
                       required
                     />
+                    {formData.relogioAtual && (parseFloat(formData.relogioAtual) || 0) < (locacaoSelecionada.ultimaLeituraRelogio ?? 0) && (
+                      <p className="text-xs text-red-500 mt-1 font-medium">Leitura atual não pode ser menor que a anterior</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">Data Início</label>
@@ -327,6 +344,14 @@ export default function NovaCobrancaPage() {
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* Indicador de fichas rodadas */}
+                <div className="mt-4 flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
+                  <span className="text-sm text-purple-700">Fichas Rodadas (Atual - Anterior)</span>
+                  <span className="text-xl font-bold text-purple-700">
+                    {calculos.fichasRodadas.toLocaleString('pt-BR')}
+                  </span>
                 </div>
               </div>
             </section>

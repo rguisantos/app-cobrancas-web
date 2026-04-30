@@ -79,12 +79,41 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const data = createSchema.parse(body)
+
+    // Validar que leitura atual >= leitura anterior
+    if (data.relogioAtual < data.relogioAnterior) {
+      return NextResponse.json(
+        { error: 'A leitura atual do relógio não pode ser menor que a leitura anterior' },
+        { status: 400 }
+      )
+    }
+
+    // Validar que a locação existe e está ativa
+    const locacaoExistente = await prisma.locacao.findFirst({
+      where: { id: data.locacaoId, status: 'Ativa', deletedAt: null },
+    })
+    if (!locacaoExistente) {
+      return NextResponse.json(
+        { error: 'Locação não encontrada ou não está ativa' },
+        { status: 400 }
+      )
+    }
+
+    // Usar ultimaLeituraRelogio da locação se relogioAnterior enviado for 0 (primeira cobrança)
+    const relogioAnteriorCorreto = data.relogioAnterior === 0 && locacaoExistente.ultimaLeituraRelogio !== null
+      ? locacaoExistente.ultimaLeituraRelogio
+      : data.relogioAnterior
+
+    const fichasRodadasCorreto = data.relogioAtual - relogioAnteriorCorreto
+
     const { id, ...rest } = data
 
     const cobranca = await prisma.cobranca.create({
       data: {
         ...(id ? { id } : {}),
         ...rest,
+        relogioAnterior: relogioAnteriorCorreto,
+        fichasRodadas: fichasRodadasCorreto,
         syncStatus: 'synced',
         needsSync:  false,
         deviceId:   'web',

@@ -131,6 +131,32 @@ export async function criarLocacao(data: LocacaoCreateInput, userId: string): Pr
     },
   })
 
+  // 4b. If numeroRelogio differs from product, update product + register history
+  if (data.numeroRelogio && data.numeroRelogio !== produto.numeroRelogio) {
+    const relogioAnterior = produto.numeroRelogio
+    await prisma.$transaction([
+      prisma.produto.update({
+        where: { id: data.produtoId },
+        data: {
+          numeroRelogio: data.numeroRelogio,
+          needsSync: true,
+          version: { increment: 1 },
+          deviceId: 'web',
+        },
+      }),
+      prisma.historicoRelogio.create({
+        data: {
+          produtoId: data.produtoId,
+          relogioAnterior,
+          relogioNovo: data.numeroRelogio,
+          motivo: `Alteração na criação da locação para ${data.clienteNome}`,
+          usuarioResponsavel: userId || 'web',
+        },
+      }),
+    ])
+    logger.info(`[locacao-service] Relógio atualizado: ${relogioAnterior} → ${data.numeroRelogio} (produto ${produto.identificador})`)
+  }
+
   // 5. Register change log for sync
   await prisma.changeLog.create({
     data: {

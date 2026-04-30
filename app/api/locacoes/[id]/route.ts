@@ -90,6 +90,37 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       },
     })
 
+    // If numeroRelogio changed, update product + register history
+    if (updateData.numeroRelogio && updateData.numeroRelogio !== locacaoAtual.numeroRelogio) {
+      const produto = await prisma.produto.findFirst({
+        where: { id: locacaoAtual.produtoId },
+        select: { id: true, numeroRelogio: true, identificador: true },
+      })
+
+      if (produto && String(updateData.numeroRelogio) !== produto.numeroRelogio) {
+        await prisma.$transaction([
+          prisma.produto.update({
+            where: { id: produto.id },
+            data: {
+              numeroRelogio: String(updateData.numeroRelogio),
+              needsSync: true,
+              version: { increment: 1 },
+              deviceId: 'web',
+            },
+          }),
+          prisma.historicoRelogio.create({
+            data: {
+              produtoId: produto.id,
+              relogioAnterior: produto.numeroRelogio,
+              relogioNovo: String(updateData.numeroRelogio),
+              motivo: `Alteração na edição da locação`,
+              usuarioResponsavel: session.user.name || session.user.email || 'web',
+            },
+          }),
+        ])
+      }
+    }
+
     // Register change log for sync
     await prisma.changeLog.create({
       data: {

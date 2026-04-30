@@ -119,7 +119,7 @@ export default async function LocacaoDetailPage({ params }: { params: Promise<{ 
                 )}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-500">Número do Relógio</span>
-                  <span className="text-lg font-mono font-bold text-slate-900">{locacao.produto?.numeroRelogio || locacao.numeroRelogio}</span>
+                  <span className="text-lg font-mono font-bold text-slate-900">{locacao.numeroRelogio}</span>
                 </div>
                 
                 {/* Troca de Pano */}

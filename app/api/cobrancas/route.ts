@@ -90,6 +90,71 @@ export async function POST(req: NextRequest) {
         version:    1,
       },
     })
+
+    // Propagate relógio changes to product and locação
+    // When a cobrança is created with relogioAtual, update:
+    // 1. produto.numeroRelogio
+    // 2. locação.ultimaLeituraRelogio + numeroRelogio
+    // 3. historicoRelogio entry
+    try {
+      const locacao = await prisma.locacao.findFirst({
+        where: { id: data.locacaoId },
+        select: { id: true, produtoId: true, numeroRelogio: true },
+      })
+
+      if (locacao?.produtoId) {
+        const produto = await prisma.produto.findFirst({
+          where: { id: locacao.produtoId },
+          select: { id: true, numeroRelogio: true, identificador: true },
+        })
+
+        if (produto) {
+          const novoRelogio = String(data.relogioAtual)
+          const relogioMudou = novoRelogio !== produto.numeroRelogio
+
+          // Update locação with latest reading
+          await prisma.locacao.update({
+            where: { id: data.locacaoId },
+            data: {
+              ultimaLeituraRelogio: data.relogioAtual,
+              dataUltimaCobranca: new Date().toISOString(),
+              numeroRelogio: novoRelogio,
+              needsSync: true,
+              version: { increment: 1 },
+              deviceId: 'web',
+            },
+          })
+
+          // If relógio changed, update product + register history
+          if (relogioMudou) {
+            await prisma.$transaction([
+              prisma.produto.update({
+                where: { id: produto.id },
+                data: {
+                  numeroRelogio: novoRelogio,
+                  needsSync: true,
+                  version: { increment: 1 },
+                  deviceId: 'web',
+                },
+              }),
+              prisma.historicoRelogio.create({
+                data: {
+                  produtoId: produto.id,
+                  relogioAnterior: produto.numeroRelogio,
+                  relogioNovo: novoRelogio,
+                  motivo: `Leitura na cobrança (${data.relogioAnterior} → ${data.relogioAtual})`,
+                  usuarioResponsavel: session.user.name || session.user.email || 'web',
+                },
+              }),
+            ])
+          }
+        }
+      }
+    } catch (propagationErr) {
+      // Non-critical: cobrança was already created, propagation failure should not fail the request
+      console.error('[POST /cobrancas] Erro ao propagar relógio:', propagationErr)
+    }
+
     return NextResponse.json(cobranca, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {

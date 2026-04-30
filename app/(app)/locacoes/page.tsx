@@ -54,7 +54,7 @@ export default async function LocacoesPage({
     formaPagamento: l.formaPagamento,
     percentualEmpresa: l.percentualEmpresa,
     precoFicha: l.precoFicha,
-    numeroRelogio: l.produto?.numeroRelogio || l.numeroRelogio,
+    numeroRelogio: l.numeroRelogio,
     status: l.status,
     dataLocacao: l.dataLocacao,
     valorFixo: l.valorFixo,

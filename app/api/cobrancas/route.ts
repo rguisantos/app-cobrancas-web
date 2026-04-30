@@ -80,14 +80,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const data = createSchema.parse(body)
 
-    // Validar que leitura atual >= leitura anterior
-    if (data.relogioAtual < data.relogioAnterior) {
-      return NextResponse.json(
-        { error: 'A leitura atual do relógio não pode ser menor que a leitura anterior' },
-        { status: 400 }
-      )
-    }
-
     // Validar que a locação existe e está ativa
     const locacaoExistente = await prisma.locacao.findFirst({
       where: { id: data.locacaoId, status: 'Ativa', deletedAt: null },
@@ -99,10 +91,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Usar ultimaLeituraRelogio da locação se relogioAnterior enviado for 0 (primeira cobrança)
-    const relogioAnteriorCorreto = data.relogioAnterior === 0 && locacaoExistente.ultimaLeituraRelogio !== null
-      ? locacaoExistente.ultimaLeituraRelogio
-      : data.relogioAnterior
+    // O relógio anterior vem do numeroRelogio da locação/produto (são o mesmo valor)
+    // O frontend já envia o valor correto, mas garantimos usando o valor do banco
+    const relogioAnteriorCorreto = parseFloat(locacaoExistente.numeroRelogio) || data.relogioAnterior
+
+    // Validar que leitura atual >= leitura anterior (relógio do produto/locação)
+    if (data.relogioAtual < relogioAnteriorCorreto) {
+      return NextResponse.json(
+        { error: `A leitura atual (${data.relogioAtual}) não pode ser menor que o relógio atual (${relogioAnteriorCorreto})` },
+        { status: 400 }
+      )
+    }
 
     const fichasRodadasCorreto = data.relogioAtual - relogioAnteriorCorreto
 

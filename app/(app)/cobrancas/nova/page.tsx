@@ -72,7 +72,8 @@ export default function NovaCobrancaPage() {
       return
     }
 
-    const relogioAnterior = locacaoSelecionada.ultimaLeituraRelogio || 0
+    // numeroRelogio é o valor atual do relógio (mesmo na locação e no produto)
+    const relogioAnterior = parseFloat(locacaoSelecionada.numeroRelogio) || 0
     const relogioAtual = parseFloat(formData.relogioAtual) || 0
     const fichasRodadas = relogioAtual - relogioAnterior
     const totalBruto = fichasRodadas * locacaoSelecionada.precoFicha
@@ -115,7 +116,8 @@ export default function NovaCobrancaPage() {
       return
     }
 
-    const relogioAnterior = locacaoSelecionada.ultimaLeituraRelogio || 0
+    // numeroRelogio é o valor atual do relógio (mesmo na locação e no produto)
+    const relogioAnterior = parseFloat(locacaoSelecionada.numeroRelogio) || 0
     const relogioAtual = parseFloat(formData.relogioAtual) || 0
 
     if (relogioAtual < relogioAnterior) {
@@ -244,7 +246,7 @@ export default function NovaCobrancaPage() {
                     <Hash className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <span className="text-xs text-slate-500">Relógio N°</span>
+                    <span className="text-xs text-slate-500">Relógio Atual</span>
                     <p className="font-mono font-bold text-slate-900">{locacaoSelecionada.numeroRelogio}</p>
                   </div>
                 </div>
@@ -290,11 +292,11 @@ export default function NovaCobrancaPage() {
                     <input
                       type="number"
                       step="0.01"
-                      value={locacaoSelecionada.ultimaLeituraRelogio ?? 0}
+                      value={parseFloat(locacaoSelecionada.numeroRelogio) || 0}
                       className="w-full px-4 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 font-mono text-lg cursor-not-allowed"
                       readOnly
                     />
-                    <p className="text-xs text-slate-400 mt-1">Leitura da última cobrança</p>
+                    <p className="text-xs text-slate-400 mt-1">Relógio atual do produto/locação</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5">
@@ -306,12 +308,12 @@ export default function NovaCobrancaPage() {
                       name="relogioAtual"
                       value={formData.relogioAtual}
                       onChange={handleChange}
-                      min={locacaoSelecionada.ultimaLeituraRelogio ?? 0}
+                      min={parseFloat(locacaoSelecionada.numeroRelogio) || 0}
                       className="w-full px-4 py-2.5 rounded-lg border border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all font-mono text-lg"
-                      placeholder="Ex: 8500"
+                      placeholder="Ex: 9100"
                       required
                     />
-                    {formData.relogioAtual && (parseFloat(formData.relogioAtual) || 0) < (locacaoSelecionada.ultimaLeituraRelogio ?? 0) && (
+                    {formData.relogioAtual && (parseFloat(formData.relogioAtual) || 0) < (parseFloat(locacaoSelecionada.numeroRelogio) || 0) && (
                       <p className="text-xs text-red-500 mt-1 font-medium">Leitura atual não pode ser menor que a anterior</p>
                     )}
                   </div>

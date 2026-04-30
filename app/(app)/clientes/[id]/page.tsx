@@ -8,7 +8,7 @@ import { StatusClienteBadge, StatusLocacaoBadge, StatusPagamentoBadge } from '@/
 import { formatarMoeda } from '@/shared/types'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { ArrowLeft, Edit, MapPin, Phone, Mail, FileText, Calendar, TrendingUp, DollarSign, Package, Clock, Trash2 } from 'lucide-react'
+import { ArrowLeft, Edit, MapPin, Phone, Mail, FileText, Calendar, TrendingUp, DollarSign, Package, Clock, Trash2, MessageCircle } from 'lucide-react'
 import { ClienteDetailClient } from './cliente-detail-client'
 
 export const metadata: Metadata = { title: 'Detalhes do Cliente' }
@@ -92,16 +92,46 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                   <span className="text-sm font-medium text-slate-900">{cliente.rota?.descricao ?? '—'}</span>
                 </div>
 
+                {cliente.tipoPessoa === 'Fisica' && cliente.nomeCompleto && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Nome Completo</span>
+                    <span className="text-sm font-medium text-slate-900">{cliente.nomeCompleto}</span>
+                  </div>
+                )}
+                {cliente.tipoPessoa === 'Juridica' && cliente.razaoSocial && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Razão Social</span>
+                    <span className="text-sm font-medium text-slate-900">{cliente.razaoSocial}</span>
+                  </div>
+                )}
+                {cliente.tipoPessoa === 'Juridica' && cliente.nomeFantasia && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Nome Fantasia</span>
+                    <span className="text-sm font-medium text-slate-900">{cliente.nomeFantasia}</span>
+                  </div>
+                )}
                 {cliente.cpf && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">CPF</span>
                     <span className="text-sm font-medium text-slate-900">{cliente.cpf}</span>
                   </div>
                 )}
+                {cliente.rg && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">RG</span>
+                    <span className="text-sm font-medium text-slate-900">{cliente.rg}</span>
+                  </div>
+                )}
                 {cliente.cnpj && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-slate-500">CNPJ</span>
                     <span className="text-sm font-medium text-slate-900">{cliente.cnpj}</span>
+                  </div>
+                )}
+                {cliente.tipoPessoa === 'Juridica' && cliente.inscricaoEstadual && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-500">Inscrição Estadual</span>
+                    <span className="text-sm font-medium text-slate-900">{cliente.inscricaoEstadual}</span>
                   </div>
                 )}
 
@@ -145,6 +175,33 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                   </div>
                 </div>
               </div>
+
+              {/* Contatos Adicionais */}
+              {Array.isArray(cliente.contatos) && cliente.contatos.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-slate-100">
+                  <p className="xs font-medium text-slate-500 uppercase tracking-wider mb-3">Contatos Adicionais</p>
+                  <div className="space-y-2">
+                    {cliente.contatos.map((ct: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="text-sm font-medium text-slate-900">{ct.nome || 'Contato'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <a href={`tel:${ct.telefone}`} className="text-sm text-blue-600 hover:underline">
+                            {ct.telefone}
+                          </a>
+                          {ct.whatsapp && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
+                              WhatsApp
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Observação */}
               {cliente.observacao && (

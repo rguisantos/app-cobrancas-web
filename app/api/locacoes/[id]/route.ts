@@ -121,6 +121,49 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
+    // If trocaPano changed from false to true, create Manutencao record + update produto
+    if (updateData.trocaPano === true && !locacaoAtual.trocaPano) {
+      try {
+        const produto = await prisma.produto.findFirst({
+          where: { id: locacaoAtual.produtoId },
+          select: { id: true, identificador: true, tipoNome: true },
+        })
+
+        const now = new Date().toISOString()
+
+        await prisma.$transaction([
+          // Create Manutencao record for troca de pano
+          prisma.manutencao.create({
+            data: {
+              produtoId: locacaoAtual.produtoId,
+              produtoIdentificador: produto?.identificador || locacaoAtual.produtoIdentificador,
+              produtoTipo: produto?.tipoNome || locacaoAtual.produtoTipo,
+              clienteId: locacaoAtual.clienteId,
+              clienteNome: locacaoAtual.clienteNome,
+              locacaoId: id,
+              tipo: 'trocaPano',
+              descricao: 'Troca de pano registrada na edição da locação',
+              data: now,
+              registradoPor: session.user.id,
+            },
+          }),
+          // Update produto dataUltimaManutencao
+          prisma.produto.update({
+            where: { id: locacaoAtual.produtoId },
+            data: {
+              dataUltimaManutencao: now,
+              needsSync: true,
+              version: { increment: 1 },
+              deviceId: 'web',
+            },
+          }),
+        ])
+      } catch (manutencaoErr) {
+        // Non-critical: locação was already updated, manutenção registration should not fail the request
+        console.error('[PUT /locacoes/[id]] Erro ao registrar manutenção de troca de pano:', manutencaoErr)
+      }
+    }
+
     // Register change log for sync
     await prisma.changeLog.create({
       data: {

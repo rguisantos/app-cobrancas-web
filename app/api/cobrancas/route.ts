@@ -31,6 +31,7 @@ const createSchema = z.object({
   status:               z.enum(['Pago', 'Parcial', 'Pendente', 'Atrasado']).default('Pendente'),
   dataVencimento:       z.string().optional().nullable(),
   observacao:           z.string().optional().nullable(),
+  trocaPano:            z.boolean().optional().default(false),
 })
 
 export async function GET(req: NextRequest) {
@@ -94,35 +95,53 @@ export async function POST(req: NextRequest) {
     // Propagate relógio changes to product and locação
     // When a cobrança is created with relogioAtual, update:
     // 1. produto.numeroRelogio
-    // 2. locação.ultimaLeituraRelogio + numeroRelogio
+    // 2. locação.ultimaLeituraRelogio + numeroRelogio + trocaPano + dataUltimaManutencao
     // 3. historicoRelogio entry
+    // 4. If trocaPano: create Manutencao record + update produto.dataUltimaManutencao
     try {
       const locacao = await prisma.locacao.findFirst({
         where: { id: data.locacaoId },
-        select: { id: true, produtoId: true, numeroRelogio: true },
+        select: {
+          id: true,
+          produtoId: true,
+          numeroRelogio: true,
+          clienteId: true,
+          clienteNome: true,
+          produtoIdentificador: true,
+          produtoTipo: true,
+          trocaPano: true,
+        },
       })
 
       if (locacao?.produtoId) {
         const produto = await prisma.produto.findFirst({
           where: { id: locacao.produtoId },
-          select: { id: true, numeroRelogio: true, identificador: true },
+          select: { id: true, numeroRelogio: true, identificador: true, tipoNome: true },
         })
 
         if (produto) {
           const novoRelogio = String(data.relogioAtual)
           const relogioMudou = novoRelogio !== produto.numeroRelogio
+          const now = new Date().toISOString()
 
-          // Update locação with latest reading
+          // Update locação with latest reading + trocaPano if applicable
+          const locacaoUpdateData: Record<string, unknown> = {
+            ultimaLeituraRelogio: data.relogioAtual,
+            dataUltimaCobranca: now,
+            numeroRelogio: novoRelogio,
+            needsSync: true,
+            version: { increment: 1 },
+            deviceId: 'web',
+          }
+
+          if (data.trocaPano) {
+            locacaoUpdateData.trocaPano = true
+            locacaoUpdateData.dataUltimaManutencao = now
+          }
+
           await prisma.locacao.update({
             where: { id: data.locacaoId },
-            data: {
-              ultimaLeituraRelogio: data.relogioAtual,
-              dataUltimaCobranca: new Date().toISOString(),
-              numeroRelogio: novoRelogio,
-              needsSync: true,
-              version: { increment: 1 },
-              deviceId: 'web',
-            },
+            data: locacaoUpdateData,
           })
 
           // If relógio changed, update product + register history
@@ -132,6 +151,7 @@ export async function POST(req: NextRequest) {
                 where: { id: produto.id },
                 data: {
                   numeroRelogio: novoRelogio,
+                  ...(data.trocaPano ? { dataUltimaManutencao: now } : {}),
                   needsSync: true,
                   version: { increment: 1 },
                   deviceId: 'web',
@@ -147,12 +167,42 @@ export async function POST(req: NextRequest) {
                 },
               }),
             ])
+          } else if (data.trocaPano) {
+            // Even if relogio didn't change, update produto.dataUltimaManutencao if trocaPano
+            await prisma.produto.update({
+              where: { id: produto.id },
+              data: {
+                dataUltimaManutencao: now,
+                needsSync: true,
+                version: { increment: 1 },
+                deviceId: 'web',
+              },
+            })
+          }
+
+          // If trocaPano, create Manutencao record
+          if (data.trocaPano) {
+            await prisma.manutencao.create({
+              data: {
+                produtoId: locacao.produtoId,
+                produtoIdentificador: locacao.produtoIdentificador,
+                produtoTipo: locacao.produtoTipo || produto.tipoNome,
+                clienteId: locacao.clienteId,
+                clienteNome: locacao.clienteNome,
+                locacaoId: locacao.id,
+                cobrancaId: cobranca.id,
+                tipo: 'trocaPano',
+                descricao: 'Troca de pano registrada na cobrança',
+                data: now,
+                registradoPor: session.user.id,
+              },
+            })
           }
         }
       }
     } catch (propagationErr) {
       // Non-critical: cobrança was already created, propagation failure should not fail the request
-      console.error('[POST /cobrancas] Erro ao propagar relógio:', propagationErr)
+      console.error('[POST /cobrancas] Erro ao propagar relógio/trocaPano:', propagationErr)
     }
 
     return NextResponse.json(cobranca, { status: 201 })

@@ -294,7 +294,8 @@ model Cobranca {
   status                String    // 'Pago' | 'Parcial' | 'Pendente' | 'Atrasado'
   dataVencimento        String?
   observacao            String?
-  
+  trocaPano             Boolean   @default(false)
+
   // Sync
   syncStatus            String    @default("synced")
   lastSyncedAt          String?

@@ -95,7 +95,7 @@ export async function criarLocacao(data: LocacaoCreateInput, userId: string): Pr
   // 2. Validate produto exists and is available
   const produto = await prisma.produto.findFirst({
     where: { id: data.produtoId, deletedAt: null },
-    select: { id: true, statusProduto: true, identificador: true },
+    select: { id: true, statusProduto: true, identificador: true, numeroRelogio: true },
   })
 
   if (!produto) {
@@ -155,6 +155,37 @@ export async function criarLocacao(data: LocacaoCreateInput, userId: string): Pr
       }),
     ])
     logger.info(`[locacao-service] Relógio atualizado: ${relogioAnterior} → ${data.numeroRelogio} (produto ${produto.identificador})`)
+  }
+
+  // 4c. If trocaPano is true, create Manutencao record + update produto
+  if (data.trocaPano) {
+    const now = new Date().toISOString()
+    await prisma.$transaction([
+      prisma.manutencao.create({
+        data: {
+          produtoId: data.produtoId,
+          produtoIdentificador: data.produtoIdentificador,
+          produtoTipo: data.produtoTipo,
+          clienteId: data.clienteId,
+          clienteNome: data.clienteNome,
+          locacaoId: locacao.id,
+          tipo: 'trocaPano',
+          descricao: 'Troca de pano registrada na criação da locação',
+          data: now,
+          registradoPor: userId,
+        },
+      }),
+      prisma.produto.update({
+        where: { id: data.produtoId },
+        data: {
+          dataUltimaManutencao: now,
+          needsSync: true,
+          version: { increment: 1 },
+          deviceId: 'web',
+        },
+      }),
+    ])
+    logger.info(`[locacao-service] Manutenção de troca de pano registrada para produto ${produto.identificador}`)
   }
 
   // 5. Register change log for sync

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Save, Calculator, Loader2, FileText, Hash, DollarSign, Calendar, User, Package } from 'lucide-react'
+import { ArrowLeft, Save, Calculator, Loader2, FileText, Hash, DollarSign, Calendar, User, Package, Wrench } from 'lucide-react'
 import Header from '@/components/layout/header'
 import { formatarMoeda } from '@/shared/types'
 import { useToast } from '@/components/ui/toaster'
@@ -40,7 +40,8 @@ export default function NovaCobrancaPage() {
     valorRecebido: '',
     observacao: '',
     dataInicio: '',
-    dataFim: new Date().toISOString().split('T')[0]
+    dataFim: new Date().toISOString().split('T')[0],
+    trocaPano: false,
   })
 
   const [calculos, setCalculos] = useState({
@@ -101,8 +102,9 @@ export default function NovaCobrancaPage() {
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    const { name, value, type } = e.target
+    const checked = (e.target as HTMLInputElement).checked
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,19 +155,14 @@ export default function NovaCobrancaPage() {
           valorRecebido,
           saldoDevedorGerado: Math.max(0, saldoDevedorGerado),
           status: valorRecebido >= calculos.totalClientePaga ? 'Pago' : (valorRecebido > 0 ? 'Parcial' : 'Pendente'),
-          observacao: formData.observacao || null
+          observacao: formData.observacao || null,
+          trocaPano: formData.trocaPano,
         })
       })
 
       if (res.ok) {
-        await fetch(`/api/locacoes/${formData.locacaoId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ultimaLeituraRelogio: relogioAtual,
-            dataUltimaCobranca: formData.dataFim
-          })
-        })
+        // No need to call PUT /locacoes — the cobrança POST already propagates
+        // ultimaLeituraRelogio, dataUltimaCobranca, numeroRelogio, and trocaPano
         router.push('/cobrancas')
       } else {
         const errorData = await res.json()
@@ -372,6 +369,37 @@ export default function NovaCobrancaPage() {
                     </div>
                   </div>
                 </div>
+              </div>
+            </section>
+
+            {/* Troca de Pano */}
+            <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-4 md:px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+                  <Wrench className="w-5 h-5 text-purple-600" />
+                  Manutenção
+                </h2>
+              </div>
+              <div className="p-4 md:p-6">
+                <label className={`flex items-start gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                  formData.trocaPano
+                    ? 'border-purple-500 bg-purple-50'
+                    : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                }`}>
+                  <input
+                    type="checkbox"
+                    name="trocaPano"
+                    checked={formData.trocaPano}
+                    onChange={handleChange}
+                    className="w-5 h-5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 mt-0.5"
+                  />
+                  <div>
+                    <span className="font-medium text-slate-900">Troca de Pano</span>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Marque se foi realizada troca de pano neste momento. Isso registrará uma manutenção de troca de pano no produto e na locação.
+                    </p>
+                  </div>
+                </label>
               </div>
             </section>
 

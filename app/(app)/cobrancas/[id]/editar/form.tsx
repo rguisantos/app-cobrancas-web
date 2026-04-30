@@ -58,9 +58,11 @@ export default function EditarCobrancaForm({ cobranca, saldoAnterior, precoFicha
     const descontoPartidas = parseFloat(descontoPartidasQtd || '0') * precoFicha
     const descontoDinheiroVal = parseFloat(descontoDinheiro || '0')
     
-    const subtotal = totalBruto - descontoPartidas - descontoDinheiroVal
+    // Desconto Partidas reduz o subtotal (antes do percentual)
+    // Desconto Dinheiro reduz o líquido do cliente (após o percentual)
+    const subtotal = totalBruto - descontoPartidas
     const valorPercentual = subtotal * (cobranca.percentualEmpresa / 100)
-    const totalClientePaga = subtotal - valorPercentual
+    const totalClientePaga = subtotal - valorPercentual - descontoDinheiroVal
     
     // Saldo devedor inclui o saldo anterior da cobrança anterior (se houver)
     const totalComSaldoAnterior = totalClientePaga + saldoAnterior

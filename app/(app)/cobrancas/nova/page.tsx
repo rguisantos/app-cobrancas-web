@@ -82,9 +82,11 @@ export default function NovaCobrancaPage() {
     const descontoPartidasValor = descontoPartidasQtd * locacaoSelecionada.precoFicha
     const descontoDinheiro = parseFloat(formData.descontoDinheiro) || 0
     
-    const subtotalAposDescontos = totalBruto - descontoPartidasValor - descontoDinheiro
+    // Desconto Partidas reduz o subtotal (antes do percentual)
+    // Desconto Dinheiro reduz o líquido do cliente (após o percentual)
+    const subtotalAposDescontos = totalBruto - descontoPartidasValor
     const valorPercentual = subtotalAposDescontos * (locacaoSelecionada.percentualEmpresa / 100)
-    const totalClientePaga = subtotalAposDescontos - valorPercentual
+    const totalClientePaga = subtotalAposDescontos - valorPercentual - descontoDinheiro
 
     setCalculos({
       fichasRodadas,
@@ -439,7 +441,7 @@ export default function NovaCobrancaPage() {
                 </h2>
               </div>
               <div className="p-4 md:p-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="bg-white rounded-lg p-3 border border-blue-100">
                     <span className="text-xs text-slate-500">Fichas Rodadas</span>
                     <p className="text-xl font-bold text-slate-900 mt-1">{calculos.fichasRodadas.toFixed(0)}</p>
@@ -449,13 +451,19 @@ export default function NovaCobrancaPage() {
                     <p className="text-xl font-bold text-slate-900 mt-1">{formatarMoeda(calculos.totalBruto)}</p>
                   </div>
                   <div className="bg-white rounded-lg p-3 border border-blue-100">
-                    <span className="text-xs text-slate-500">Subtotal (após descontos)</span>
+                    <span className="text-xs text-slate-500">Subtotal (após partidas)</span>
                     <p className="text-xl font-bold text-slate-900 mt-1">{formatarMoeda(calculos.subtotalAposDescontos)}</p>
                   </div>
                   <div className="bg-white rounded-lg p-3 border border-blue-100">
                     <span className="text-xs text-slate-500">% Empresa</span>
                     <p className="text-xl font-bold text-blue-700 mt-1">-{formatarMoeda(calculos.valorPercentual)}</p>
                   </div>
+                  {(parseFloat(formData.descontoDinheiro) || 0) > 0 && (
+                    <div className="bg-white rounded-lg p-3 border border-amber-100">
+                      <span className="text-xs text-slate-500">Desc. Dinheiro (líquido)</span>
+                      <p className="text-xl font-bold text-amber-600 mt-1">-{formatarMoeda(parseFloat(formData.descontoDinheiro) || 0)}</p>
+                    </div>
+                  )}
                 </div>
                 <div className="mt-4 pt-4 border-t border-blue-200">
                   <div className="flex items-center justify-between">

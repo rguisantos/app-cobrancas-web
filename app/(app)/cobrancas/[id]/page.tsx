@@ -13,6 +13,7 @@ import {
   FileText, TrendingUp, Receipt, Clock, AlertCircle, CheckCircle2, XCircle,
   Download, Printer
 } from 'lucide-react'
+import { DeleteCobrancaButton } from './delete-button'
 
 export const metadata: Metadata = { title: 'Detalhes da Cobrança' }
 
@@ -98,6 +99,9 @@ export default async function CobrancaDetailPage({ params }: { params: Promise<{
                 <Edit className="w-4 h-4" />
                 <span className="hidden sm:inline">Editar</span>
               </Link>
+            )}
+            {isAdmin && (
+              <DeleteCobrancaButton cobrancaId={id} cobrancaLabel={`#${cobranca.id.slice(0, 8)}`} />
             )}
             <Link href="/cobrancas" className="btn-secondary text-sm">
               <ArrowLeft className="w-4 h-4" />

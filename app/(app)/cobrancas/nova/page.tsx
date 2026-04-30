@@ -144,6 +144,9 @@ export default function NovaCobrancaPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Proteção contra duplo clique
+    if (loading) return
+
     if (!locacaoSelecionada) {
       warning('Selecione uma locação')
       return

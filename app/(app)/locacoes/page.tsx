@@ -71,7 +71,7 @@ export default async function LocacoesPage({
       <Header
         title="Locações"
         subtitle={`${total} locação${total !== 1 ? 'ões' : ''} registrada${total !== 1 ? 's' : ''}`}
-        actions={podeEditar && <Link href="/locacoes/nova" className="btn-primary text-sm">+ Nova Locação</Link>}
+        actions={podeEditar && <Link href="/locacoes/novo" className="btn-primary text-sm">+ Nova Locação</Link>}
       />
 
       <LocacoesClient

@@ -221,7 +221,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                 Locações ({totalLocacoes})
               </h2>
               {podeEditar && (
-                <Link href={`/locacoes/nova?clienteId=${cliente.id}`} className="btn-primary text-xs py-1.5">
+                <Link href={`/locacoes/novo?clienteId=${cliente.id}`} className="btn-primary text-xs py-1.5">
                   + Nova
                 </Link>
               )}
@@ -352,7 +352,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
                     <Edit className="w-4 h-4" />
                     Editar Cliente
                   </Link>
-                  <Link href={`/locacoes/nova?clienteId=${cliente.id}`} className="btn-primary w-full justify-center">
+                  <Link href={`/locacoes/novo?clienteId=${cliente.id}`} className="btn-primary w-full justify-center">
                     <Package className="w-4 h-4" />
                     Nova Locação
                   </Link>
@@ -367,7 +367,7 @@ export default async function ClienteDetailPage({ params }: { params: Promise<{ 
       {podeEditar && (
         <div className="lg:hidden fixed bottom-4 right-4 flex flex-col gap-3">
           <Link
-            href={`/locacoes/nova?clienteId=${cliente.id}`}
+            href={`/locacoes/novo?clienteId=${cliente.id}`}
             className="w-14 h-14 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-lg hover:bg-purple-700 transition-colors"
             title="Nova Locação"
           >

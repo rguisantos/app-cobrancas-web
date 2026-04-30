@@ -340,7 +340,7 @@ export function LocacoesClient({
             </p>
             {podeEditar && (
               <div className="flex flex-col sm:flex-row gap-3">
-                <Link href="/locacoes/nova" className="btn-primary flex items-center gap-1.5">
+                <Link href="/locacoes/novo" className="btn-primary flex items-center gap-1.5">
                   <Plus className="w-4 h-4" />
                   Nova Locação
                 </Link>

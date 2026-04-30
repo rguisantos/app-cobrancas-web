@@ -98,6 +98,7 @@ export function ProdutoForm({ mode, produtoId, initialData }: ProdutoFormProps) 
   const [tipos, setTipos] = useState<AtributoOpcao[]>([])
   const [descricoes, setDescricoes] = useState<AtributoOpcao[]>([])
   const [tamanhos, setTamanhos] = useState<AtributoOpcao[]>([])
+  const [estabelecimentos, setEstabelecimentos] = useState<AtributoOpcao[]>([])
   const [formData, setFormData] = useState<ProdutoFormData>(
     initialData ? { ...EMPTY_FORM, ...initialData } : EMPTY_FORM
   )
@@ -108,6 +109,10 @@ export function ProdutoForm({ mode, produtoId, initialData }: ProdutoFormProps) 
       fetch('/api/tipos-produto').then(res => res.json()).then(setTipos),
       fetch('/api/descricoes-produto').then(res => res.json()).then(setDescricoes),
       fetch('/api/tamanhos-produto').then(res => res.json()).then(setTamanhos),
+      fetch('/api/estabelecimentos?limit=100').then(res => res.json()).then((data: any) => {
+        const list = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : [])
+        setEstabelecimentos(list.map((e: any) => ({ id: e.id, nome: e.nome })))
+      }),
     ]
 
     if (mode === 'editar' && produtoId) {
@@ -489,13 +494,17 @@ export function ProdutoForm({ mode, produtoId, initialData }: ProdutoFormProps) 
             <FormField label="Estabelecimento">
               <div className="relative">
                 <Package className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
+                <select
                   name="estabelecimento"
                   value={formData.estabelecimento}
                   onChange={handleChange}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
-                  placeholder="Local onde o produto está (ex: Barracão)"
-                />
+                  className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all bg-white appearance-none"
+                >
+                  <option value="">Selecione o estabelecimento</option>
+                  {estabelecimentos.map(e => (
+                    <option key={e.id} value={e.nome}>{e.nome}</option>
+                  ))}
+                </select>
               </div>
             </FormField>
           </div>

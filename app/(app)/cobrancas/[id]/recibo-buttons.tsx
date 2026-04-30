@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Download, Printer, Loader2 } from 'lucide-react'
-import { formatarMoeda } from '@/shared/types'
 import { useToast } from '@/components/ui/toaster'
 
 interface CobrancaReciboData {
@@ -64,7 +63,7 @@ function formatarData(dataStr: string): string {
 }
 
 export function ReciboButtons({ cobrancaId }: ReciboButtonsProps) {
-  const [loading, setLoading] = useState<'a4' | 'termico' | null>(null)
+  const [loading, setLoading] = useState<'a4' | null>(null)
   const { error: toastError } = useToast()
 
   const gerarReciboA4 = async () => {
@@ -314,231 +313,10 @@ export function ReciboButtons({ cobrancaId }: ReciboButtonsProps) {
     }
   }
 
-  const gerarReciboTermico = async () => {
-    setLoading('termico')
-    try {
-      // Buscar dados da cobrança
-      const res = await fetch(`/api/cobrancas/${cobrancaId}`)
-      if (!res.ok) {
-        toastError('Erro ao buscar dados da cobrança')
-        return
-      }
-      const cobranca: CobrancaReciboData = await res.json()
-
-      // Importar jsPDF dinamicamente (client-side)
-      const { jsPDF } = await import('jspdf')
-
-      const pageWidth = 72
-      const marginX = 3
-      const contentWidth = pageWidth - marginX * 2
-      const initialHeight = 600
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [pageWidth, initialHeight] })
-
-      let y = marginX + 4
-
-      function centerText(text: string, fontSize: number, style: 'normal' | 'bold' = 'normal') {
-        doc.setFontSize(fontSize)
-        doc.setFont('helvetica', style)
-        const textWidth = doc.getTextWidth(text)
-        doc.text(text, (pageWidth - textWidth) / 2, y)
-        y += fontSize * 0.45 + 2
-      }
-
-      function leftText(text: string, fontSize: number, style: 'normal' | 'bold' = 'normal') {
-        doc.setFontSize(fontSize)
-        doc.setFont('helvetica', style)
-        doc.text(text, marginX, y)
-        y += fontSize * 0.45 + 1
-      }
-
-      function keyValue(key: string, value: string, fontSize: number = 7) {
-        doc.setFontSize(fontSize)
-        doc.setFont('helvetica', 'normal')
-        doc.text(key, marginX, y)
-        doc.setFont('helvetica', 'bold')
-        doc.text(value, pageWidth - marginX, y, { align: 'right' })
-        y += fontSize * 0.45 + 1.5
-      }
-
-      function separator() {
-        doc.setFontSize(7)
-        doc.setFont('courier', 'normal')
-        const sep = '--------------------------------'
-        doc.text(sep, (pageWidth - doc.getTextWidth(sep)) / 2, y)
-        y += 8
-      }
-
-      // ===== CABECALHO =====
-      doc.setTextColor(0, 0, 0)
-      centerText('Sistema de Gestao', 10, 'bold')
-      centerText('de Cobrancas', 10, 'bold')
-      y += 2
-      leftText('Endereco: Av. Principal, 1000', 6)
-      leftText('Telefone: (67) 99999-0000', 6)
-      y += 4
-
-      separator()
-
-      // ===== RECIBO # e DATA =====
-      centerText('RECIBO', 9, 'bold')
-      keyValue('Recibo N:', cobranca.id.slice(0, 8).toUpperCase())
-      keyValue('Data:', new Date().toLocaleDateString('pt-BR'))
-      keyValue('Hora:', new Date().toLocaleTimeString('pt-BR'))
-      y += 2
-
-      separator()
-
-      // ===== CLIENTE =====
-      centerText('CLIENTE', 8, 'bold')
-      y += 1
-      const cpfCnpj = cobranca.cliente?.tipoPessoa === 'Juridica'
-        ? cobranca.cliente?.cnpj || ''
-        : cobranca.cliente?.cpf || ''
-
-      keyValue('Nome:', cobranca.cliente?.nomeExibicao || cobranca.clienteNome)
-      if (cpfCnpj) keyValue('CPF/CNPJ:', cpfCnpj)
-      y += 2
-
-      separator()
-
-      // ===== PRODUTO =====
-      centerText('PRODUTO', 8, 'bold')
-      y += 1
-      keyValue('Identificador:', cobranca.produtoIdentificador)
-      keyValue('Tipo:', cobranca.locacao?.produtoTipo || '-')
-      keyValue('Periodo:', `${formatarData(cobranca.dataInicio)} a ${formatarData(cobranca.dataFim)}`)
-      if (cobranca.dataPagamento) keyValue('Pgto:', formatarData(cobranca.dataPagamento))
-      y += 2
-
-      separator()
-
-      // ===== LEITURA DO RELOGIO =====
-      centerText('LEITURA DO RELOGIO', 8, 'bold')
-      y += 1
-      keyValue('Anterior:', cobranca.relogioAnterior.toLocaleString('pt-BR'))
-      keyValue('Atual:', cobranca.relogioAtual.toLocaleString('pt-BR'))
-      keyValue('Fichas:', cobranca.fichasRodadas.toLocaleString('pt-BR'))
-      y += 2
-
-      separator()
-
-      // ===== RESUMO FINANCEIRO =====
-      centerText('RESUMO FINANCEIRO', 8, 'bold')
-      y += 1
-
-      keyValue('Valor Ficha:', formatarMoedaLocal(cobranca.valorFicha))
-      keyValue('Total Bruto:', formatarMoedaLocal(cobranca.totalBruto))
-
-      if (cobranca.descontoPartidasValor && cobranca.descontoPartidasValor > 0) {
-        keyValue(`Desc. Partidas (${cobranca.descontoPartidasQtd}):`, `- ${formatarMoedaLocal(cobranca.descontoPartidasValor)}`)
-      }
-      if (cobranca.descontoDinheiro && cobranca.descontoDinheiro > 0) {
-        keyValue('Desc. Dinheiro (liq.):', `- ${formatarMoedaLocal(cobranca.descontoDinheiro)}`)
-      }
-
-      keyValue('Subtotal:', formatarMoedaLocal(cobranca.subtotalAposDescontos))
-      keyValue(`% Empresa (${cobranca.percentualEmpresa}%):`, `- ${formatarMoedaLocal(cobranca.valorPercentual)}`)
-
-      y += 2
-
-      // Total com destaque
-      doc.setFillColor(0, 0, 0)
-      doc.rect(marginX, y - 1, contentWidth, 12, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(9)
-      doc.setFont('helvetica', 'bold')
-      doc.text('TOTAL CLIENTE PAGA', marginX + 2, y + 7)
-      doc.text(formatarMoedaLocal(cobranca.totalClientePaga), pageWidth - marginX - 2, y + 7, { align: 'right' })
-      doc.setTextColor(0, 0, 0)
-      y += 16
-
-      // Saldo Devedor Anterior
-      const saldoAnterior = cobranca.saldoAnterior || 0
-      if (saldoAnterior > 0) {
-        doc.setTextColor(180, 120, 0)
-        doc.setFontSize(7)
-        doc.setFont('helvetica', 'bold')
-        doc.text('+ Saldo Anterior:', marginX, y)
-        doc.text(formatarMoedaLocal(saldoAnterior), pageWidth - marginX, y, { align: 'right' })
-        doc.setTextColor(0, 0, 0)
-        y += 10
-
-        doc.setFillColor(180, 0, 0)
-        doc.rect(marginX, y - 1, contentWidth, 12, 'F')
-        doc.setTextColor(255, 255, 255)
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'bold')
-        doc.text('TOTAL A RECEBER', marginX + 2, y + 7)
-        doc.text(formatarMoedaLocal(cobranca.totalClientePaga + saldoAnterior), pageWidth - marginX - 2, y + 7, { align: 'right' })
-        doc.setTextColor(0, 0, 0)
-        y += 16
-      }
-
-      keyValue('Valor Recebido:', formatarMoedaLocal(cobranca.valorRecebido))
-
-      const saldoDevedor = cobranca.saldoDevedorGerado ?? 0
-      if (saldoDevedor > 0) {
-        doc.setTextColor(180, 0, 0)
-        doc.setFontSize(8)
-        doc.setFont('helvetica', 'bold')
-        doc.text('Saldo Devedor:', marginX, y)
-        doc.text(formatarMoedaLocal(saldoDevedor), pageWidth - marginX, y, { align: 'right' })
-        doc.setTextColor(0, 0, 0)
-        y += 12
-      } else {
-        keyValue('Saldo Devedor:', formatarMoedaLocal(0))
-      }
-
-      if (cobranca.observacao) {
-        y += 2
-        separator()
-        doc.setFontSize(6)
-        doc.setFont('helvetica', 'italic')
-        doc.text(`Obs: ${cobranca.observacao}`, marginX, y, { maxWidth: contentWidth })
-        y += 10
-      }
-
-      y += 2
-      separator()
-
-      // ===== STATUS =====
-      const statusColors: Record<string, { r: number; g: number; b: number; label: string }> = {
-        Pago: { label: 'PAGO', r: 22, g: 163, b: 74 },
-        Parcial: { label: 'PAGAMENTO PARCIAL', r: 245, g: 158, b: 11 },
-        Pendente: { label: 'PENDENTE', r: 37, g: 99, b: 235 },
-        Atrasado: { label: 'ATRASADO', r: 220, g: 38, b: 38 },
-      }
-      const sInfo = statusColors[cobranca.status] || { label: cobranca.status, r: 100, g: 100, b: 100 }
-
-      doc.setFillColor(sInfo.r, sInfo.g, sInfo.b)
-      const sBoxW = Math.min(contentWidth, 65)
-      doc.roundedRect((pageWidth - sBoxW) / 2, y, sBoxW, 12, 2, 2, 'F')
-      doc.setTextColor(255, 255, 255)
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'bold')
-      doc.text(sInfo.label, pageWidth / 2, y + 8.5, { align: 'center' })
-      doc.setTextColor(0, 0, 0)
-      y += 18
-
-      separator()
-
-      // RODAPE
-      centerText('Obrigado pela preferencia!', 7, 'bold')
-      y += 2
-      centerText(`Gerado em ${new Date().toLocaleString('pt-BR')}`, 5)
-
-      // Trim page
-      const finalHeight = y + marginX + 4
-      ;(doc.internal.pageSize as any).height = finalHeight
-
-      // Salvar
-      doc.save(`recibo-termico-${cobranca.id.slice(0, 8)}.pdf`)
-    } catch (err) {
-      console.error('Erro ao gerar recibo térmico:', err)
-      toastError('Erro ao gerar recibo térmico. Tente novamente.')
-    } finally {
-      setLoading(null)
-    }
+  const imprimirReciboTermico = () => {
+    // Abrir página de impressão térmica em nova aba
+    // A página já dispara window.print() automaticamente
+    window.open(`/cobrancas/${cobrancaId}/imprimir`, '_blank')
   }
 
   return (
@@ -547,17 +325,19 @@ export function ReciboButtons({ cobrancaId }: ReciboButtonsProps) {
         onClick={gerarReciboA4}
         disabled={!!loading}
         className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+        title="Baixar recibo em PDF formato A4"
       >
         {loading === 'a4' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
         <span className="hidden sm:inline">Recibo PDF</span>
       </button>
       <button
-        onClick={gerarReciboTermico}
+        onClick={imprimirReciboTermico}
         disabled={!!loading}
         className="btn-secondary text-sm inline-flex items-center gap-1.5 disabled:opacity-50"
+        title="Imprimir recibo em impressora térmica 80mm"
       >
-        {loading === 'termico' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
-        <span className="hidden sm:inline">Recibo Térmico</span>
+        <Printer className="w-4 h-4" />
+        <span className="hidden sm:inline">Imprimir</span>
       </button>
     </>
   )

@@ -35,7 +35,7 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ['@prisma/client', 'bcryptjs'],
+  serverExternalPackages: ['@prisma/client', 'bcryptjs', 'jspdf', 'jspdf-autotable', 'qrcode', 'canvas'],
   typescript: {
     ignoreBuildErrors: false,
   },

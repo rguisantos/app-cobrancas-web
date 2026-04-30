@@ -347,7 +347,11 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       },
     })
   } catch (err) {
-    console.error('[cobrancas/recibo-termico]', err)
-    return serverError()
+    console.error('[cobrancas/recibo-termico] Erro ao gerar PDF:', err)
+    const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido'
+    return NextResponse.json(
+      { error: 'Erro ao gerar recibo térmico', details: errorMessage },
+      { status: 500 }
+    )
   }
 }

@@ -10,10 +10,10 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { 
   ArrowLeft, Calculator, Edit, Hash, DollarSign, Calendar, User, Package, 
-  FileText, TrendingUp, Receipt, Clock, AlertCircle, CheckCircle2, XCircle,
-  Download, Printer
+  FileText, TrendingUp, Receipt, Clock, AlertCircle, CheckCircle2, XCircle
 } from 'lucide-react'
 import { DeleteCobrancaButton } from './delete-button'
+import { ReciboButtons } from './recibo-buttons'
 
 export const metadata: Metadata = { title: 'Detalhes da Cobrança' }
 
@@ -86,14 +86,7 @@ export default async function CobrancaDetailPage({ params }: { params: Promise<{
         subtitle={`${cobranca.clienteNome} - ${cobranca.produtoIdentificador}`}
         actions={
           <div className="flex gap-2">
-            <a href={`/api/cobrancas/${id}/recibo`} target="_blank" rel="noopener noreferrer" className="btn-secondary text-sm">
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Recibo PDF</span>
-            </a>
-            <a href={`/api/cobrancas/${id}/recibo-termico`} target="_blank" rel="noopener noreferrer" className="btn-secondary text-sm">
-              <Printer className="w-4 h-4" />
-              <span className="hidden sm:inline">Recibo Térmico</span>
-            </a>
+            <ReciboButtons cobrancaId={id} />
             {podeEditar && (
               <Link href={`/cobrancas/${id}/editar`} className="btn-primary text-sm">
                 <Edit className="w-4 h-4" />

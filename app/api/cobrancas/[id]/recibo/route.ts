@@ -402,7 +402,11 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
       },
     })
   } catch (err) {
-    console.error('[cobrancas/recibo]', err)
-    return serverError()
+    console.error('[cobrancas/recibo] Erro ao gerar PDF:', err)
+    const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido'
+    return NextResponse.json(
+      { error: 'Erro ao gerar recibo PDF', details: errorMessage },
+      { status: 500 }
+    )
   }
 }

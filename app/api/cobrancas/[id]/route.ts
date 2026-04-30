@@ -23,7 +23,23 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     } 
   })
   if (!cobranca) return notFound()
-  return NextResponse.json(cobranca)
+  
+  // Buscar saldo anterior da cobrança anterior (para recibos client-side)
+  const cobrancaAnterior = await prisma.cobranca.findFirst({
+    where: {
+      locacaoId: cobranca.locacaoId,
+      deletedAt: null,
+      id: { not: id },
+      createdAt: { lt: cobranca.createdAt }
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { saldoDevedorGerado: true }
+  })
+
+  return NextResponse.json({
+    ...cobranca,
+    saldoAnterior: cobrancaAnterior?.saldoDevedorGerado ?? 0,
+  })
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

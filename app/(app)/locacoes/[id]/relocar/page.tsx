@@ -72,6 +72,12 @@ export default function RelocarProdutoPage() {
       .then(res => res.json())
       .then(data => {
         setLocacao(data)
+        // Helper: extract YYYY-MM-DD from ISO date string for HTML date inputs
+        const toDateInput = (v: string | null | undefined) => {
+          if (!v) return ''
+          try { return new Date(v).toISOString().split('T')[0] } catch { return '' }
+        }
+
         setFormData(prev => ({
           ...prev,
           numeroRelogio: data.numeroRelogio || '',
@@ -80,7 +86,7 @@ export default function RelocarProdutoPage() {
           formaPagamento: data.formaPagamento || 'PercentualReceber',
           periodicidade: data.periodicidade || '',
           valorFixo: data.valorFixo ? String(data.valorFixo) : '',
-          dataPrimeiraCobranca: data.dataPrimeiraCobranca || '',
+          dataPrimeiraCobranca: toDateInput(data.dataPrimeiraCobranca),
         }))
         setLoadingData(false)
       })

@@ -176,6 +176,7 @@ export const relocarSchema = z.object({
   percentualCliente:   z.number().min(0, 'Percentual mínimo é 0').max(100, 'Percentual máximo é 100'),
   periodicidade:       z.enum(['Mensal', 'Semanal', 'Quinzenal', 'Diária']).optional().nullable(),
   valorFixo:           z.number().positive('Valor fixo deve ser positivo').optional().nullable(),
+  dataPrimeiraCobranca: z.string().optional().nullable(),
   motivoRelocacao:     z.string().min(3, 'Motivo da relocação deve ter pelo menos 3 caracteres'),
   observacao:          z.string().optional().nullable(),
   trocaPano:           z.boolean().optional(),

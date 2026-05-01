@@ -312,6 +312,7 @@ export async function relocarProduto(
         percentualCliente: data.percentualCliente,
         periodicidade: data.periodicidade,
         valorFixo: data.valorFixo,
+        dataPrimeiraCobranca: data.dataPrimeiraCobranca || undefined,
         observacao: data.observacao,
         status: 'Ativa',
         trocaPano: data.trocaPano || false,

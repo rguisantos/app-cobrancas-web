@@ -58,7 +58,11 @@ export default function EnviarEstoquePage() {
     ])
       .then(([locacaoData, estabelecimentosData]) => {
         setLocacao(locacaoData)
-        setEstabelecimentos(estabelecimentosData)
+        // API returns { data: [...], total, page, limit } — extract the array
+        const listaEstabelecimentos = Array.isArray(estabelecimentosData)
+          ? estabelecimentosData
+          : (estabelecimentosData.data || [])
+        setEstabelecimentos(listaEstabelecimentos)
         setLoadingData(false)
       })
       .catch(err => {

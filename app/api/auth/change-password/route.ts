@@ -8,6 +8,7 @@ import { verificarSenha, hashSenha } from '@/lib/hash'
 import { getSession } from '@/lib/auth'
 import { revogarTodasSessoes } from '@/lib/auth-core'
 import { trocarSenhaSchema } from '@/lib/validations'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function POST(req: NextRequest) {
   let userId: string | null = null
@@ -62,6 +63,17 @@ export async function POST(req: NextRequest) {
 
     // Revogar todas as sessões (garante que qualquer atacante com a senha antiga seja desconectado)
     await revogarTodasSessoes(usuario.id)
+
+    registrarAuditoria({
+      acao: 'alterar_senha',
+      entidade: 'usuario',
+      entidadeId: usuario.id,
+      entidadeNome: usuario.email,
+      detalhes: { email: usuario.email },
+      usuarioId: usuario.id,
+      ...extractRequestInfo(req),
+      severidade: 'seguranca',
+    })
 
     return NextResponse.json({
       success: true,

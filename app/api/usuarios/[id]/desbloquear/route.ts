@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, notFound, serverError } from '@/lib/api-helpers'
-import { registrarAuditoria } from '@/lib/auditoria'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function POST(
   req: NextRequest,
@@ -24,11 +24,14 @@ export async function POST(
       },
     })
 
-    await registrarAuditoria({
+    registrarAuditoria({
       acao: 'desbloquear_usuario',
       entidade: 'usuario',
       entidadeId: id,
+      entidadeNome: usuario.nome,
       detalhes: { nome: usuario.nome, email: usuario.email },
+      ...extractRequestInfo(req),
+      severidade: 'seguranca',
     })
 
     return NextResponse.json({ success: true })

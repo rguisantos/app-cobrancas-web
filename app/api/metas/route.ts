@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { getAuthSession, getUserRotaIds, unauthorized, forbidden, serverError, validateBody, handleApiError, ApiError } from '@/lib/api-helpers'
 import { metaCreateSchema } from '@/lib/validations'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 // GET /api/metas - List all metas with progress
 export async function GET(request: NextRequest) {
@@ -143,6 +144,15 @@ export async function POST(request: NextRequest) {
         rotaId: data.rotaId || null,
         criadoPor: data.criadoPor || session.user.id,
       },
+    })
+
+    registrarAuditoria({
+      acao: 'criar_meta',
+      entidade: 'meta',
+      entidadeId: meta.id,
+      entidadeNome: meta.nome,
+      detalhes: { nome: data.nome, tipo: data.tipo, valorMeta: data.valorMeta },
+      ...extractRequestInfo(request),
     })
 
     return NextResponse.json(meta, { status: 201 })

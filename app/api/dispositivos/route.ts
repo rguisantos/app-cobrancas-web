@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth'
 import { logger } from '@/lib/logger'
 import { gerarChaveAtivacao, gerarSenhaNumerica } from '@/lib/dispositivo-helpers'
 import { z } from 'zod'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 // Schema de validação para criação
 const createSchema = z.object({
@@ -112,6 +113,14 @@ export async function POST(request: NextRequest) {
         },
       })
       logger.info(`[dispositivos] Dispositivo criado (retry): ${dispositivo.id} - ${dispositivo.nome}`)
+      registrarAuditoria({
+        acao: 'criar_dispositivo',
+        entidade: 'dispositivo',
+        entidadeId: dispositivo.id,
+        entidadeNome: dispositivo.nome,
+        detalhes: { nome: data.nome, tipo: data.tipo },
+        ...extractRequestInfo(request),
+      })
       return NextResponse.json(dispositivo, { status: 201 })
     }
 
@@ -126,6 +135,14 @@ export async function POST(request: NextRequest) {
     })
 
     logger.info(`[dispositivos] Dispositivo criado: ${dispositivo.id} - ${dispositivo.nome}`)
+    registrarAuditoria({
+      acao: 'criar_dispositivo',
+      entidade: 'dispositivo',
+      entidadeId: dispositivo.id,
+      entidadeNome: dispositivo.nome,
+      detalhes: { nome: data.nome, tipo: data.tipo },
+      ...extractRequestInfo(request),
+    })
     return NextResponse.json(dispositivo, { status: 201 })
   } catch (err) {
     if (err instanceof z.ZodError) {

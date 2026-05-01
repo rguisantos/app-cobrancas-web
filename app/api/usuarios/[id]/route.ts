@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { hashSenha } from '@/lib/hash'
 import { getAuthSession, unauthorized, notFound, serverError } from '@/lib/api-helpers'
 import { PERMISSOES_PADRAO } from '@/lib/permissoes-padrao'
-import { registrarAuditoria } from '@/lib/auditoria'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { z } from 'zod'
 
 // ─── Zod schemas for expanded permissions ──────────────────────────
@@ -172,11 +172,15 @@ export async function PUT(
     if (rotasPermitidas !== undefined) detalhesAlteracao.rotasAlteradas = true
     if (senha) detalhesAlteracao.senhaAlterada = true
 
-    await registrarAuditoria({
+    registrarAuditoria({
       acao: permissoesWeb || permissoesMobile ? 'alterar_permissao' : 'editar_usuario',
       entidade: 'usuario',
       entidadeId: id,
+      entidadeNome: usuarioExistente.nome,
       detalhes: detalhesAlteracao,
+      antes: { nome: usuarioExistente.nome, email: usuarioExistente.email, tipoPermissao: usuarioExistente.tipoPermissao },
+      depois: { nome: rest.nome || usuarioExistente.nome, email: rest.email || usuarioExistente.email, tipoPermissao: rest.tipoPermissao || usuarioExistente.tipoPermissao },
+      ...extractRequestInfo(req),
     })
     
     const { senha: _, ...usuarioSemSenha } = usuario
@@ -218,11 +222,13 @@ export async function PATCH(
         },
       })
 
-      await registrarAuditoria({
+      registrarAuditoria({
         acao: novoBloqueio ? 'editar_usuario' : 'desbloquear_usuario',
         entidade: 'usuario',
         entidadeId: id,
+        entidadeNome: usuario.nome,
         detalhes: { nome: usuario.nome, email: usuario.email, bloqueado: novoBloqueio },
+        ...extractRequestInfo(req),
       })
 
       return NextResponse.json({ success: true, bloqueado: novoBloqueio })
@@ -262,11 +268,13 @@ export async function DELETE(
     await prisma.sessao.deleteMany({ where: { usuarioId: id } })
 
     // Registrar auditoria
-    await registrarAuditoria({
+    registrarAuditoria({
       acao: 'excluir_usuario',
       entidade: 'usuario',
       entidadeId: id,
+      entidadeNome: usuario.nome,
       detalhes: { nome: usuario.nome, email: usuario.email },
+      ...extractRequestInfo(req),
     })
     
     return NextResponse.json({ success: true })

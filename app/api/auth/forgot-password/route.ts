@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { logger } from '@/lib/logger'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -55,6 +56,16 @@ export async function POST(req: NextRequest) {
         token: tokenHash,
         expiraEm,
       },
+    })
+
+    registrarAuditoria({
+      acao: 'recuperar_senha',
+      entidade: 'usuario',
+      entidadeId: usuario.id,
+      entidadeNome: usuario.email,
+      detalhes: { email, tokenGerado: true },
+      ...extractRequestInfo(req),
+      severidade: 'seguranca',
     })
 
     logger.info(`[forgot-password] Token de recuperação gerado para: ${email}`)

@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth'
 import { logger } from '@/lib/logger'
 import { gerarSenhaNumerica } from '@/lib/dispositivo-helpers'
 import { z } from 'zod'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 // Schema de validação para atualização
 const patchSchema = z.object({
@@ -68,6 +69,16 @@ export async function PATCH(
     })
 
     logger.info(`[dispositivos] Dispositivo atualizado: ${id} - campos: ${Object.keys(data).join(', ')}`)
+    registrarAuditoria({
+      acao: 'editar_dispositivo',
+      entidade: 'dispositivo',
+      entidadeId: id,
+      entidadeNome: existente.nome,
+      detalhes: { campos: Object.keys(data) },
+      antes: { nome: existente.nome, status: existente.status },
+      depois: { ...data },
+      ...extractRequestInfo(request),
+    })
     return NextResponse.json(dispositivo)
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -123,6 +134,14 @@ export async function DELETE(
     })
 
     logger.info(`[dispositivos] Dispositivo excluído (soft delete): ${id} - ${existente.nome}`)
+    registrarAuditoria({
+      acao: 'excluir_dispositivo',
+      entidade: 'dispositivo',
+      entidadeId: id,
+      entidadeNome: existente.nome,
+      detalhes: { nome: existente.nome, softDelete: true },
+      ...extractRequestInfo(request),
+    })
     return NextResponse.json({ success: true, message: 'Dispositivo desativado com sucesso' })
   } catch (err) {
     logger.error('[dispositivos] Erro ao excluir:', err)

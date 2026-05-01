@@ -6,6 +6,7 @@ import { processPush, purgeOldChangeLogs } from '@/lib/sync-engine'
 import { logger } from '@/lib/logger'
 import { validateDispositivoAtivo } from '@/lib/dispositivo-helpers'
 import type { ChangeLog } from '@cobrancas/shared'
+import { registrarAuditoria } from '@/lib/auditoria'
 import { z } from 'zod'
 
 // Schema flexível para aceitar tipos do SQLite (string JSON, number, null)
@@ -81,6 +82,16 @@ export async function POST(req: NextRequest) {
         logger.warn('[sync/push] Erro no purge de changelog:', err)
       )
     }
+
+    registrarAuditoria({
+      acao: 'sync_push',
+      entidade: 'sync',
+      detalhes: { deviceId, changesCount: changes.length, conflictsCount: conflicts.length, errorsCount: errors.length },
+      usuarioId: tokenValido.sub,
+      ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || undefined,
+      userAgent: req.headers.get('user-agent') || undefined,
+      origem: 'mobile',
+    })
 
     return NextResponse.json({
       success: true,

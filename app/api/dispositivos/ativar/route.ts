@@ -11,6 +11,7 @@ import {
   getClientIp,
 } from '@/lib/dispositivo-helpers'
 import { z } from 'zod'
+import { registrarAuditoria } from '@/lib/auditoria'
 
 const schema = z.object({
   dispositivoId: z.string().min(1, 'ID do dispositivo é obrigatório'),
@@ -105,6 +106,18 @@ export async function POST(req: NextRequest) {
 
     registerSuccess(ip)
     logger.info(`[dispositivos/ativar:${requestId}] Dispositivo ativado com sucesso: ${dispositivoAtualizado.id} - ${dispositivoAtualizado.nome}`)
+
+    registrarAuditoria({
+      acao: 'ativar_dispositivo',
+      entidade: 'dispositivo',
+      entidadeId: dispositivoAtualizado.id,
+      entidadeNome: dispositivoAtualizado.nome,
+      detalhes: { deviceName: data.deviceName, ativado: true },
+      ip,
+      userAgent: req.headers.get('user-agent') || undefined,
+      origem: 'mobile',
+      severidade: 'seguranca',
+    })
 
     return NextResponse.json({
       success: true,

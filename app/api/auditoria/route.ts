@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, handleApiError } from '@/lib/api-helpers'
-import { ACAO_LABELS, ENTIDADE_LABELS, ACAO_CATEGORIAS, getCategoriaAcao } from '@/lib/auditoria'
+import { ACAO_LABELS, ENTIDADE_LABELS, ACAO_CATEGORIAS, getCategoriaAcao, parseUserAgent, gerarDiff, formatarDiffParaResumo } from '@/lib/auditoria'
 
 // GET /api/auditoria — Listar logs de auditoria (LogAuditoria)
 export async function GET(request: NextRequest) {
@@ -15,13 +15,17 @@ export async function GET(request: NextRequest) {
     const usuarioId = searchParams.get('usuarioId')
     const dataInicio = searchParams.get('dataInicio')
     const dataFim = searchParams.get('dataFim')
+    const severidade = searchParams.get('severidade')
+    const origem = searchParams.get('origem')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
 
     const where: any = {}
     if (entidade) where.entidade = entidade
-    if (acao) where.acao = acao
+    if (acao) where.acao = { startsWith: acao }
     if (usuarioId) where.usuarioId = usuarioId
+    if (severidade) where.severidade = severidade
+    if (origem) where.origem = origem
     if (dataInicio || dataFim) {
       where.createdAt = {}
       if (dataInicio) where.createdAt.gte = new Date(dataInicio)
@@ -33,7 +37,7 @@ export async function GET(request: NextRequest) {
         where,
         include: {
           usuario: {
-            select: { id: true, nome: true, email: true }
+            select: { id: true, nome: true, email: true, tipoPermissao: true }
           }
         },
         orderBy: { createdAt: 'desc' },
@@ -43,27 +47,38 @@ export async function GET(request: NextRequest) {
       prisma.logAuditoria.count({ where }),
     ])
 
-    // Enriquecer com labels
+    // Enriquecer com labels, diff e device info
     const enriched = logs.map(log => {
       const acaoLabel = ACAO_LABELS[log.acao] || log.acao
       const entidadeLabel = ENTIDADE_LABELS[log.entidade] || log.entidade
       const categoria = getCategoriaAcao(log.acao)
       const categoriaInfo = ACAO_CATEGORIAS[categoria] || ACAO_CATEGORIAS.especial
 
+      // Parsear user-agent para info de dispositivo
+      const deviceInfo = parseUserAgent(log.userAgent)
+
+      // Gerar diff se tem antes/depois
+      const diff = gerarDiff(
+        log.antes as Record<string, any> | null,
+        log.depois as Record<string, any> | null
+      )
+      const diffResumo = formatarDiffParaResumo(diff)
+
       // Gerar resumo legível
       const detalhes = log.detalhes as Record<string, any> | null
+      const entidadeNome = log.entidadeNome || (
+        detalhes?.nome || detalhes?.nomeExibicao || detalhes?.identificador || detalhes?.email ||
+        detalhes?.descricao || detalhes?.clienteNome || detalhes?.produtoIdentificador || ''
+      )
       let resumo = `${acaoLabel} — ${entidadeLabel}`
-      if (detalhes?.nome || detalhes?.nomeExibicao || detalhes?.identificador || detalhes?.email) {
-        resumo += `: ${detalhes.nome || detalhes.nomeExibicao || detalhes.identificador || detalhes.email}`
-      }
-      if (detalhes?.campos && Array.isArray(detalhes.campos)) {
-        resumo += ` (${detalhes.campos.join(', ')})`
-      }
+      if (entidadeNome) resumo += `: ${entidadeNome}`
+      if (diffResumo) resumo += ` (${diffResumo})`
 
       return {
         ...log,
         acaoLabel,
         entidadeLabel,
+        entidadeNome,
         categoria,
         categoriaLabel: categoriaInfo.label,
         categoriaColor: categoriaInfo.color,
@@ -71,28 +86,80 @@ export async function GET(request: NextRequest) {
         resumo,
         usuarioNome: log.usuario?.nome || 'Sistema',
         usuarioEmail: log.usuario?.email || '',
+        usuarioTipoPermissao: log.usuario?.tipoPermissao || '',
+        deviceInfo,
+        diff,
       }
     })
 
-    // Estatísticas rápidas para o dashboard
-    const stats = await prisma.logAuditoria.aggregate({
-      where: { createdAt: { gte: new Date(new Date().setDate(new Date().getDate() - 30)) } },
-      _count: true,
-    })
-
+    // Estatísticas para o dashboard
+    const trintaDiasAtras = new Date(new Date().setDate(new Date().getDate() - 30))
     const hoje = new Date()
     hoje.setHours(0, 0, 0, 0)
-    const statsHoje = await prisma.logAuditoria.count({
-      where: { createdAt: { gte: hoje } },
+
+    const [totalMes, statsHoje, topAcoes, topUsuarios, porSeveridade, porOrigem, porEntidade] = await Promise.all([
+      prisma.logAuditoria.count({
+        where: { createdAt: { gte: trintaDiasAtras } },
+      }),
+      prisma.logAuditoria.count({
+        where: { createdAt: { gte: hoje } },
+      }),
+      prisma.logAuditoria.groupBy({
+        by: ['acao'],
+        where: { createdAt: { gte: trintaDiasAtras } },
+        _count: { acao: true },
+        orderBy: { _count: { acao: 'desc' } },
+        take: 8,
+      }),
+      prisma.logAuditoria.groupBy({
+        by: ['usuarioId'],
+        where: { createdAt: { gte: trintaDiasAtras }, usuarioId: { not: null } },
+        _count: { usuarioId: true },
+        orderBy: { _count: { usuarioId: 'desc' } },
+        take: 5,
+      }),
+      prisma.logAuditoria.groupBy({
+        by: ['severidade'],
+        where: { createdAt: { gte: trintaDiasAtras } },
+        _count: { severidade: true },
+      }),
+      prisma.logAuditoria.groupBy({
+        by: ['origem'],
+        where: { createdAt: { gte: trintaDiasAtras } },
+        _count: { origem: true },
+      }),
+      prisma.logAuditoria.groupBy({
+        by: ['entidade'],
+        where: { createdAt: { gte: trintaDiasAtras } },
+        _count: { entidade: true },
+        orderBy: { _count: { entidade: 'desc' } },
+        take: 8,
+      }),
+    ])
+
+    // Buscar nomes dos top usuários
+    const topUsuarioIds = topUsuarios.filter(u => u.usuarioId).map(u => u.usuarioId!)
+    const topUsuariosNomes = await prisma.usuario.findMany({
+      where: { id: { in: topUsuarioIds } },
+      select: { id: true, nome: true, email: true },
     })
 
-    // Top ações
-    const topAcoes = await prisma.logAuditoria.groupBy({
-      by: ['acao'],
-      where: { createdAt: { gte: new Date(new Date().setDate(new Date().getDate() - 30)) } },
-      _count: { acao: true },
-      orderBy: { _count: { acao: 'desc' } },
-      take: 5,
+    const topUsuariosComNome = topUsuarios.map(tu => {
+      const user = topUsuariosNomes.find(u => u.id === tu.usuarioId)
+      return {
+        usuarioId: tu.usuarioId,
+        nome: user?.nome || 'Desconhecido',
+        email: user?.email || '',
+        count: tu._count.usuarioId,
+      }
+    })
+
+    // Contagem de ações críticas e de segurança hoje
+    const criticasHoje = await prisma.logAuditoria.count({
+      where: {
+        createdAt: { gte: hoje },
+        severidade: { in: ['critico', 'seguranca'] },
+      },
     })
 
     return NextResponse.json({
@@ -104,12 +171,27 @@ export async function GET(request: NextRequest) {
         pages: Math.ceil(total / limit),
       },
       stats: {
-        totalMes: stats._count,
+        totalMes,
         totalHoje: statsHoje,
+        criticasHoje,
         topAcoes: topAcoes.map(ta => ({
           acao: ta.acao,
           label: ACAO_LABELS[ta.acao] || ta.acao,
           count: ta._count.acao,
+        })),
+        topUsuarios: topUsuariosComNome,
+        porSeveridade: porSeveridade.map(ps => ({
+          severidade: ps.severidade,
+          count: ps._count.severidade,
+        })),
+        porOrigem: porOrigem.map(po => ({
+          origem: po.origem,
+          count: po._count.origem,
+        })),
+        porEntidade: porEntidade.map(pe => ({
+          entidade: pe.entidade,
+          label: ENTIDADE_LABELS[pe.entidade] || pe.entidade,
+          count: pe._count.entidade,
         })),
       },
     })

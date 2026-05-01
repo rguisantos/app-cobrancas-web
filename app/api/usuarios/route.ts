@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { hashSenha } from '@/lib/hash'
 import { getAuthSession, unauthorized, serverError } from '@/lib/api-helpers'
 import { PERMISSOES_PADRAO } from '@/lib/permissoes-padrao'
-import { registrarAuditoria } from '@/lib/auditoria'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { z } from 'zod'
 
 // ─── Zod schemas for expanded permissions ──────────────────────────
@@ -112,11 +112,13 @@ export async function POST(req: NextRequest) {
     })
 
     // Registrar auditoria
-    await registrarAuditoria({
+    registrarAuditoria({
       acao: 'criar_usuario',
       entidade: 'usuario',
       entidadeId: usuario.id,
+      entidadeNome: usuario.nome,
       detalhes: { nome: usuario.nome, email: usuario.email, tipoPermissao: rest.tipoPermissao },
+      ...extractRequestInfo(req),
     })
     
     return NextResponse.json({ 

@@ -6,6 +6,7 @@ import { processPull } from '@/lib/sync-engine'
 import { logger } from '@/lib/logger'
 import { validateDispositivoAtivo } from '@/lib/dispositivo-helpers'
 import { z } from 'zod'
+import { registrarAuditoria } from '@/lib/auditoria'
 
 const pullSchema = z.object({
   deviceId:   z.string(),
@@ -52,6 +53,16 @@ export async function POST(req: NextRequest) {
       (response.changes?.rotas?.length || 0)
 
     logger.info(`[sync/pull:${requestId}] PULL concluído. Total: ${totalChanges}, hasMore: ${response.hasMore}, isStale: ${response.isStale}`)
+
+    registrarAuditoria({
+      acao: 'sync_pull',
+      entidade: 'sync',
+      detalhes: { deviceId, totalChanges },
+      usuarioId: tokenValido.sub,
+      ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || undefined,
+      userAgent: req.headers.get('user-agent') || undefined,
+      origem: 'mobile',
+    })
 
     return NextResponse.json(response)
   } catch (err) {

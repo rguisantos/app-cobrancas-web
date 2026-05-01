@@ -7,6 +7,7 @@ import { hashSenha } from '@/lib/hash'
 import { revogarTodasSessoes } from '@/lib/auth-core'
 import { validarForcaSenha } from '@/lib/auth-core'
 import { logger } from '@/lib/logger'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { z } from 'zod'
 
 function hashToken(token: string): string {
@@ -99,6 +100,16 @@ export async function POST(req: NextRequest) {
 
     // Revogar todas as sessões existentes (segurança: força re-login em todos os dispositivos)
     await revogarTodasSessoes(tokenRecuperacao.usuarioId)
+
+    registrarAuditoria({
+      acao: 'reset_senha',
+      entidade: 'usuario',
+      entidadeId: tokenRecuperacao.usuarioId,
+      entidadeNome: tokenRecuperacao.usuario.email,
+      detalhes: { email: tokenRecuperacao.usuario.email, viaToken: true },
+      ...extractRequestInfo(req),
+      severidade: 'seguranca',
+    })
 
     logger.info(`[reset-password] Senha redefinida para: ${tokenRecuperacao.usuario.email}`)
 

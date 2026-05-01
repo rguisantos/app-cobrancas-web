@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, forbidden, serverError, badRequest, validateBody, handleApiError } from '@/lib/api-helpers'
 import { historicoRelogioCreateSchema } from '@/lib/validations'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function GET(req: NextRequest) {
   const session = await getAuthSession()
@@ -115,6 +116,18 @@ export async function POST(req: NextRequest) {
         },
       }),
     ])
+
+    registrarAuditoria({
+      acao: 'atualizar_relogio',
+      entidade: 'historicoRelogio',
+      entidadeId: historico.id,
+      entidadeNome: produto.identificador,
+      detalhes: { produtoIdentificador: produto.identificador, relogioAnterior, relogioNovo: data.relogioNovo, motivo: data.motivo },
+      antes: { numeroRelogio: relogioAnterior },
+      depois: { numeroRelogio: data.relogioNovo },
+      ...extractRequestInfo(req),
+      severidade: 'aviso',
+    })
 
     return NextResponse.json(historico, { status: 201 })
   } catch (err) {

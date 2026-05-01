@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hashSenha } from '@/lib/hash'
 import { getAuthSession, unauthorized, notFound, serverError } from '@/lib/api-helpers'
-import { registrarAuditoria } from '@/lib/auditoria'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { z } from 'zod'
 
 const resetSchema = z.object({
@@ -43,11 +43,13 @@ export async function POST(
     // Revogar todas as sessões para forçar re-login
     await prisma.sessao.deleteMany({ where: { usuarioId: id } })
 
-    await registrarAuditoria({
+    registrarAuditoria({
       acao: 'reset_senha',
       entidade: 'usuario',
       entidadeId: id,
+      entidadeNome: usuario.nome,
       detalhes: { nome: usuario.nome, email: usuario.email },
+      ...extractRequestInfo(req),
     })
 
     return NextResponse.json({ success: true, message: 'Senha redefinida com sucesso' })

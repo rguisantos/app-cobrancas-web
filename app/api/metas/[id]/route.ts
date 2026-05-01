@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, forbidden, notFound, handleApiError } from '@/lib/api-helpers'
 import { metaUpdateSchema } from '@/lib/validations'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function PUT(
   request: NextRequest,
@@ -37,6 +38,17 @@ export async function PUT(
       },
     })
 
+    registrarAuditoria({
+      acao: 'editar_meta',
+      entidade: 'meta',
+      entidadeId: id,
+      entidadeNome: existing.nome,
+      detalhes: { campos: Object.keys(data) },
+      antes: { nome: existing.nome, tipo: existing.tipo, valorMeta: existing.valorMeta, status: existing.status },
+      depois: data,
+      ...extractRequestInfo(request),
+    })
+
     return NextResponse.json(meta)
   } catch (err) {
     return handleApiError(err)
@@ -62,6 +74,15 @@ export async function DELETE(
 
     // Excluir permanentemente (Meta não tem soft delete no schema atual)
     await prisma.meta.delete({ where: { id } })
+
+    registrarAuditoria({
+      acao: 'excluir_meta',
+      entidade: 'meta',
+      entidadeId: id,
+      entidadeNome: existing.nome,
+      detalhes: { nome: existing.nome, tipo: existing.tipo },
+      ...extractRequestInfo(request),
+    })
 
     return NextResponse.json({ success: true })
   } catch (err) {

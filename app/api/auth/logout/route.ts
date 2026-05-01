@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revogarSessao, revogarTodasSessoes } from '@/lib/auth-core'
 import { extrairToken, verificarToken } from '@/lib/jwt'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -15,21 +16,36 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}))
     const { refreshToken, revogarTodas } = schema.parse(body)
 
+    // Obter payload do access token para auditoria (disponível em todos os fluxos)
+    const token = extrairToken(req.headers.get('Authorization'))
+    const payload = token ? verificarToken(token) : null
+
     if (revogarTodas) {
-      // Obter usuário a partir do access token
-      const token = extrairToken(req.headers.get('Authorization'))
-      if (token) {
-        const payload = verificarToken(token)
-        if (payload?.sub) {
-          const count = await revogarTodasSessoes(payload.sub)
-          return NextResponse.json({ success: true, message: `${count} sessões encerradas` })
-        }
+      if (payload?.sub) {
+        const count = await revogarTodasSessoes(payload.sub)
+        registrarAuditoria({
+          acao: 'revogar_todas_sessoes',
+          entidade: 'sessao',
+          detalhes: { sessoesRevogadas: count },
+          usuarioId: payload.sub,
+          ...extractRequestInfo(req),
+          severidade: 'seguranca',
+        })
+        return NextResponse.json({ success: true, message: `${count} sessões encerradas` })
       }
       return NextResponse.json({ error: 'Token não fornecido' }, { status: 401 })
     }
 
     if (refreshToken) {
       const revoked = await revogarSessao(refreshToken)
+      registrarAuditoria({
+        acao: 'logout',
+        entidade: 'sessao',
+        detalhes: { tipo: 'sessao_unica' },
+        usuarioId: payload?.sub,
+        ...extractRequestInfo(req),
+        severidade: 'seguranca',
+      })
       if (revoked) {
         return NextResponse.json({ success: true, message: 'Sessão encerrada' })
       }
@@ -37,6 +53,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Sem refresh token fornecido — best effort
+    registrarAuditoria({
+      acao: 'logout',
+      entidade: 'sessao',
+      detalhes: { tipo: 'sem_token' },
+      usuarioId: payload?.sub,
+      ...extractRequestInfo(req),
+      severidade: 'seguranca',
+    })
     return NextResponse.json({ success: true, message: 'Logout realizado' })
   } catch {
     return NextResponse.json({ success: true, message: 'Logout realizado' })

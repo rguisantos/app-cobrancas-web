@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { extrairToken, verificarToken } from '@/lib/jwt'
 import { resolveConflict, conflictResolveSchema } from '@/lib/sync-conflict-resolver'
 import { logger } from '@/lib/logger'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function POST(req: NextRequest) {
   const token = extrairToken(req.headers.get('Authorization'))
@@ -23,6 +24,15 @@ export async function POST(req: NextRequest) {
         { status: result.status || 400 }
       )
     }
+
+    registrarAuditoria({
+      acao: 'sync_conflict_resolve',
+      entidade: 'sync',
+      detalhes: { conflictId: input.conflitoId, resolution: input.estrategia },
+      ...extractRequestInfo(req),
+      origem: 'mobile',
+      severidade: 'aviso',
+    })
 
     return NextResponse.json({ success: true, message: 'Conflito resolvido' })
   } catch (error) {

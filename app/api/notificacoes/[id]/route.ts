@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, notFound, handleApiError } from '@/lib/api-helpers'
+import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
 
 export async function PUT(
   req: NextRequest,
@@ -24,6 +25,14 @@ export async function PUT(
     const updated = await prisma.notificacao.update({
       where: { id },
       data: { lida: true },
+    })
+
+    registrarAuditoria({
+      acao: 'marcar_notificacao_lida',
+      entidade: 'notificacao',
+      entidadeId: id,
+      detalhes: { titulo: notificacao.titulo },
+      ...extractRequestInfo(req),
     })
 
     return NextResponse.json(updated)
@@ -50,6 +59,14 @@ export async function DELETE(
     if (!notificacao) return notFound('Notificação não encontrada')
 
     await prisma.notificacao.delete({ where: { id } })
+
+    registrarAuditoria({
+      acao: 'excluir_notificacao',
+      entidade: 'notificacao',
+      entidadeId: id,
+      detalhes: { titulo: notificacao.titulo },
+      ...extractRequestInfo(req),
+    })
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -653,12 +653,18 @@ model TokenRecuperacao {
 model LogAuditoria {
   id          String   @id @default(uuid())
   usuarioId   String?  // Usuário que executou a ação (null se sistema)
-  acao        String   // 'criar_usuario' | 'editar_usuario' | 'excluir_usuario' | 'desbloquear_usuario' | 'reset_senha' | 'alterar_permissao' | 'login' | 'logout'
-  entidade    String   // 'usuario' | 'sessao' | etc.
+  acao        String   // Ação executada (ver AcaoAuditoria em lib/auditoria.ts)
+  entidade    String   // Entidade afetada (usuario, cliente, produto, etc.)
   entidadeId  String?  // ID da entidade afetada
+  entidadeNome String? // Nome/identificador legível da entidade (ex: "Romário", "800")
   detalhes    Json?    // Dados adicionais da ação (campos alterados, etc.)
+  antes       Json?    // Snapshot dos dados ANTES da alteração
+  depois      Json?    // Snapshot dos dados DEPOIS da alteração
   ip          String?
   userAgent   String?
+  dispositivo String?  // Dispositivo parseado (ex: "Chrome 120 / Windows 11", "Mobile Android")
+  severidade  String   @default("info") // 'info' | 'aviso' | 'critico' | 'seguranca'
+  origem      String   @default("web")  // 'web' | 'mobile' | 'sistema' | 'cron'
   createdAt   DateTime @default(now())
 
   usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
@@ -668,4 +674,6 @@ model LogAuditoria {
   @@index([acao])
   @@index([entidade, entidadeId])
   @@index([createdAt])
+  @@index([severidade])
+  @@index([origem])
 }

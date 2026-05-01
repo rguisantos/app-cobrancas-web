@@ -49,6 +49,7 @@ interface AuditLog {
   // Enriched
   acaoLabel: string
   entidadeLabel: string
+  acaoContemEntidade: boolean
   categoria: string
   categoriaLabel: string
   categoriaColor: string
@@ -637,9 +638,11 @@ export default function AuditoriaClient() {
                         <span className="text-sm font-medium text-slate-900">
                           {log.acaoLabel}
                         </span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full border ${log.categoriaBg} ${log.categoriaColor}`}>
-                          {log.entidadeLabel}
-                        </span>
+                        {!log.acaoContemEntidade && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full border ${log.categoriaBg} ${log.categoriaColor}`}>
+                            {log.entidadeLabel}
+                          </span>
+                        )}
                         {log.entidadeNome && (
                           <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
                             {log.entidadeNome}

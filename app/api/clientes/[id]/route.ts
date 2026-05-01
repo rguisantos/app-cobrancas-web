@@ -64,6 +64,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       acao: 'editar_cliente',
       entidade: 'cliente',
       entidadeId: id,
+      entidadeNome: cliente.nomeExibicao,
       detalhes: { nomeExibicao: cliente.nomeExibicao, campos: Object.keys(body).filter(k => !['id', 'version', 'needsSync', 'syncStatus', 'lastSyncedAt', 'deviceId'].includes(k)) },
       ...extractRequestInfo(req),
     }).catch(() => {})
@@ -95,6 +96,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       acao: 'excluir_cliente',
       entidade: 'cliente',
       entidadeId: id,
+      entidadeNome: cliente.nomeExibicao,
       detalhes: { nomeExibicao: cliente.nomeExibicao, softDelete: true },
       ...extractRequestInfo(_),
     }).catch(() => {})

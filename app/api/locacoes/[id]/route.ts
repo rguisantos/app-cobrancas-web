@@ -181,6 +181,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       acao: 'editar_locacao',
       entidade: 'locacao',
       entidadeId: id,
+      entidadeNome: locacaoAtual.clienteNome && locacaoAtual.produtoIdentificador
+        ? `${locacaoAtual.clienteNome} - ${locacaoAtual.produtoIdentificador}`
+        : locacaoAtual.clienteNome || locacaoAtual.produtoIdentificador || undefined,
       detalhes: { campos: updateData },
       ...extractRequestInfo(req),
     }).catch(() => {})

@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       acao: 'criar_estabelecimento',
       entidade: 'estabelecimento',
       entidadeId: item.id,
+      entidadeNome: data.nome,
       detalhes: { nome: data.nome },
       ...extractRequestInfo(req),
     }).catch(() => {})

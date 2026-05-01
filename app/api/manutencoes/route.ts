@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
       acao: 'criar_manutencao',
       entidade: 'manutencao',
       entidadeId: manutencao.id,
+      entidadeNome: produtoIdentificador && clienteNome ? `${clienteNome} - ${produtoIdentificador}` : produtoIdentificador || clienteNome,
       detalhes: { tipo: data.tipo, produtoIdentificador, clienteNome },
       ...extractRequestInfo(req),
     }).catch(() => {})

@@ -108,6 +108,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       acao: 'editar_produto',
       entidade: 'produto',
       entidadeId: id,
+      entidadeNome: produto.identificador,
       detalhes: { identificador: produto.identificador, campos: data },
       ...extractRequestInfo(req),
     }).catch(() => {})
@@ -161,6 +162,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       acao: 'excluir_produto',
       entidade: 'produto',
       entidadeId: id,
+      entidadeNome: produto.identificador,
       detalhes: { identificador: produto.identificador, softDelete: true },
       ...extractRequestInfo(_),
     }).catch(() => {})

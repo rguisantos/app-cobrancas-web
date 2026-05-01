@@ -245,6 +245,7 @@ export async function POST(req: NextRequest) {
       acao: 'criar_cobranca',
       entidade: 'cobranca',
       entidadeId: cobranca.id,
+      entidadeNome: data.clienteNome && data.produtoIdentificador ? `${data.clienteNome} - ${data.produtoIdentificador}` : data.clienteNome || data.produtoIdentificador,
       detalhes: { clienteNome: data.clienteNome, produtoIdentificador: data.produtoIdentificador, totalClientePaga: data.totalClientePaga, valorRecebido: data.valorRecebido, status: cobranca.status },
       ...extractRequestInfo(req),
     }).catch(() => {})

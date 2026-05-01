@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
       acao: 'criar_cliente',
       entidade: 'cliente',
       entidadeId: cliente.id,
+      entidadeNome: cliente.nomeExibicao || cliente.identificador,
       detalhes: { nomeExibicao: cliente.nomeExibicao, identificador: cliente.identificador },
       ...extractRequestInfo(req),
     }).catch(() => {})

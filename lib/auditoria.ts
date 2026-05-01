@@ -52,7 +52,7 @@ export type AcaoAuditoria =
 
 export const ACAO_LABELS: Record<string, string> = {
   // Usuários
-  criar_usuario: 'Criar Usuário',
+  criar_usuario: 'Novo Usuário',
   editar_usuario: 'Editar Usuário',
   excluir_usuario: 'Excluir Usuário',
   desbloquear_usuario: 'Desbloquear Usuário',
@@ -64,57 +64,57 @@ export const ACAO_LABELS: Record<string, string> = {
   alterar_senha: 'Alterar Senha',
   recuperar_senha: 'Recuperar Senha',
   // Clientes
-  criar_cliente: 'Criar Cliente',
+  criar_cliente: 'Novo Cliente',
   editar_cliente: 'Editar Cliente',
   excluir_cliente: 'Excluir Cliente',
   // Produtos
-  criar_produto: 'Criar Produto',
+  criar_produto: 'Novo Produto',
   editar_produto: 'Editar Produto',
   excluir_produto: 'Excluir Produto',
   // Locações
-  criar_locacao: 'Criar Locação',
+  criar_locacao: 'Nova Locação',
   editar_locacao: 'Editar Locação',
   excluir_locacao: 'Excluir Locação',
   relocar_locacao: 'Relocar Locação',
   enviar_estoque: 'Enviar para Estoque',
   finalizar_locacao: 'Finalizar Locação',
   // Cobranças
-  criar_cobranca: 'Criar Cobrança',
+  criar_cobranca: 'Nova Cobrança',
   editar_cobranca: 'Editar Cobrança',
   excluir_cobranca: 'Excluir Cobrança',
   alterar_status_cobranca: 'Alterar Status Cobrança',
   imprimir_recibo: 'Imprimir Recibo',
   // Rotas
-  criar_rota: 'Criar Rota',
+  criar_rota: 'Nova Rota',
   editar_rota: 'Editar Rota',
   excluir_rota: 'Excluir Rota',
   // Manutenções
-  criar_manutencao: 'Criar Manutenção',
+  criar_manutencao: 'Nova Manutenção',
   editar_manutencao: 'Editar Manutenção',
   excluir_manutencao: 'Excluir Manutenção',
   // Tipos/Descrições/Tamanhos
-  criar_tipo_produto: 'Criar Tipo Produto',
+  criar_tipo_produto: 'Novo Tipo Produto',
   editar_tipo_produto: 'Editar Tipo Produto',
   excluir_tipo_produto: 'Excluir Tipo Produto',
-  criar_descricao_produto: 'Criar Descrição Produto',
+  criar_descricao_produto: 'Nova Descrição Produto',
   editar_descricao_produto: 'Editar Descrição Produto',
   excluir_descricao_produto: 'Excluir Descrição Produto',
-  criar_tamanho_produto: 'Criar Tamanho Produto',
+  criar_tamanho_produto: 'Novo Tamanho Produto',
   editar_tamanho_produto: 'Editar Tamanho Produto',
   excluir_tamanho_produto: 'Excluir Tamanho Produto',
   // Estabelecimentos
-  criar_estabelecimento: 'Criar Estabelecimento',
+  criar_estabelecimento: 'Novo Estabelecimento',
   editar_estabelecimento: 'Editar Estabelecimento',
   excluir_estabelecimento: 'Excluir Estabelecimento',
   // Relógio
   atualizar_relogio: 'Atualizar Relógio',
   // Dispositivos
-  criar_dispositivo: 'Criar Dispositivo',
+  criar_dispositivo: 'Novo Dispositivo',
   editar_dispositivo: 'Editar Dispositivo',
   excluir_dispositivo: 'Excluir Dispositivo',
   ativar_dispositivo: 'Ativar Dispositivo',
   // Metas
-  criar_meta: 'Criar Meta',
+  criar_meta: 'Nova Meta',
   editar_meta: 'Editar Meta',
   excluir_meta: 'Excluir Meta',
   // Notificações
@@ -133,6 +133,29 @@ export const ACAO_LABELS: Record<string, string> = {
   revogar_sessao: 'Revogar Sessão',
   revogar_todas_sessoes: 'Revogar Todas as Sessões',
 }
+
+/**
+ * Ações cujo label JÁ contém o nome da entidade (ex: 'Nova Locação' já diz 'Locação').
+ * Para essas ações, o resumo NÃO repete o entidadeLabel.
+ */
+export const ACOES_COM_ENTIDADE_NO_LABEL = new Set([
+  'criar_usuario', 'editar_usuario', 'excluir_usuario',
+  'desbloquear_usuario', 'alterar_permissao',
+  'criar_cliente', 'editar_cliente', 'excluir_cliente',
+  'criar_produto', 'editar_produto', 'excluir_produto',
+  'criar_locacao', 'editar_locacao', 'excluir_locacao',
+  'relocar_locacao', 'finalizar_locacao',
+  'criar_cobranca', 'editar_cobranca', 'excluir_cobranca',
+  'alterar_status_cobranca',
+  'criar_rota', 'editar_rota', 'excluir_rota',
+  'criar_manutencao', 'editar_manutencao', 'excluir_manutencao',
+  'criar_tipo_produto', 'editar_tipo_produto', 'excluir_tipo_produto',
+  'criar_descricao_produto', 'editar_descricao_produto', 'excluir_descricao_produto',
+  'criar_tamanho_produto', 'editar_tamanho_produto', 'excluir_tamanho_produto',
+  'criar_estabelecimento', 'editar_estabelecimento', 'excluir_estabelecimento',
+  'criar_dispositivo', 'editar_dispositivo', 'excluir_dispositivo', 'ativar_dispositivo',
+  'criar_meta', 'editar_meta', 'excluir_meta',
+])
 
 export const ENTIDADE_LABELS: Record<string, string> = {
   usuario: 'Usuário',

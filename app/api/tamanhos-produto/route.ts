@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
       acao: 'criar_tamanho_produto',
       entidade: 'tamanhoProduto',
       entidadeId: item.id,
+      entidadeNome: data.nome,
       detalhes: { nome: data.nome },
       ...extractRequestInfo(req),
     }).catch(() => {})

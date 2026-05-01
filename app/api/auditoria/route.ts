@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, unauthorized, handleApiError } from '@/lib/api-helpers'
-import { ACAO_LABELS, ENTIDADE_LABELS, ACAO_CATEGORIAS, getCategoriaAcao, parseUserAgent, gerarDiff, formatarDiffParaResumo } from '@/lib/auditoria'
+import { ACAO_LABELS, ENTIDADE_LABELS, ACAO_CATEGORIAS, ACOES_COM_ENTIDADE_NO_LABEL, getCategoriaAcao, parseUserAgent, gerarDiff, formatarDiffParaResumo } from '@/lib/auditoria'
 
 // GET /api/auditoria — Listar logs de auditoria (LogAuditoria)
 export async function GET(request: NextRequest) {
@@ -64,13 +64,14 @@ export async function GET(request: NextRequest) {
       )
       const diffResumo = formatarDiffParaResumo(diff)
 
-      // Gerar resumo legível
+      // Gerar resumo legível (sem redundância: se o label da ação já contém a entidade, não repete)
       const detalhes = log.detalhes as Record<string, any> | null
       const entidadeNome = log.entidadeNome || (
         detalhes?.nome || detalhes?.nomeExibicao || detalhes?.identificador || detalhes?.email ||
         detalhes?.descricao || detalhes?.clienteNome || detalhes?.produtoIdentificador || ''
       )
-      let resumo = `${acaoLabel} — ${entidadeLabel}`
+      const acaoJaContemEntidade = ACOES_COM_ENTIDADE_NO_LABEL.has(log.acao)
+      let resumo = acaoJaContemEntidade ? acaoLabel : `${acaoLabel} — ${entidadeLabel}`
       if (entidadeNome) resumo += `: ${entidadeNome}`
       if (diffResumo) resumo += ` (${diffResumo})`
 
@@ -79,6 +80,7 @@ export async function GET(request: NextRequest) {
         acaoLabel,
         entidadeLabel,
         entidadeNome,
+        acaoContemEntidade: acaoJaContemEntidade,
         categoria,
         categoriaLabel: categoriaInfo.label,
         categoriaColor: categoriaInfo.color,

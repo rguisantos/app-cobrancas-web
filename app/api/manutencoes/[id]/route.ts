@@ -94,6 +94,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       acao: 'editar_manutencao',
       entidade: 'manutencao',
       entidadeId: id,
+      entidadeNome: manutencaoExistente?.produtoIdentificador && manutencaoExistente?.clienteNome ? `${manutencaoExistente.clienteNome} - ${manutencaoExistente.produtoIdentificador}` : manutencaoExistente?.produtoIdentificador || manutencaoExistente?.clienteNome || undefined,
       detalhes: { campos },
       ...extractRequestInfo(req),
     }).catch(() => {})
@@ -133,6 +134,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       acao: 'excluir_manutencao',
       entidade: 'manutencao',
       entidadeId: id,
+      entidadeNome: manutencaoExistente.produtoIdentificador && manutencaoExistente.clienteNome ? `${manutencaoExistente.clienteNome} - ${manutencaoExistente.produtoIdentificador}` : manutencaoExistente.produtoIdentificador || undefined,
       detalhes: { softDelete: true, produtoIdentificador: manutencaoExistente.produtoIdentificador, tipo: manutencaoExistente.tipo },
       ...extractRequestInfo(_),
     }).catch(() => {})

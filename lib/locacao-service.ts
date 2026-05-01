@@ -201,10 +201,15 @@ export async function criarLocacao(data: LocacaoCreateInput, userId: string): Pr
   })
 
   // 6. Audit log
+  const entidadeNome = data.clienteNome && data.produtoIdentificador
+    ? `${data.clienteNome} - ${data.produtoIdentificador}`
+    : data.clienteNome || data.produtoIdentificador || undefined
+
   await registrarAuditoria({
     acao: 'criar_locacao',
     entidade: 'locacao',
     entidadeId: locacao.id,
+    entidadeNome,
     detalhes: {
       clienteNome: data.clienteNome,
       produtoIdentificador: data.produtoIdentificador,
@@ -238,6 +243,7 @@ export async function relocarProduto(
   locacaoId: string,
   data: RelocarInput,
   userId: string,
+  requestInfo?: { ip?: string; userAgent?: string },
 ): Promise<RelocarResult> {
   // 1. Find current locação
   const locacaoAtual = await prisma.locacao.findFirst({
@@ -366,10 +372,13 @@ export async function relocarProduto(
   })
 
   // 5. Audit log (outside transaction — non-critical)
+  const relocEntidadeNome = `${locacaoAtual.clienteNome} → ${data.novoClienteNome} (${locacaoAtual.produtoIdentificador})`
+
   await registrarAuditoria({
     acao: 'relocar_locacao',
     entidade: 'locacao',
     entidadeId: locacaoId,
+    entidadeNome: relocEntidadeNome,
     detalhes: {
       locacaoAntigaId: locacaoId,
       locacaoNovaId: resultado.id,
@@ -379,6 +388,8 @@ export async function relocarProduto(
       trocaPano: data.trocaPano || false,
     },
     usuarioId: userId,
+    ip: requestInfo?.ip,
+    userAgent: requestInfo?.userAgent,
   }).catch(() => {})
 
   logger.info(
@@ -410,6 +421,7 @@ export async function enviarParaEstoque(
   locacaoId: string,
   data: EnviarEstoqueInput,
   userId: string,
+  requestInfo?: { ip?: string; userAgent?: string },
 ): Promise<EnviarEstoqueResult> {
   // 1. Find current locação
   const locacaoAtual = await prisma.locacao.findFirst({
@@ -499,12 +511,15 @@ export async function enviarParaEstoque(
     acao: 'enviar_estoque',
     entidade: 'locacao',
     entidadeId: locacaoId,
+    entidadeNome: `${locacaoAtual.clienteNome} - ${locacaoAtual.produtoIdentificador} → ${data.estabelecimento}`,
     detalhes: {
       estabelecimento: data.estabelecimento,
       motivo: data.motivo,
       produtoIdentificador: locacaoAtual.produtoIdentificador,
     },
     usuarioId: userId,
+    ip: requestInfo?.ip,
+    userAgent: requestInfo?.userAgent,
   }).catch(() => {})
 
   logger.info(
@@ -534,6 +549,7 @@ export async function finalizarLocacao(
   locacaoId: string,
   data: FinalizarLocacaoInput,
   userId: string,
+  requestInfo?: { ip?: string; userAgent?: string },
 ): Promise<FinalizarResult> {
   // 1. Find current locação
   const locacao = await prisma.locacao.findFirst({
@@ -587,10 +603,15 @@ export async function finalizarLocacao(
   })
 
   // 4. Audit log (outside transaction — non-critical)
+  const finEntidadeNome = locacao.clienteNome && locacao.produtoIdentificador
+    ? `${locacao.clienteNome} - ${locacao.produtoIdentificador}`
+    : locacao.clienteNome || locacao.produtoIdentificador || undefined
+
   await registrarAuditoria({
     acao: 'editar_locacao',
     entidade: 'locacao',
     entidadeId: locacaoId,
+    entidadeNome: finEntidadeNome,
     detalhes: {
       acaoRealizada: 'finalizar',
       motivo: data.motivo,
@@ -598,6 +619,8 @@ export async function finalizarLocacao(
       produtoIdentificador: locacao.produtoIdentificador,
     },
     usuarioId: userId,
+    ip: requestInfo?.ip,
+    userAgent: requestInfo?.userAgent,
   }).catch(() => {})
 
   logger.info(`[locacao-service] Locação finalizada: ${locacaoId} — Motivo: ${data.motivo}`)

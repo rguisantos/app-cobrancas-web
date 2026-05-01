@@ -154,6 +154,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       acao: 'editar_rota',
       entidade: 'rota',
       entidadeId: id,
+      entidadeNome: rotaExistente.descricao,
       detalhes: { descricao: rotaExistente.descricao, campos: parsed.data },
       ...extractRequestInfo(req),
     }).catch(() => {})
@@ -214,6 +215,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       acao: 'excluir_rota',
       entidade: 'rota',
       entidadeId: id,
+      entidadeNome: rota.descricao,
       detalhes: { descricao: rota.descricao, softDelete: true },
       ...extractRequestInfo(_),
     }).catch(() => {})

@@ -2,7 +2,7 @@
 // Envia produto para estoque (finaliza locação e atualiza produto)
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, unauthorized, forbidden, validateBody, handleApiError } from '@/lib/api-helpers'
-import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
+import { extractRequestInfo } from '@/lib/auditoria'
 import { enviarEstoqueSchema } from '@/lib/validations'
 import { enviarParaEstoque } from '@/lib/locacao-service'
 
@@ -24,15 +24,7 @@ export async function POST(
     const body = await req.json()
     const data = validateBody(enviarEstoqueSchema, body)
 
-    const resultado = await enviarParaEstoque(id, data, session.user.id)
-
-    registrarAuditoria({
-      acao: 'enviar_estoque',
-      entidade: 'locacao',
-      entidadeId: id,
-      detalhes: { produtoIdentificador: resultado.produtoIdentificador, estabelecimento: resultado.estabelecimento },
-      ...extractRequestInfo(req),
-    }).catch(() => {})
+    const resultado = await enviarParaEstoque(id, data, session.user.id, extractRequestInfo(req))
 
     return NextResponse.json({
       success: true,

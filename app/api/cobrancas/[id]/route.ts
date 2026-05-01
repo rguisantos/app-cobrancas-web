@@ -158,6 +158,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       acao: 'editar_cobranca',
       entidade: 'cobranca',
       entidadeId: id,
+      entidadeNome: cobrancaExistente?.clienteNome && cobrancaExistente?.produtoIdentificador ? `${cobrancaExistente.clienteNome} - ${cobrancaExistente.produtoIdentificador}` : cobrancaExistente?.clienteNome || cobrancaExistente?.produtoIdentificador,
       detalhes: { campos: Object.keys(body).filter((k: string) => !['id', 'version', 'needsSync', 'syncStatus', 'lastSyncedAt', 'deviceId'].includes(k)) },
       ...extractRequestInfo(req),
     }).catch(() => {})
@@ -225,6 +226,7 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
       acao: 'excluir_cobranca',
       entidade: 'cobranca',
       entidadeId: id,
+      entidadeNome: cobrancaExistente.clienteNome && cobrancaExistente.produtoIdentificador ? `${cobrancaExistente.clienteNome} - ${cobrancaExistente.produtoIdentificador}` : cobrancaExistente.clienteNome,
       detalhes: { clienteNome: cobrancaExistente.clienteNome, softDelete: true },
       ...extractRequestInfo(_),
     }).catch(() => {})

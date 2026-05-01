@@ -2,7 +2,7 @@
 // Reloca um produto para outro cliente (finaliza locação atual e cria nova)
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthSession, unauthorized, forbidden, validateBody, handleApiError } from '@/lib/api-helpers'
-import { registrarAuditoria, extractRequestInfo } from '@/lib/auditoria'
+import { extractRequestInfo } from '@/lib/auditoria'
 import { relocarSchema } from '@/lib/validations'
 import { relocarProduto } from '@/lib/locacao-service'
 
@@ -24,15 +24,7 @@ export async function POST(
     const body = await req.json()
     const data = validateBody(relocarSchema, body)
 
-    const resultado = await relocarProduto(id, data, session.user.id)
-
-    registrarAuditoria({
-      acao: 'relocar_locacao',
-      entidade: 'locacao',
-      entidadeId: id,
-      detalhes: { novoClienteNome: data.novoClienteNome, novoProdutoIdentificador: (resultado.locacaoNova as any).produtoIdentificador },
-      ...extractRequestInfo(req),
-    }).catch(() => {})
+    const resultado = await relocarProduto(id, data, session.user.id, extractRequestInfo(req))
 
     return NextResponse.json({
       success: true,

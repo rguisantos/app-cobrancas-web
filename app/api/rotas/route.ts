@@ -110,6 +110,7 @@ export async function POST(req: NextRequest) {
       acao: 'criar_rota',
       entidade: 'rota',
       entidadeId: rota.id,
+      entidadeNome: descricao,
       detalhes: { descricao },
       ...extractRequestInfo(req),
     }).catch(() => {})

@@ -48,14 +48,19 @@ export async function GET(request: NextRequest) {
           ? Prisma.sql`AND cl."rotaId" = ${meta.rotaId}`
           : Prisma.empty
 
+        // dataVencimento is stored as text in the database, so we must cast it to timestamp
+        // for comparison with the meta's DateTime fields.
+        const dataInicioStr = meta.dataInicio.toISOString()
+        const dataFimStr = meta.dataFim.toISOString()
+
         if (meta.tipo === 'receita') {
           const result = await prisma.$queryRaw<any[]>(Prisma.sql`
             SELECT COALESCE(SUM(cb."valorRecebido"), 0)::float as total
             FROM cobrancas cb
             INNER JOIN locacoes l ON l.id = cb."locacaoId"
             INNER JOIN clientes cl ON cl.id = l."clienteId"
-            WHERE cb."dataVencimento" >= ${meta.dataInicio}
-              AND cb."dataVencimento" <= ${meta.dataFim}
+            WHERE cb."dataVencimento"::timestamp >= ${dataInicioStr}::timestamp
+              AND cb."dataVencimento"::timestamp <= ${dataFimStr}::timestamp
               AND cb."deletedAt" IS NULL
               ${rotaFilter}
           `)
@@ -66,8 +71,8 @@ export async function GET(request: NextRequest) {
             FROM cobrancas cb
             INNER JOIN locacoes l ON l.id = cb."locacaoId"
             INNER JOIN clientes cl ON cl.id = l."clienteId"
-            WHERE cb."dataVencimento" >= ${meta.dataInicio}
-              AND cb."dataVencimento" <= ${meta.dataFim}
+            WHERE cb."dataVencimento"::timestamp >= ${dataInicioStr}::timestamp
+              AND cb."dataVencimento"::timestamp <= ${dataFimStr}::timestamp
               AND cb."deletedAt" IS NULL
               ${rotaFilter}
           `)
@@ -80,8 +85,8 @@ export async function GET(request: NextRequest) {
             FROM cobrancas cb
             INNER JOIN locacoes l ON l.id = cb."locacaoId"
             INNER JOIN clientes cl ON cl.id = l."clienteId"
-            WHERE cb."dataVencimento" >= ${meta.dataInicio}
-              AND cb."dataVencimento" <= ${meta.dataFim}
+            WHERE cb."dataVencimento"::timestamp >= ${dataInicioStr}::timestamp
+              AND cb."dataVencimento"::timestamp <= ${dataFimStr}::timestamp
               AND cb."deletedAt" IS NULL
               ${rotaFilter}
           `)

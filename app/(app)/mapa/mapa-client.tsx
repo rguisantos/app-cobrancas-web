@@ -297,7 +297,7 @@ export default function MapaClient() {
       )}
 
       {/* Map */}
-      <div className="flex-1 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm">
+      <div className="flex-1 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm relative" style={{ zIndex: 0 }}>
         {loading ? (
           <div className="h-full flex items-center justify-center bg-slate-50 dark:bg-slate-900">
             <Loader2 className="w-8 h-8 animate-spin text-primary-600" />

@@ -231,5 +231,5 @@ export default function MapView({ clientes, rotas, getRotaColor }: MapViewProps)
     }
   }, [clientes, rotas, getRotaColor])
 
-  return <div ref={mapRef} className="h-full w-full" />
+  return <div ref={mapRef} className="h-full w-full relative" style={{ zIndex: 0 }} />
 }

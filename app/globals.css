@@ -383,3 +383,22 @@
   height: 100%;
   font-family: inherit;
 }
+
+/* Keep Leaflet map below sidebar and top bar
+   Sidebar = z-30, TopBar = z-40, Mobile overlay = z-20
+   Leaflet defaults to z-index: 400+ which overlays everything */
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom,
+.leaflet-left,
+.leaflet-right {
+  z-index: 10 !important;
+}
+
+.leaflet-popup-pane {
+  z-index: 15 !important;
+}
+
+.leaflet-control-pane {
+  z-index: 15 !important;
+}

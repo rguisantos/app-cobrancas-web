@@ -106,6 +106,33 @@ export async function POST(request: Request) {
       }
     }
 
+    // Backfill: cobranças sem dataPagamento mas com status Pago/Parcial
+    try {
+      const backfillPagamento = await prisma.$executeRawUnsafe(`
+        UPDATE "cobrancas"
+        SET "dataPagamento" = COALESCE("updatedAt"::text, "createdAt"::text)
+        WHERE "dataPagamento" IS NULL
+          AND status IN ('Pago', 'Parcial')
+          AND "deletedAt" IS NULL
+      `);
+      results.push(`Backfill dataPagamento: ${backfillPagamento} cobrança(s) atualizada(s)`);
+    } catch (error: any) {
+      results.push(`Erro backfill dataPagamento: ${error.message}`);
+    }
+
+    // Backfill: cobranças sem dataVencimento
+    try {
+      const backfillVencimento = await prisma.$executeRawUnsafe(`
+        UPDATE "cobrancas"
+        SET "dataVencimento" = COALESCE("dataFim", "createdAt"::text)
+        WHERE "dataVencimento" IS NULL
+          AND "deletedAt" IS NULL
+      `);
+      results.push(`Backfill dataVencimento: ${backfillVencimento} cobrança(s) atualizada(s)`);
+    } catch (error: any) {
+      results.push(`Erro backfill dataVencimento: ${error.message}`);
+    }
+
     // Verificar estrutura atual
     const tabelas = ['cobrancas', 'clientes', 'produtos', 'locacoes'];
     const estrutura: Record<string, string[]> = {};

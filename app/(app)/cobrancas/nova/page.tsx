@@ -250,6 +250,8 @@ export default function NovaCobrancaPage() {
       const valorRecebido = parseFloat(formData.valorRecebido) || 0
       const saldoDevedorGerado = Math.max(0, calculos.totalComSaldoAnterior - valorRecebido)
 
+      const status = valorRecebido >= calculos.totalComSaldoAnterior ? 'Pago' : (valorRecebido > 0 ? 'Parcial' : 'Pendente')
+
       const res = await fetch('/api/cobrancas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -261,6 +263,8 @@ export default function NovaCobrancaPage() {
           produtoIdentificador: locacaoSelecionada.produtoIdentificador,
           dataInicio: formData.dataInicio || new Date().toISOString().split('T')[0],
           dataFim: formData.dataFim,
+          dataVencimento: formData.dataFim,
+          dataPagamento: (status === 'Pago' || status === 'Parcial') ? new Date().toISOString() : null,
           relogioAnterior,
           relogioAtual,
           fichasRodadas: calculos.fichasRodadas,
@@ -276,7 +280,7 @@ export default function NovaCobrancaPage() {
           saldoAnterior,
           valorRecebido,
           saldoDevedorGerado: Math.max(0, saldoDevedorGerado),
-          status: valorRecebido >= calculos.totalComSaldoAnterior ? 'Pago' : (valorRecebido > 0 ? 'Parcial' : 'Pendente'),
+          status,
           observacao: formData.observacao || null,
           trocaPano: formData.trocaPano,
         })

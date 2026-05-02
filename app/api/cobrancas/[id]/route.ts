@@ -138,9 +138,21 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
     if (body.status !== undefined) {
       dadosAtualizacao.status = body.status
+
+      // Auto-set dataPagamento quando status muda para 'Pago' ou 'Parcial'
+      // e dataPagamento não foi fornecido explicitamente
+      if ((body.status === 'Pago' || body.status === 'Parcial') && body.dataPagamento === undefined) {
+        if (!cobrancaExistente.dataPagamento) {
+          dadosAtualizacao.dataPagamento = new Date().toISOString()
+        }
+      }
     }
     if (body.dataPagamento !== undefined) {
       dadosAtualizacao.dataPagamento = body.dataPagamento
+    }
+    // Auto-set dataVencimento se ainda não existe na cobrança e não foi fornecido
+    if (!cobrancaExistente.dataVencimento && body.dataVencimento === undefined) {
+      dadosAtualizacao.dataVencimento = cobrancaExistente.dataFim || new Date().toISOString()
     }
 
     // Observação

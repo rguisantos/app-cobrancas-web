@@ -114,6 +114,19 @@ export async function POST(req: NextRequest) {
     // saldoAnterior é runtime-only — não armazenar no DB
     // saldoDevedorGerado já inclui o saldoAnterior no cálculo do frontend
 
+    // Auto-set dataPagamento quando status é 'Pago' ou 'Parcial' e não foi fornecido
+    // Isso garante que a Agenda mostre os recebimentos corretamente
+    const now = new Date().toISOString()
+    if ((data.status === 'Pago' || data.status === 'Parcial') && !data.dataPagamento) {
+      rest.dataPagamento = now
+    }
+
+    // Auto-set dataVencimento quando não foi fornecido — usar dataFim como padrão
+    // Isso garante que a Agenda mostre os vencimentos corretamente
+    if (!data.dataVencimento) {
+      rest.dataVencimento = data.dataFim || now
+    }
+
     const cobranca = await prisma.cobranca.create({
       data: {
         ...(id ? { id } : {}),

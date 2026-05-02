@@ -324,11 +324,11 @@ export default function GlobalSearch() {
       {/* Modal Overlay */}
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start sm:items-start justify-center pt-[5vh] sm:pt-[10vh] bg-black/40 backdrop-blur-sm"
           onClick={handleBackdropClick}
         >
           <div
-            className="w-full max-w-lg mx-4 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
+            className="relative w-full max-w-lg mx-2 sm:mx-4 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
             onKeyDown={handleKeyDown}
           >
             {/* Search Input */}
@@ -339,7 +339,7 @@ export default function GlobalSearch() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar clientes, produtos, locações, cobranças..."
+                placeholder="Buscar clientes, produtos, locações..."
                 className="flex-1 py-4 text-sm text-slate-900 placeholder:text-slate-400 bg-transparent border-none outline-none"
               />
               {query && (
@@ -353,6 +353,14 @@ export default function GlobalSearch() {
                   <X className="w-4 h-4" />
                 </button>
               )}
+              {/* Close button — always visible on mobile, ESC hint on desktop */}
+              <button
+                onClick={() => setOpen(false)}
+                className="sm:hidden p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+                aria-label="Fechar busca"
+              >
+                <X className="w-5 h-5" />
+              </button>
               <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-medium text-slate-400 border border-slate-200">
                 ESC
               </kbd>
@@ -474,8 +482,8 @@ export default function GlobalSearch() {
               )}
             </div>
 
-            {/* Footer */}
-            <div className="border-t border-slate-100 px-4 py-2 flex items-center gap-4 text-[11px] text-slate-400">
+            {/* Footer — keyboard hints only visible on desktop */}
+            <div className="hidden sm:flex border-t border-slate-100 px-4 py-2 items-center gap-4 text-[11px] text-slate-400">
               <span className="flex items-center gap-1">
                 <kbd className="px-1 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px]">
                   ↑
@@ -497,6 +505,15 @@ export default function GlobalSearch() {
                 </kbd>
                 Fechar
               </span>
+            </div>
+            {/* Mobile close button at bottom */}
+            <div className="sm:hidden border-t border-slate-100 px-4 py-2.5">
+              <button
+                onClick={() => setOpen(false)}
+                className="w-full py-2.5 rounded-lg bg-slate-100 text-sm font-medium text-slate-600 hover:bg-slate-200 active:bg-slate-300 transition-colors"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>

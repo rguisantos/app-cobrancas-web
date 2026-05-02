@@ -42,6 +42,9 @@ export async function GET(request: NextRequest) {
     async function getPeriodData(inicio: string, fim: string): Promise<PeriodData> {
       const dataInicio = new Date(inicio)
       const dataFim = new Date(fim + 'T23:59:59')
+      // dataVencimento is text — cast to timestamp for comparison
+      const dataInicioStr = dataInicio.toISOString()
+      const dataFimStr = dataFim.toISOString()
 
       const [receita, cobrancasStatus, topClientes, inadimplencia, locacoesAtivas] = await Promise.all([
         prisma.$queryRaw<{ receita: number; total_cobrado: number; saldo_devedor: number; total_cobrancas: number }[]>(Prisma.sql`
@@ -53,8 +56,8 @@ export async function GET(request: NextRequest) {
           FROM cobrancas cb
           INNER JOIN locacoes l ON l.id = cb."locacaoId"
           INNER JOIN clientes cl ON cl.id = l."clienteId"
-          WHERE cb."dataVencimento" >= ${dataInicio}
-            AND cb."dataVencimento" <= ${dataFim}
+          WHERE cb."dataVencimento"::timestamp >= ${dataInicioStr}::timestamp
+            AND cb."dataVencimento"::timestamp <= ${dataFimStr}::timestamp
             AND cb."deletedAt" IS NULL
             ${rotaFilter}
         `),
@@ -66,8 +69,8 @@ export async function GET(request: NextRequest) {
           FROM cobrancas cb
           INNER JOIN locacoes l ON l.id = cb."locacaoId"
           INNER JOIN clientes cl ON cl.id = l."clienteId"
-          WHERE cb."dataVencimento" >= ${dataInicio}
-            AND cb."dataVencimento" <= ${dataFim}
+          WHERE cb."dataVencimento"::timestamp >= ${dataInicioStr}::timestamp
+            AND cb."dataVencimento"::timestamp <= ${dataFimStr}::timestamp
             AND cb."deletedAt" IS NULL
             ${rotaFilter}
           GROUP BY cb.status
@@ -79,8 +82,8 @@ export async function GET(request: NextRequest) {
           FROM cobrancas cb
           INNER JOIN locacoes l ON l.id = cb."locacaoId"
           INNER JOIN clientes cl ON cl.id = l."clienteId"
-          WHERE cb."dataVencimento" >= ${dataInicio}
-            AND cb."dataVencimento" <= ${dataFim}
+          WHERE cb."dataVencimento"::timestamp >= ${dataInicioStr}::timestamp
+            AND cb."dataVencimento"::timestamp <= ${dataFimStr}::timestamp
             AND cb."deletedAt" IS NULL
             ${rotaFilter}
           GROUP BY cl."nomeExibicao"
@@ -95,8 +98,8 @@ export async function GET(request: NextRequest) {
           INNER JOIN locacoes l ON l.id = cb."locacaoId"
           INNER JOIN clientes cl ON cl.id = l."clienteId"
           WHERE cb.status = 'Atrasado'
-            AND cb."dataVencimento" >= ${dataInicio}
-            AND cb."dataVencimento" <= ${dataFim}
+            AND cb."dataVencimento"::timestamp >= ${dataInicioStr}::timestamp
+            AND cb."dataVencimento"::timestamp <= ${dataFimStr}::timestamp
             AND cb."deletedAt" IS NULL
             ${rotaFilter}
         `),
@@ -106,7 +109,7 @@ export async function GET(request: NextRequest) {
           INNER JOIN clientes cl ON cl.id = l."clienteId"
           WHERE l.status = 'Ativa'
             AND l."deletedAt" IS NULL
-            AND l."dataInicio" <= ${dataFim}
+            AND l."dataLocacao"::timestamp <= ${dataFimStr}::timestamp
             ${rotaFilter}
         `),
       ])

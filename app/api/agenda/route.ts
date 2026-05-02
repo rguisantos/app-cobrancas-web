@@ -74,6 +74,10 @@ export async function GET(request: NextRequest) {
     const eventos: AgendaEvent[] = []
 
     // Vencimentos
+    // dataVencimento is text in DB — cast to timestamp for comparison
+    const dataInicioStr = dataInicio.toISOString()
+    const dataFimStr = dataFim.toISOString()
+
     if (tiposList.includes('vencimento')) {
       const vencimentos = await prisma.$queryRaw<any[]>(Prisma.sql`
         SELECT 
@@ -88,12 +92,12 @@ export async function GET(request: NextRequest) {
         INNER JOIN locacoes l ON l.id = cb."locacaoId"
         INNER JOIN clientes cl ON cl.id = l."clienteId"
         LEFT JOIN produtos p ON p.id = l."produtoId"
-        WHERE cb."dataVencimento" >= ${dataInicio}
-          AND cb."dataVencimento" <= ${dataFim}
+        WHERE cb."dataVencimento"::timestamp >= ${dataInicioStr}::timestamp
+          AND cb."dataVencimento"::timestamp <= ${dataFimStr}::timestamp
           AND cb."deletedAt" IS NULL
           AND cb.status IN ('Pendente', 'Atrasado', 'Parcial')
           ${rotaFilter}
-        ORDER BY cb."dataVencimento"
+        ORDER BY cb."dataVencimento"::timestamp
       `)
 
       for (const v of vencimentos) {
@@ -112,6 +116,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Recebimentos
+    // dataPagamento is text in DB — cast to timestamp for comparison
     if (tiposList.includes('recebimento')) {
       const recebimentos = await prisma.$queryRaw<any[]>(Prisma.sql`
         SELECT 
@@ -125,12 +130,12 @@ export async function GET(request: NextRequest) {
         INNER JOIN locacoes l ON l.id = cb."locacaoId"
         INNER JOIN clientes cl ON cl.id = l."clienteId"
         LEFT JOIN produtos p ON p.id = l."produtoId"
-        WHERE cb."dataPagamento" >= ${dataInicio}
-          AND cb."dataPagamento" <= ${dataFim}
+        WHERE cb."dataPagamento"::timestamp >= ${dataInicioStr}::timestamp
+          AND cb."dataPagamento"::timestamp <= ${dataFimStr}::timestamp
           AND cb."deletedAt" IS NULL
           AND cb.status IN ('Pago', 'Parcial')
           ${rotaFilter}
-        ORDER BY cb."dataPagamento"
+        ORDER BY cb."dataPagamento"::timestamp
       `)
 
       for (const r of recebimentos) {
@@ -149,6 +154,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Manutenções
+    // manutencao.data is text in DB — cast to timestamp for comparison
     if (tiposList.includes('manutencao')) {
       const manutencoes = await prisma.$queryRaw<any[]>(Prisma.sql`
         SELECT 
@@ -160,10 +166,10 @@ export async function GET(request: NextRequest) {
         FROM manutencoes m
         LEFT JOIN produtos p ON p.id = m."produtoId"
         LEFT JOIN locacoes l ON l."produtoId" = p.id AND l.status = 'Ativa' AND l."deletedAt" IS NULL
-        WHERE m.data >= ${dataInicio}
-          AND m.data <= ${dataFim}
+        WHERE m.data::timestamp >= ${dataInicioStr}::timestamp
+          AND m.data::timestamp <= ${dataFimStr}::timestamp
           ${rotaFilterManut}
-        ORDER BY m.data
+        ORDER BY m.data::timestamp
       `)
 
       for (const m of manutencoes) {

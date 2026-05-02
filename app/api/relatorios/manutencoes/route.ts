@@ -20,8 +20,10 @@ export async function GET(req: NextRequest) {
     const tipoParam = new URL(req.url).searchParams.get('tipo') || tipoFilter || undefined
     const { inicio, fim } = calcularPeriodo(periodo, dataInicio, dataFim)
 
-    const inicioStr = inicio.toISOString().split('T')[0]
-    const fimStr = fim.toISOString().split('T')[0]
+    // manutencao.data stores ISO timestamps as text — use full ISO strings
+    // (date-only strings break <= comparison: '2024-01-15T...' > '2024-01-31')
+    const inicioStr = inicio.toISOString()
+    const fimStr = fim.toISOString()
 
     const tipoFragment = buildTipoManutencaoFragment(tipoParam)
 
@@ -54,7 +56,7 @@ export async function GET(req: NextRequest) {
         FROM manutencoes m
         JOIN produtos p ON m."produtoId" = p.id AND p."deletedAt" IS NULL
         WHERE m."deletedAt" IS NULL AND p."dataUltimaManutencao" IS NOT NULL
-          AND m.data >= ${inicioStr} AND m.data <= ${fimStr}
+          AND m.data::timestamp >= ${inicioStr}::timestamp AND m.data::timestamp <= ${fimStr}::timestamp
         ${tipoFragment}
       `),
       prisma.$queryRaw<{ mes: Date; trocaPano: number; manutencao: number }[]>(Prisma.sql`
@@ -63,7 +65,7 @@ export async function GET(req: NextRequest) {
           COUNT(CASE WHEN tipo = 'manutencao' THEN 1 END)::int as manutencao
         FROM manutencoes
         WHERE "deletedAt" IS NULL
-          AND data >= ${new Date(new Date().getFullYear(), new Date().getMonth() - 11, 1).toISOString().split('T')[0]}
+          AND data::timestamp >= ${new Date(new Date().getFullYear(), new Date().getMonth() - 11, 1).toISOString()}::timestamp
         GROUP BY mes ORDER BY mes ASC
       `),
       prisma.$queryRaw<{ tipoNome: string; count: number }[]>(Prisma.sql`
@@ -71,14 +73,14 @@ export async function GET(req: NextRequest) {
         FROM manutencoes m
         JOIN produtos p ON m."produtoId" = p.id AND p."deletedAt" IS NULL
         WHERE m."deletedAt" IS NULL
-          AND m.data >= ${inicioStr} AND m.data <= ${fimStr}
+          AND m.data::timestamp >= ${inicioStr}::timestamp AND m.data::timestamp <= ${fimStr}::timestamp
         GROUP BY p."tipoNome" ORDER BY count DESC
       `),
       prisma.$queryRaw<{ tipo: string; count: number }[]>(Prisma.sql`
         SELECT tipo, COUNT(*)::int as count
         FROM manutencoes
         WHERE "deletedAt" IS NULL
-          AND data >= ${inicioStr} AND data <= ${fimStr}
+          AND data::timestamp >= ${inicioStr}::timestamp AND data::timestamp <= ${fimStr}::timestamp
         GROUP BY tipo ORDER BY count DESC
       `),
       prisma.$queryRaw<{ rotaDescricao: string; count: number }[]>(Prisma.sql`
@@ -87,7 +89,7 @@ export async function GET(req: NextRequest) {
         LEFT JOIN clientes c ON m."clienteId" = c.id AND c."deletedAt" IS NULL
         LEFT JOIN rotas r ON c."rotaId" = r.id AND r."deletedAt" IS NULL
         WHERE m."deletedAt" IS NULL
-          AND m.data >= ${inicioStr} AND m.data <= ${fimStr}
+          AND m.data::timestamp >= ${inicioStr}::timestamp AND m.data::timestamp <= ${fimStr}::timestamp
         GROUP BY r.descricao ORDER BY count DESC
       `),
       prisma.manutencao.findMany({

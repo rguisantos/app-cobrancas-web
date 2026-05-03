@@ -16,7 +16,6 @@ import {
   FileText,
   MapPin,
   Map,
-  Menu,
   X,
   Wrench,
   Database,
@@ -64,7 +63,14 @@ export default function Sidebar() {
 
   const isActive = (href: string) => pathname.startsWith(href)
 
-  // Close sidebar when clicking outside on mobile
+  // Listen for toggle event from TopBar
+  useEffect(() => {
+    const handleToggle = () => setIsOpen((prev) => !prev)
+    window.addEventListener('toggle-sidebar', handleToggle)
+    return () => window.removeEventListener('toggle-sidebar', handleToggle)
+  }, [])
+
+  // Close sidebar on resize to desktop
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 1024) {
@@ -77,37 +83,24 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile Menu Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="lg:hidden fixed top-4 left-4 z-[45] p-2.5 rounded-lg bg-white border border-slate-200 shadow-sm hover:bg-slate-50 transition-colors dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700"
-        aria-label="Toggle menu"
-      >
-        {isOpen ? (
-          <X className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-        ) : (
-          <Menu className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-        )}
-      </button>
-
       {/* Overlay for mobile */}
       {isOpen && (
         <div 
-          className="lg:hidden fixed inset-0 bg-black/30 z-20 dark:bg-black/50"
+          className="lg:hidden fixed inset-0 bg-black/30 z-40 dark:bg-black/50"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed left-0 top-0 h-full w-64 bg-white border-r border-slate-200 flex flex-col z-30 shadow-sm
+        fixed left-0 top-0 h-full w-64 bg-white border-r border-slate-200 flex flex-col z-50 shadow-sm
         transition-transform duration-300 ease-in-out
         dark:bg-slate-800 dark:border-slate-700
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0
       `}>
-        {/* Logo Section */}
-        <div className="p-5 border-b border-slate-100 dark:border-slate-700">
+        {/* Logo Section with close button on mobile */}
+        <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-3 group">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600 to-blue-400 flex items-center justify-center shadow-sm shadow-primary-600/30 group-hover:shadow-md transition-shadow dark:from-primary-500 dark:to-blue-400">
               <DollarSign className="w-5 h-5 text-white" />
@@ -121,6 +114,13 @@ export default function Sidebar() {
               </p>
             </div>
           </Link>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="lg:hidden p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors dark:hover:bg-slate-700 dark:hover:text-slate-300"
+            aria-label="Fechar menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Main Navigation */}

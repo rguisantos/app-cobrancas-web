@@ -19,7 +19,11 @@ Sistema completo de gestão de cobranças para empresas de locação de equipame
 - [Fluxos de Negócio](#fluxos-de-negócio)
 - [Segurança e Middleware](#segurança-e-middleware)
 - [Motor de Sincronização](#motor-de-sincronização)
+- [Sistema de Auditoria](#sistema-de-auditoria)
+- [Automação (Cron Jobs)](#automação-cron-jobs)
+- [Sistema de Email](#sistema-de-email)
 - [Estrutura de Pastas](#estrutura-de-pastas)
+- [Pacote Compartilhado (@cobrancas/shared)](#pacote-compartilhado-cobrancasshared)
 - [Deploy](#deploy)
 - [Problemas Conhecidos](#problemas-conhecidos)
 
@@ -33,9 +37,15 @@ O **App Cobranças Web** é uma plataforma completa para:
 - 🎱 **Controle de Produtos** - Bilhares, jukeboxes, mesas e outros equipamentos
 - 📍 **Gestão de Locações** - Contratos de locação com diferentes formas de pagamento
 - 💰 **Cobranças** - Registro de leituras de relógio, cálculo de valores e controle de pagamentos
-- 🗺️ **Rotas** - Organização de clientes por rotas de visitação
-- 👥 **Usuários** - Controle de acesso com diferentes níveis de permissão
+- 🗺️ **Mapa de Rotas** - Visualização interativa com dados financeiros no mapa (Leaflet)
+- 📅 **Agenda** - Calendário de pagamentos e vencimentos
+- 🎯 **Metas** - Metas de arrecadação por período e rota
 - 🔄 **Sincronização Mobile** - Dados disponíveis offline no aplicativo mobile
+- 🔒 **Auditoria** - Rastreamento completo de ações no sistema
+- 📧 **Email** - Notificação automática de cobranças atrasadas
+- ⏰ **Automação** - Geração automática de cobranças e marcação de vencimentos
+- 👥 **Usuários** - Controle de acesso com diferentes níveis de permissão
+- 🔔 **Notificações** - Alertas de cobranças vencidas, conflitos de sync e mais
 
 ---
 
@@ -46,15 +56,22 @@ O **App Cobranças Web** é uma plataforma completa para:
 | **Next.js** | 15.x | Framework full-stack (App Router) |
 | **React** | 19.x | Interface de usuário |
 | **TypeScript** | 5.x | Tipagem estática |
-| **PostgreSQL** | 15+ | Banco de dados relacional |
+| **PostgreSQL** | 15+ | Banco de dados relacional (Neon) |
 | **Prisma** | 6.x | ORM com type-safety |
 | **NextAuth** | 4.x | Autenticação web |
 | **JWT** | - | Autenticação mobile |
 | **Tailwind CSS** | 3.x | Estilização |
 | **Zod** | 3.x | Validação de schemas |
 | **Lucide React** | - | Ícones |
-| **date-fns** | 4.x | Manipulação de datas |
+| **Leaflet / React-Leaflet** | 5.x | Mapa interativo |
+| **Recharts** | 2.x | Gráficos e visualizações |
+| **date-fns** | 3.x | Manipulação de datas |
 | **bcryptjs** | - | Hash de senhas |
+| **Nodemailer** | 7.x | Envio de emails |
+| **jsPDF** | 4.x | Geração de recibos PDF |
+| **ExcelJS** | 4.x | Exportação para Excel |
+| **QRCode** | - | Geração de QR Codes para PIX |
+| **clsx / tailwind-merge** | - | Utilitários de classes CSS |
 
 ---
 
@@ -63,7 +80,7 @@ O **App Cobranças Web** é uma plataforma completa para:
 ### Pré-requisitos
 
 - Node.js 18+
-- PostgreSQL 15+ (ou conta no Supabase/Railway)
+- PostgreSQL 15+ (ou conta no Neon/Supabase/Railway)
 - npm ou bun
 
 ### Instalação
@@ -85,6 +102,7 @@ cp .env.example .env.local
 ```env
 # Banco de dados
 DATABASE_URL="postgresql://usuario:senha@host:5432/banco"
+DIRECT_URL="postgresql://usuario:senha@host:5432/banco"
 
 # Autenticação Web (NextAuth)
 NEXTAUTH_SECRET="chave-secreta-min-32-caracteres"
@@ -94,6 +112,21 @@ NEXTAUTH_URL="http://localhost:3000"
 JWT_SECRET="outra-chave-secreta-min-32-caracteres"
 JWT_EXPIRES_IN="15m"
 REFRESH_TOKEN_EXPIRES_IN="7d"
+
+# Automação (Cron Jobs)
+CRON_SECRET="chave-secreta-para-cron-jobs"
+
+# Email (Nodemailer)
+EMAIL_HOST="smtp.gmail.com"
+EMAIL_PORT="587"
+EMAIL_USER="seu-email@gmail.com"
+EMAIL_PASS="senha-de-app"
+EMAIL_FROM="App Cobranças <seu-email@gmail.com>"
+
+# PIX (opcional)
+PIX_CHAVE="sua-chave-pix"
+PIX_NOME="Sua Empresa"
+PIX_CIDADE="Campo Grande"
 
 # Opcional
 ENVIRONMENT="development"
@@ -122,7 +155,7 @@ npm run dev
 
 ## Estrutura do Banco de Dados
 
-O sistema possui **17 tabelas** organizadas em entidades principais, tabelas de apoio e tabelas de sistema.
+O sistema possui **23 tabelas** organizadas em entidades principais, tabelas de apoio e tabelas de sistema.
 
 ### 📊 Entidades Principais
 
@@ -134,6 +167,10 @@ Rotas de visitação para organização dos clientes.
 |-------|------|-----------|
 | `id` | String (UUID) | Identificador único |
 | `descricao` | String | Nome da rota (ex: "Linha Norte", "Centro") |
+| `cor` | String | Cor hexadecimal para identificação visual (default: "#2563EB") |
+| `regiao` | String? | Região/zona (ex: "Zona Norte") |
+| `ordem` | Int | Ordem de prioridade para cobrança |
+| `observacao` | String? | Anotações operacionais |
 | `status` | String | 'Ativo' ou 'Inativo' |
 | `syncStatus` | String | Status de sincronização |
 | `lastSyncedAt` | String? | Última sincronização |
@@ -172,7 +209,9 @@ Clientes que recebem produtos em locação.
 | `bairro` | String | Bairro |
 | `cidade` | String | Cidade |
 | `estado` | String | Estado (UF) |
-| `rotaId` | String | FK para Rota |
+| `latitude` | Float? | Coordenada GPS |
+| `longitude` | Float? | Coordenada GPS |
+| `rotaId` | String? | FK para Rota (nullable) |
 | `status` | String | 'Ativo' ou 'Inativo' |
 
 **Relacionamentos:**
@@ -197,6 +236,8 @@ Equipamentos disponíveis para locação.
 | `descricaoNome` | String | Nome da descrição (cache) |
 | `tamanhoId` | String | FK para TamanhoProduto |
 | `tamanhoNome` | String | Nome do tamanho (cache) |
+| `codigoCH` | String? | Código interno CH |
+| `codigoABLF` | String? | Código interno ABLF |
 | `conservacao` | String | 'Ótima', 'Boa', 'Regular', 'Ruim', 'Péssima' |
 | `statusProduto` | String | 'Ativo', 'Inativo', 'Manutenção' |
 | `estabelecimento` | String? | Local quando não locado |
@@ -206,6 +247,7 @@ Equipamentos disponíveis para locação.
 - `locacoes[]` - Histórico de locações
 - `cobrancas[]` - Cobranças relacionadas
 - `historicoRelogio[]` - Histórico de alterações do relógio
+- `manutencoes[]` - Histórico de manutenções
 
 ---
 
@@ -220,6 +262,7 @@ Contratos de locação de produtos para clientes.
 | `clienteNome` | String | Nome do cliente (cache) |
 | `produtoId` | String | FK para Produto |
 | `produtoIdentificador` | String | Identificação do produto (cache) |
+| `produtoTipo` | String | Tipo do produto (cache) |
 | `dataLocacao` | String | Data de início da locação |
 | `dataFim` | String? | Data de término |
 | `formaPagamento` | String | 'Periodo', 'PercentualPagar', 'PercentualReceber' |
@@ -229,6 +272,7 @@ Contratos de locação de produtos para clientes.
 | `percentualCliente` | Float | Percentual do cliente |
 | `valorFixo` | Float? | Valor fixo (pagamento por período) |
 | `periodicidade` | String? | 'Semanal', 'Quinzenal', 'Mensal' |
+| `dataPrimeiraCobranca` | String? | Data da primeira cobrança |
 | `observacoes` | String? | Observações |
 | `status` | String | 'Ativa', 'Finalizada', 'Cancelada' |
 | `ultimaLeituraRelogio` | Float? | Última leitura após cobrança |
@@ -261,7 +305,8 @@ Registro de cobranças periódicas com leitura de relógio.
 | `produtoIdentificador` | String | Identificação do produto (cache) |
 | `dataInicio` | String | Início do período cobrado |
 | `dataFim` | String | Fim do período cobrado |
-| `dataPagamento` | String? | Data do pagamento |
+| `dataPagamento` | String? | Data do pagamento (auto-set quando Pago/Parcial) |
+| `dataVencimento` | String? | Data de vencimento (auto-set = dataFim na criação) |
 | `relogioAnterior` | Float | Leitura anterior do relógio |
 | `relogioAtual` | Float | Leitura atual do relógio |
 | `fichasRodadas` | Float | Diferença entre leituras |
@@ -277,6 +322,10 @@ Registro de cobranças periódicas com leitura de relógio.
 | `valorRecebido` | Float | Valor efetivamente recebido |
 | `saldoDevedorGerado` | Float | Saldo devedor (se pagamento parcial) |
 | `status` | String | 'Pago', 'Parcial', 'Pendente', 'Atrasado' |
+
+**Comportamento automático:**
+- `dataVencimento` é setada como `dataFim` na criação
+- `dataPagamento` é setada automaticamente quando status muda para Pago/Parcial
 
 **Relacionamentos:**
 - `locacao` - Locação relacionada
@@ -298,8 +347,8 @@ Usuários do sistema (web e mobile).
 | `cpf` | String? | CPF |
 | `telefone` | String? | Telefone |
 | `tipoPermissao` | String | 'Administrador', 'Secretario', 'AcessoControlado' |
-| `permissoesWeb` | Json | Permissões detalhadas para web |
-| `permissoesMobile` | Json | Permissões detalhadas para mobile |
+| `permissoesWeb` | Json | Permissões granulares para web (18 flags) |
+| `permissoesMobile` | Json | Permissões granulares para mobile |
 | `rotasPermitidas` | Json | Array de IDs de rotas permitidas |
 | `status` | String | 'Ativo' ou 'Inativo' |
 | `bloqueado` | Boolean | Se está bloqueado |
@@ -308,6 +357,9 @@ Usuários do sistema (web e mobile).
 
 **Relacionamentos:**
 - `rotasPermitidasRel[]` - Rotas com acesso permitido
+- `notificacoes[]` - Notificações do usuário
+- `sessoes[]` - Sessões ativas
+- `logsAuditoria[]` - Logs de auditoria
 
 ---
 
@@ -332,6 +384,104 @@ Usuários do sistema (web e mobile).
 | **SyncConflict** | Conflitos de sincronização detectados |
 | **HistoricoRelogio** | Histórico de alterações de contador |
 | **Manutencao** | Histórico de manutenções de produtos |
+| **Notificacao** | Notificações para usuários (cobranças vencidas, conflitos, etc.) |
+| **Meta** | Metas de arrecadação por período e rota |
+| **LogAuditoria** | Rastreamento completo de ações no sistema |
+| **Sessao** | Gerenciamento de sessões de autenticação |
+| **TentativaLogin** | Rastreamento de tentativas de login (segurança) |
+| **TokenRecuperacao** | Tokens para recuperação de senha |
+
+---
+
+### 🆕 Modelos de Sistema — Detalhes
+
+#### Notificacao
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | String (UUID) | Identificador único |
+| `usuarioId` | String | FK para Usuario (destinatário) |
+| `tipo` | String | 'cobranca_vencida', 'saldo_devedor', 'conflito_sync', 'cobranca_gerada', 'info' |
+| `titulo` | String | Título da notificação |
+| `mensagem` | String | Conteúdo da notificação |
+| `lida` | Boolean | Se já foi lida |
+| `link` | String? | Link de navegação opcional |
+
+---
+
+#### Meta
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | String (UUID) | Identificador único |
+| `nome` | String | Nome da meta (ex: "Meta Janeiro 2024") |
+| `tipo` | String | 'receita', 'cobrancas', 'adimplencia' |
+| `valorMeta` | Float | Valor alvo |
+| `valorAtual` | Float | Valor alcançado |
+| `dataInicio` | DateTime | Início do período |
+| `dataFim` | DateTime | Fim do período |
+| `rotaId` | String? | Rota (null = meta global) |
+| `status` | String | 'ativa', 'atingida', 'expirada' |
+| `criadoPor` | String? | ID do usuário que criou |
+
+---
+
+#### LogAuditoria
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | String (UUID) | Identificador único |
+| `usuarioId` | String? | Usuário que executou (null = sistema) |
+| `acao` | String | Ação executada (ver lib/auditoria.ts) |
+| `entidade` | String | Entidade afetada |
+| `entidadeId` | String? | ID da entidade |
+| `entidadeNome` | String? | Nome legível da entidade |
+| `detalhes` | Json? | Dados adicionais |
+| `antes` | Json? | Snapshot ANTES da alteração |
+| `depois` | Json? | Snapshot DEPOIS da alteração |
+| `ip` | String? | IP do usuário |
+| `userAgent` | String? | User agent |
+| `dispositivo` | String? | Dispositivo parseado |
+| `severidade` | String | 'info', 'aviso', 'critico', 'seguranca' |
+| `origem` | String | 'web', 'mobile', 'sistema', 'cron' |
+
+---
+
+#### Sessao
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | String (UUID) | Identificador único |
+| `usuarioId` | String | FK para Usuario |
+| `refreshToken` | String (unique) | Hash do refresh token |
+| `dispositivo` | String | 'Web' ou 'Mobile' |
+| `ip` | String? | IP da sessão |
+| `userAgent` | String? | User agent |
+| `expiraEm` | DateTime | Data de expiração |
+
+---
+
+#### TentativaLogin
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | String (UUID) | Identificador único |
+| `email` | String | Email tentado |
+| `ip` | String | IP da tentativa |
+| `sucesso` | Boolean | Se o login teve sucesso |
+| `userAgent` | String? | User agent |
+
+---
+
+#### TokenRecuperacao
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | String (UUID) | Identificador único |
+| `usuarioId` | String | FK para Usuario |
+| `token` | String (unique) | Hash SHA-256 do token |
+| `usado` | Boolean | Se já foi utilizado |
+| `expiraEm` | DateTime | Data de expiração |
 
 ---
 
@@ -345,6 +495,8 @@ Usuários do sistema (web e mobile).
 | `/api/auth/me` | GET | Dados do usuário logado | - |
 | `/api/auth/logout` | POST | Logout do usuário | - |
 | `/api/auth/change-password` | POST | Alterar senha | `{ senhaAtual, novaSenha }` |
+| `/api/auth/forgot-password` | POST | Solicitar recuperação de senha | `{ email }` |
+| `/api/auth/reset-password` | POST | Redefinir senha com token | `{ token, novaSenha }` |
 | `/api/auth/[...nextauth]` | GET/POST | NextAuth para web | - |
 
 **Resposta do Login Mobile:**
@@ -367,6 +519,8 @@ Usuários do sistema (web e mobile).
 - Usuário não pode estar `bloqueado = true`
 - Usuário não pode ter `deletedAt` (soft delete)
 - Atualiza `dataUltimoAcesso` e `ultimoAcessoDispositivo`
+- Tentativas de login registradas na tabela `TentativaLogin`
+- Rate limiting: 5 tentativas por IP a cada 15 minutos
 
 ---
 
@@ -376,6 +530,7 @@ Usuários do sistema (web e mobile).
 |----------|--------|-----------|
 | `/api/sync/push` | POST | Mobile envia alterações locais |
 | `/api/sync/pull` | POST | Mobile recebe alterações do servidor |
+| `/api/sync/snapshot` | POST | Snapshot completo para devices stale |
 | `/api/sync/conflicts` | GET | Lista conflitos pendentes |
 | `/api/sync/conflict/resolve` | POST | Resolve um conflito |
 
@@ -384,7 +539,6 @@ Usuários do sistema (web e mobile).
 A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feita via `deviceKey`:
 
 ```json
-// PUSH e PULL usam deviceKey
 {
   "deviceKey": "samsung_mobile_1234567890_abc",
   "lastSyncAt": "2024-01-01T00:00:00Z",
@@ -417,23 +571,19 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
   "success": true,
   "lastSyncAt": "2024-01-01T01:00:00Z",
   "conflicts": [],
-  "errors": []
+  "errors": [],
+  "updatedVersions": [{"entityId": "uuid", "entityType": "cliente", "newVersion": 2}]
 }
 ```
 
 **PULL - Receber Mudanças:**
 ```json
-// Request
-{
-  "deviceId": "dev_1234567890_abc",
-  "deviceKey": "samsung_mobile_1234567890_abc",
-  "lastSyncAt": "2024-01-01T00:00:00Z"
-}
-
 // Response
 {
   "success": true,
   "lastSyncAt": "2024-01-01T02:00:00Z",
+  "hasMore": false,
+  "isStale": false,
   "changes": {
     "clientes": [...],
     "produtos": [...],
@@ -445,6 +595,26 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
   "tiposProduto": [...],
   "descricoesProduto": [...],
   "tamanhosProduto": [...]
+}
+```
+
+**SNAPSHOT - Sync Completo (para devices stale > 30 dias):**
+```json
+// Response
+{
+  "success": true,
+  "lastSyncAt": "2024-01-01T02:00:00Z",
+  "snapshot": {
+    "clientes": [...],
+    "produtos": [...],
+    "locacoes": [...],
+    "cobrancas": [...],
+    "rotas": [...],
+    "usuarios": [...],
+    "tiposProduto": [...],
+    "descricoesProduto": [...],
+    "tamanhosProduto": [...]
+  }
 }
 ```
 
@@ -461,6 +631,7 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 | `/api/clientes/[id]` | GET | Buscar por ID |
 | `/api/clientes/[id]` | PUT | Atualizar |
 | `/api/clientes/[id]` | DELETE | Remover (soft delete) |
+| `/api/clientes/batch` | POST | Criar múltiplos |
 
 **Query Params (GET):**
 - `page` - Página (default: 1)
@@ -480,6 +651,7 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 | `/api/produtos/[id]` | GET | Buscar por ID |
 | `/api/produtos/[id]` | PUT | Atualizar |
 | `/api/produtos/[id]` | DELETE | Remover |
+| `/api/produtos/batch` | POST | Criar múltiplos |
 
 **Query Params Especiais:**
 - `disponiveis=true` - Apenas produtos sem locação ativa
@@ -494,35 +666,11 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 | `/api/locacoes` | GET | Listar locações |
 | `/api/locacoes` | POST | Criar nova locação |
 | `/api/locacoes/ativas` | GET | Locações ativas |
+| `/api/locacoes/por-rota` | GET | Locações agrupadas por rota |
 | `/api/locacoes/[id]` | GET | Detalhes da locação |
 | `/api/locacoes/[id]` | PUT | Atualizar locação |
 | `/api/locacoes/[id]/relocar` | POST | Relocar para outro cliente |
 | `/api/locacoes/[id]/enviar-estoque` | POST | Encerrar e enviar para estoque |
-
-**Relocação:**
-```json
-{
-  "novoClienteId": "uuid-novo-cliente",
-  "novoClienteNome": "Nome do Cliente",
-  "formaPagamento": "PercentualReceber",
-  "numeroRelogio": "12345",
-  "precoFicha": 2.50,
-  "percentualEmpresa": 50,
-  "percentualCliente": 50,
-  "motivoRelocacao": "Cliente solicitou mudança",
-  "observacao": "Observação opcional",
-  "trocaPano": true
-}
-```
-
-**Enviar para Estoque:**
-```json
-{
-  "estabelecimento": "Barracão",
-  "motivo": "Produto precisa de manutenção",
-  "observacao": "Observação opcional"
-}
-```
 
 ---
 
@@ -533,13 +681,12 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 | `/api/cobrancas` | GET | Listar cobranças |
 | `/api/cobrancas` | POST | Criar cobrança |
 | `/api/cobrancas/[id]` | GET | Detalhes |
-| `/api/cobrancas/[id]` | PUT | Atualizar |
+| `/api/cobrancas/[id]` | PUT | Atualizar (inclui registrar pagamento) |
+| `/api/cobrancas/batch` | POST | Criar múltiplas |
 
-**Query Params (GET):**
-- `clienteId` - Filtrar por cliente
-- `status` - Filtrar por status
-- `dataInicio` - Data inicial
-- `dataFim` - Data final
+**Comportamento automático:**
+- Ao criar cobrança: `dataVencimento` é setada automaticamente como `dataFim`
+- Ao registrar pagamento (status Pago/Parcial): `dataPagamento` é setada automaticamente
 
 ---
 
@@ -579,28 +726,192 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 
 ---
 
+### 🗺️ Mapa de Rotas
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/mapa` | GET | Dados do mapa com clientes, financeiro e cores por rota |
+| `/api/mapa/geocodificar` | POST | Geocodificar endereços dos clientes |
+| `/api/mapa/seed-coordinates` | POST | Popular coordenadas iniciais |
+
+**Resposta do `/api/mapa`:**
+```json
+{
+  "clientes": [
+    {
+      "id": "uuid",
+      "nomeExibicao": "Cliente",
+      "latitude": -20.44,
+      "longitude": -54.64,
+      "rotaId": "uuid",
+      "rotaNome": "Linha Norte",
+      "rotaCor": "#2563EB",
+      "totalRecebido": 1500.00,
+      "totalPendente": 300.00,
+      "locacoesAtivas": 2
+    }
+  ],
+  "stats": {
+    "totalClientes": 150,
+    "clientesComCoordenadas": 120,
+    "totalRecebido": 45000.00,
+    "totalPendente": 5000.00
+  },
+  "rotas": [
+    { "id": "uuid", "descricao": "Linha Norte", "cor": "#2563EB", "totalClientes": 30 }
+  ]
+}
+```
+
+---
+
+### 🔍 Busca Global
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/busca-global?q=termo` | GET | Busca unificada em clientes, produtos, locações e cobranças |
+
+**Parâmetros:**
+- `q` - Termo de busca (mínimo 2 caracteres)
+
+**Resposta:**
+```json
+{
+  "clientes": [...],
+  "produtos": [...],
+  "locacoes": [...],
+  "cobrancas": [...]
+}
+```
+
+Cada tipo retorna no máximo 5 resultados. Busca case-insensitive com `mode: 'insensitive'`. Soft-delete aware (filtra `deletedAt: null`).
+
+---
+
+### 📅 Agenda
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/agenda` | GET | Listar pagamentos e vencimentos por data |
+
+**Query Params:**
+- `dataInicio` - Data inicial
+- `dataFim` - Data final
+- `rotaId` - Filtrar por rota (para AcessoControlado)
+
+**Permissão:** Requer permissão `agenda`. AcessoControlado só vê cobranças das suas rotas.
+
+---
+
+### 🎯 Metas
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/metas` | GET | Listar metas |
+| `/api/metas` | POST | Criar meta |
+| `/api/metas/[id]` | GET | Detalhes da meta |
+| `/api/metas/[id]` | PUT | Atualizar meta |
+| `/api/metas/[id]` | DELETE | Remover meta |
+
+**Permissão:** Requer permissão `relatorios`.
+
+---
+
+### 🔔 Notificações
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/notificacoes` | GET | Listar notificações do usuário |
+| `/api/notificacoes/[id]` | PUT | Marcar como lida |
+| `/api/notificacoes/[id]` | DELETE | Remover notificação |
+
+**Tipos de notificação:**
+- `cobranca_vencida` - Cobrança com vencimento passado
+- `saldo_devedor` - Saldo devedor acumulado
+- `conflito_sync` - Conflito de sincronização detectado
+- `cobranca_gerada` - Cobrança gerada automaticamente (cron)
+- `info` - Informações gerais
+
+---
+
+### 🛡️ Auditoria
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/auditoria` | GET | Listar logs de auditoria |
+
+**Query Params:**
+- `acao` - Filtrar por ação (ex: `criar_usuario`)
+- `entidade` - Filtrar por entidade (ex: `usuario`)
+- `usuarioId` - Filtrar por usuário
+- `severidade` - Filtrar por severidade
+- `origem` - Filtrar por origem (web/mobile/sistema/cron)
+- `dataInicio` / `dataFim` - Filtrar por período
+- `page` / `limit` - Paginação
+
+**Permissão:** Requer permissão `adminAuditoria` (apenas Admin).
+
+---
+
+### ⏰ Automação (Cron)
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/cron/vencimento` | POST | Marcar cobranças pendentes como 'Atrasado' |
+| `/api/cron/gerar-cobrancas` | POST | Gerar cobranças automáticas para locações por período |
+
+**Autenticação:** CRON_SECRET no header `x-cron-secret` ou query param `secret`. Também aceita sessão de Administrador.
+
+---
+
+### 📧 Email
+
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/email/notificar-atrasadas` | POST | Enviar notificação por email para cobranças atrasadas |
+| `/api/email/teste` | POST | Enviar email de teste |
+
+**Configuração:** Requer variáveis `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM`.
+
+---
+
 ### 📊 Dashboard e Relatórios
 
 | Endpoint | Método | Descrição |
 |----------|--------|-----------|
 | `/api/dashboard` | GET | Métricas para dashboard web |
+| `/api/dashboard/atividade` | GET | Atividade recente |
 | `/api/dashboard/mobile` | GET | Métricas para dashboard mobile |
 | `/api/relatorios/financeiro` | GET | Relatório financeiro |
+| `/api/relatorios/clientes` | GET | Relatório de clientes |
 | `/api/relatorios/produtos` | GET | Relatório de produtos |
+| `/api/relatorios/locacoes` | GET | Relatório de locações |
+| `/api/relatorios/estoque` | GET | Relatório de estoque |
+| `/api/relatorios/inadimplencia` | GET | Relatório de inadimplência |
+| `/api/relatorios/recebimentos` | GET | Relatório de recebimentos |
+| `/api/relatorios/rotas` | GET | Relatório por rotas |
+| `/api/relatorios/locacoes-rota` | GET | Locações por rota |
+| `/api/relatorios/comparativo` | GET | Comparativo mensal |
+| `/api/relatorios/operacional` | GET | Relatório operacional |
+| `/api/relatorios/manutencoes` | GET | Relatório de manutenções |
+| `/api/relatorios/relogios` | GET | Relatório de relógios |
 
 **Dashboard Web - Métricas retornadas:**
 ```json
 {
-  "totalClientes": 150,
-  "totalProdutos": 80,
-  "produtosLocados": 65,
-  "produtosEstoque": 15,
-  "receitaMes": 12500.00,
-  "totalCobrancasMes": 45,
-  "saldoDevedor": 2300.00,
-  "cobrancasAtrasadas": 5,
-  "conflictsPendentes": 0,
-  "dataReferencia": "2024-01-15T10:30:00Z"
+  "ganhos": {
+    "ganhoAtualMes": 12500.00,
+    "ganhoComPercentual": 8000.00,
+    "ganhoComPeriodo": 4500.00
+  },
+  "clientesNaoCobrados": [...],
+  "totalClientesNaoCobrados": 5,
+  "produtosLocadosEstoque": {
+    "totalLocados": 65,
+    "totalEstoque": 15
+  },
+  "dataReferencia": "2024-01-15T10:30:00Z",
+  "mesReferencia": "Janeiro 2024"
 }
 ```
 
@@ -612,11 +923,25 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 |----------|--------|-----------|
 | `/api/health` | GET | Healthcheck |
 | `/api/admin/init` | POST | Inicializar banco |
-| `/api/dispositivos` | GET | Listar dispositivos |
-| `/api/dispositivos` | POST | Criar dispositivo |
+| `/api/admin/migrate` | POST | Executar migrações manuais |
+| `/api/admin/migrate-db` | POST | Migrações de schema |
+| `/api/dispositivos` | GET/POST | Listar/criar dispositivos |
 | `/api/dispositivos/[id]` | DELETE | Remover dispositivo |
 | `/api/dispositivos/ativar` | POST | Ativar dispositivo |
 | `/api/dispositivos/status` | POST | Verificar status de ativação |
+| `/api/equipamentos` | GET | Listar equipamentos |
+| `/api/manutencoes` | GET/POST | Listar/criar manutenções |
+| `/api/manutencoes/[id]` | GET/PUT/DELETE | CRUD de manutenção |
+| `/api/historico-relogio` | GET/POST | Histórico de relógio |
+| `/api/historico-relogio/[id]` | PUT | Atualizar registro |
+| `/api/estabelecimentos` | GET/POST | CRUD de estabelecimentos |
+| `/api/estabelecimentos/[id]` | PUT/DELETE | Atualizar/remover |
+| `/api/tipos-produto` | GET/POST | CRUD de tipos |
+| `/api/tipos-produto/[id]` | PUT/DELETE | Atualizar/remover |
+| `/api/descricoes-produto` | GET/POST | CRUD de descrições |
+| `/api/descricoes-produto/[id]` | PUT/DELETE | Atualizar/remover |
+| `/api/tamanhos-produto` | GET/POST | CRUD de tamanhos |
+| `/api/tamanhos-produto/[id]` | PUT/DELETE | Atualizar/remover |
 
 ---
 
@@ -632,19 +957,16 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 
 ### 🔒 Rotas Autenticadas
 
-#### Dashboard (`/dashboard`)
+#### Dashboard (`/dashboard`) — Permissão: `dashboard`
 
 **KPIs exibidos:**
+- Ganhos do mês atual (total, percentual, período)
 - Total de clientes ativos
 - Produtos locados vs. disponíveis
-- Receita do mês atual
-- Saldo devedor total
-- Cobranças recentes (últimas 10)
-- Alertas (cobranças atrasadas, conflitos de sync)
+- Clientes não cobrados recentemente
+- Atividade recente
 
----
-
-#### Clientes (`/clientes`)
+#### Clientes (`/clientes`) — Permissão: `clientes`
 
 | Rota | Função |
 |------|--------|
@@ -653,16 +975,7 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 | `/clientes/[id]` | Detalhes com locações e cobranças |
 | `/clientes/[id]/editar` | Editar dados do cliente |
 
-**Funcionalidades:**
-- Cadastro de pessoa física ou jurídica
-- Validação de CPF/CNPJ
-- Busca automática de endereço por CEP (ViaCEP)
-- Vinculação a rotas
-- Histórico de locações e cobranças
-
----
-
-#### Produtos (`/produtos`)
+#### Produtos (`/produtos`) — Permissão: `produtos`
 
 | Rota | Função |
 |------|--------|
@@ -671,16 +984,7 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 | `/produtos/[id]` | Detalhes com histórico de locações |
 | `/produtos/[id]/editar` | Editar produto |
 
-**Funcionalidades:**
-- Cadastro com identificador único (placa)
-- Controle de relógio (contador)
-- Classificação por tipo, descrição, tamanho
-- Status de conservação
-- Histórico de locações
-
----
-
-#### Locações (`/locacoes`)
+#### Locações (`/locacoes`) — Permissão: `locacaoRelocacaoEstoque`
 
 | Rota | Função |
 |------|--------|
@@ -691,50 +995,56 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 | `/locacoes/[id]/relocar` | Relocar produto para outro cliente |
 | `/locacoes/[id]/enviar-estoque` | Encerrar locação |
 
-**Funcionalidades:**
-- Seleção de cliente e produto disponível
-- Três formas de pagamento (período, percentual)
-- Registro de leitura inicial do relógio
-- Relocação de produto para outro cliente
-- Envio para estoque ao finalizar
-
----
-
-#### Cobranças (`/cobrancas`)
+#### Cobranças (`/cobrancas`) — Permissão: `cobrancas`
 
 | Rota | Função |
 |------|--------|
 | `/cobrancas` | Listagem com filtros (status, período, cliente) |
 | `/cobrancas/nova` | Nova cobrança |
-| `/cobrancas/[id]` | Detalhes |
+| `/cobrancas/[id]` | Detalhes com recibo PDF e PIX |
 | `/cobrancas/[id]/editar` | Editar cobrança |
 
-**Funcionalidades:**
-- Seleção de locação ativa
-- Registro de leitura do relógio
-- Cálculo automático de valores
-- Aplicação de descontos
-- Controle de pagamento parcial
-- Geração de saldo devedor
+#### Relatórios (`/relatorios`) — Permissão: `relatorios`
 
----
+14 tipos de relatório com exportação Excel e gráficos Recharts:
+financeiro, clientes, produtos, locacoes, estoque, inadimplencia, recebimentos, rotas, locacoes-rota, comparativo, operacional, manutencoes, relogios.
 
-#### Relatórios (`/relatorios`)
+#### Manutenções (`/manutencoes`) — Permissão: `manutencoes`
 
-**Informações disponíveis:**
-- Receita por período (mês/ano)
-- Saldo devedor total e por cliente
-- Cobranças por status
-- Produtos mais locados
-- Clientes por rota
+| Rota | Função |
+|------|--------|
+| `/manutencoes` | Listagem de manutenções |
+| `/manutencoes/nova` | Nova manutenção |
+
+#### Relógios (`/relogios`) — Permissão: `relogios`
+
+| Rota | Função |
+|------|--------|
+| `/relogios` | Listagem de alterações de relógio |
+| `/relogios/nova` | Registrar alteração de relógio |
+
+#### 📅 Agenda (`/agenda`) — Permissão: `agenda`
+
+Calendário de pagamentos e vencimentos com visualização por data. Mostra cobranças pagas, pendentes e atrasadas agrupadas por dia. AcessoControlado só visualiza cobranças das suas rotas.
+
+#### 🗺️ Mapa de Rotas (`/mapa`) — Permissão: `mapa`
+
+Mapa interativo (Leaflet) com:
+- Marcadores coloridos por rota (cor definida no cadastro da rota)
+- Popups com dados financeiros (total recebido, pendente, locações ativas)
+- Cards de estatísticas gerais
+- Legenda interativa com toggle de rotas (mostrar/ocultar)
+- Centralizado em Campo Grande, MS
+
+#### Perfil (`/perfil`) — Permissão: `dashboard`
+
+Página de perfil do usuário com opção de alterar senha.
 
 ---
 
 ### 👑 Área Administrativa (`/admin/*`)
 
-**Acesso restrito:** Apenas usuários com `tipoPermissao = 'Administrador'`
-
-#### Usuários (`/admin/usuarios`)
+#### Usuários (`/admin/usuarios`) — Permissão: `adminUsuarios`
 
 | Rota | Função |
 |------|--------|
@@ -742,15 +1052,7 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 | `/admin/usuarios/novo` | Criar usuário |
 | `/admin/usuarios/[id]/editar` | Editar usuário |
 
-**Funcionalidades:**
-- Definir tipo de permissão
-- Configurar permissões específicas (web/mobile)
-- Vincular rotas permitidas (para AcessoControlado)
-- Bloquear/desbloquear usuários
-
----
-
-#### Rotas (`/admin/rotas`)
+#### Rotas (`/admin/rotas`) — Permissão: `rotas`
 
 | Rota | Função |
 |------|--------|
@@ -758,30 +1060,36 @@ A sincronização **NÃO** usa o token JWT do usuário. A autenticação é feit
 | `/admin/rotas/nova` | Criar rota |
 | `/admin/rotas/[id]` | Editar rota com clientes vinculados |
 
----
+#### Cadastros (`/admin/cadastros`) — Permissão: `adminCadastros`
 
-#### Dispositivos (`/admin/dispositivos`)
+Gerenciamento de tipos, descrições e tamanhos de produto, estabelecimentos e equipamentos.
+
+#### Dispositivos (`/admin/dispositivos`) — Permissão: `adminDispositivos`
 
 | Rota | Função |
 |------|--------|
 | `/admin/dispositivos` | Listar dispositivos móveis |
 | `/admin/dispositivos/novo` | Criar novo dispositivo |
 
-**Funcionalidades:**
-- Gerar senha numérica de 6 dígitos para ativação
-- Visualizar chave do dispositivo
-- Ver último acesso de cada dispositivo
-- Ativar/desativar dispositivos
+#### Sincronização (`/admin/sync`) — Permissão: `adminSincronizacao`
 
----
+Status de sincronização de cada dispositivo, conflitos pendentes, logs de alterações.
 
-#### Sincronização (`/admin/sync`)
+#### 🛡️ Auditoria (`/admin/auditoria`) — Permissão: `adminAuditoria`
 
-**Informações exibidas:**
-- Status de sincronização de cada dispositivo
-- Última sincronização
-- Conflitos pendentes
-- Logs de alterações recentes
+Visualização completa dos logs de auditoria com filtros por ação, entidade, usuário, severidade, origem e período.
+
+#### 🎯 Metas (`/admin/metas`) — Permissão: `relatorios`
+
+Gestão de metas de arrecadação por tipo (receita, cobranças, adimplência), período e rota.
+
+#### ⏰ Automação (`/admin/cron`) — Permissão: `adminSincronizacao`
+
+Painel de controle de automação: gerar cobranças automáticas, marcar cobranças vencidas.
+
+#### 📧 Email (`/admin/email`) — Permissão: `adminCadastros`
+
+Configuração e teste de email, envio de notificação de cobranças atrasadas.
 
 ---
 
@@ -807,7 +1115,7 @@ O sistema implementa **sincronização bidirecional offline-first** entre o app 
 
 ### 🔐 Autenticação para Sincronização
 
-**Importante:** A sincronização NÃO usa o token JWT do usuário. O dispositivo é a credencial para sincronização.
+**Importante:** A sincronização NÃO usa o token JWT do usuário. O dispositivo é a credencial.
 
 - `deviceKey` - Chave única do dispositivo registrado
 - Dispositivo precisa estar cadastrado e ativo no sistema
@@ -820,14 +1128,9 @@ O sistema implementa **sincronização bidirecional offline-first** entre o app 
 2. Envia para `/api/sync/push` com `deviceKey`
 3. Servidor valida dispositivo
 4. Processa mudanças na ordem de dependência:
-   - 1º: Rotas
-   - 2º: Clientes
-   - 3º: Produtos
-   - 4º: Locações
-   - 5º: Cobranças
-   - 6º: Usuários
+   - 1º: Rotas → 2º: Clientes → 3º: Produtos → 4º: Locações → 5º: Cobranças → 6º: Usuários
 5. Detecta conflitos por versão
-6. Retorna resultado
+6. Retorna resultado com `updatedVersions`
 
 ### 📥 PULL (Servidor → Mobile)
 
@@ -835,14 +1138,15 @@ O sistema implementa **sincronização bidirecional offline-first** entre o app 
 1. Mobile envia `lastSyncAt` para `/api/sync/pull`
 2. Servidor busca entidades modificadas após essa data
 3. Filtra apenas mudanças de **outros dispositivos**
-4. Retorna todas as entidades atualizadas
-5. Inclui atributos de produto (tipos, descrições, tamanhos)
+4. Retorna todas as entidades atualizadas (máx. 500 por tipo)
+5. Indica `hasMore` se há mais registros
+6. Indica `isStale` se device está sem sync há > 30 dias
+
+### 📸 Snapshot (para devices stale)
+
+Quando um dispositivo está sem sincronizar há mais de 30 dias, o endpoint `/api/sync/snapshot` retorna um snapshot completo de todas as entidades.
 
 ### ⚠️ Detecção de Conflitos
-
-**Critério:** Conflito detectado quando:
-- Servidor tem versão mais recente que o mobile
-- Ambos modificaram a mesma entidade
 
 **Resolução:**
 ```json
@@ -876,32 +1180,25 @@ Todas as entidades têm estes campos:
 - Estratégia: JWT
 - Sessão: 30 dias
 - Providers: Credentials (email/senha)
-- Proteção de rotas via middleware
+- Proteção de rotas via middleware com permissões granulares
 
 ### Mobile (JWT Customizado)
 
 - Access Token: 15 minutos (configurável via `JWT_EXPIRES_IN`)
-- Refresh Token: 7 dias
+- Refresh Token: 7 dias (armazenado na tabela `Sessao`)
 - Algoritmo: HS256
 - Hash de senha: bcrypt com 12 rounds
 
-### Fluxo de Login Mobile
+### Recuperação de Senha
 
 ```
-1. POST /api/auth/login { email, password }
-   ↓
-2. Servidor valida:
-   - status = 'Ativo'
-   - bloqueado = false
-   - deletedAt = null
-   ↓
-3. Gera Access Token JWT
-   ↓
-4. Retorna { token, user }
-   ↓
-5. Mobile armazena token
-   ↓
-6. Próximas requisições: Authorization: Bearer <token>
+1. POST /api/auth/forgot-password { email }
+2. Servidor gera TokenRecuperacao (hash SHA-256)
+3. Em produção: envia email com link de recuperação
+4. POST /api/auth/reset-password { token, novaSenha }
+5. Servidor valida token (não expirado, não usado)
+6. Atualiza senha e marca token como usado
+7. Registra auditoria (recuperar_senha)
 ```
 
 ---
@@ -912,45 +1209,86 @@ Todas as entidades têm estes campos:
 
 | Tipo | Descrição | Acesso |
 |------|-----------|--------|
-| **Administrador** | Acesso total ao sistema | Todas as rotas e funcionalidades |
-| **Secretario** | Gestão operacional | Clientes, produtos, locações, cobranças |
-| **AcessoControlado** | Acesso restrito | Apenas rotas atribuídas |
+| **Administrador** | Acesso total | Todas as rotas e funcionalidades |
+| **Secretario** | Gestão operacional | Permissões configuráveis (default: acesso amplo) |
+| **AcessoControlado** | Acesso restrito | Apenas rotas atribuídas + permissões específicas |
 
-### Estrutura de Permissões
+### Estrutura de Permissões Web
 
 ```typescript
-interface PermissoesUsuario {
-  web: {
-    todosCadastros: boolean;          // CRUD completo
-    locacaoRelocacaoEstoque: boolean; // Gestão de locações
-    relatorios: boolean;              // Acesso a relatórios
-  };
-  mobile: {
-    todosCadastros: boolean;          // CRUD completo
-    alteracaoRelogio: boolean;        // Alterar contador
-    locacaoRelocacaoEstoque: boolean; // Gestão de locações
-    cobrancasFaturas: boolean;        // Registrar cobranças
-  };
+interface PermissoesWeb {
+  // Cadastros
+  clientes: boolean;
+  produtos: boolean;
+  rotas: boolean;
+  // Operações
+  locacaoRelocacaoEstoque: boolean;
+  cobrancas: boolean;
+  manutencoes: boolean;
+  relogios: boolean;
+  // Visualização
+  relatorios: boolean;
+  dashboard: boolean;
+  agenda: boolean;
+  mapa: boolean;
+  // Admin
+  adminCadastros: boolean;
+  adminUsuarios: boolean;
+  adminDispositivos: boolean;
+  adminSincronizacao: boolean;
+  adminAuditoria: boolean;
+}
+```
+
+### Estrutura de Permissões Mobile
+
+```typescript
+interface PermissoesMobile {
+  clientes: boolean;
+  produtos: boolean;
+  alteracaoRelogio: boolean;
+  locacaoRelocacaoEstoque: boolean;
+  cobrancasFaturas: boolean;
+  manutencoes: boolean;
+  relatorios: boolean;
+  sincronizacao: boolean;
 }
 ```
 
 ### Controle por Rota
 
-Para `AcessoControlado`, o campo `rotasPermitidas` contém os IDs das rotas que o usuário pode acessar. O mobile e web filtram automaticamente clientes e cobranças por essas rotas.
+Para `AcessoControlado`, o campo `rotasPermitidas` contém os IDs das rotas que o usuário pode acessar. O middleware, as APIs e as páginas filtram automaticamente clientes e cobranças por essas rotas.
 
 ### Middleware de Proteção
 
+O middleware implementa verificação granular em **duas camadas**:
+
+1. **Middleware (frontend + API)** — Verifica sessão NextAuth e permissão granular
+2. **API handlers (backend)** — Verificam `getAuthSession()` + permissões específicas
+
 ```typescript
-// Rotas protegidas pelo middleware
-const config = {
-  matcher: [
-    '/dashboard/:path*',
-    '/clientes/:path*',
-    '/produtos/:path*',
-    '/cobrancas/:path*',
-    '/relatorios/:path*',
-    '/admin/:path*',  // Apenas Administrador
-  ],
+// Mapeamento de rotas para permissões
+const ROUTE_PERMISSIONS = {
+  '/clientes': 'clientes',
+  '/produtos': 'produtos',
+  '/locacoes': 'locacaoRelocacaoEstoque',
+  '/cobrancas': 'cobrancas',
+  '/manutencoes': 'manutencoes',
+  '/relogios': 'relogios',
+  '/relatorios': 'relatorios',
+  '/dashboard': 'dashboard',
+  '/agenda': 'agenda',
+  '/mapa': 'mapa',
+  '/admin/usuarios': 'adminUsuarios',
+  '/admin/cadastros': 'adminCadastros',
+  '/admin/dispositivos': 'adminDispositivos',
+  '/admin/sync': 'adminSincronizacao',
+  '/admin/auditoria': 'adminAuditoria',
+  '/admin/metas': 'relatorios',
+  '/admin/email': 'adminCadastros',
+  '/admin/cron': 'adminSincronizacao',
+  '/admin/rotas': 'rotas',
+  '/perfil': 'dashboard',
 }
 ```
 
@@ -959,8 +1297,6 @@ const config = {
 ## Cálculos de Cobrança
 
 ### 📐 Fórmulas de Cálculo
-
-O sistema suporta três formas de pagamento, cada uma com sua lógica de cálculo:
 
 #### 1. PercentualReceber (Cliente recebe parte do faturamento)
 
@@ -972,16 +1308,6 @@ valorPercentual = subtotalAposDescontos × (percentualEmpresa / 100)
 totalClientePaga = subtotalAposDescontos - valorPercentual
 ```
 
-**Exemplo:**
-- Relógio anterior: 1000
-- Relógio atual: 1100
-- Fichas rodadas: 100
-- Preço ficha: R$ 2,50
-- Percentual empresa: 50%
-- Total bruto: R$ 250,00
-- Valor percentual: R$ 125,00
-- **Cliente paga: R$ 125,00**
-
 #### 2. PercentualPagar (Cliente paga percentual do faturamento)
 
 ```
@@ -992,22 +1318,11 @@ valorPercentual = subtotalAposDescontos × (percentualEmpresa / 100)
 totalClientePaga = valorPercentual
 ```
 
-**Exemplo:**
-- Fichas rodadas: 100
-- Preço ficha: R$ 2,50
-- Percentual empresa: 40%
-- Total bruto: R$ 250,00
-- **Cliente paga: R$ 100,00**
-
 #### 3. Periodo (Valor fixo por período)
 
 ```
 totalClientePaga = valorFixo (definido na locação)
 ```
-
-**Exemplo:**
-- Valor fixo mensal: R$ 300,00
-- **Cliente paga: R$ 300,00**
 
 ### 💰 Controle de Pagamento
 
@@ -1020,7 +1335,7 @@ troco = max(0, valorRecebido - totalClientePaga)
 - `Pago`: valorRecebido >= totalClientePaga
 - `Parcial`: valorRecebido > 0 e valorRecebido < totalClientePaga
 - `Pendente`: valorRecebido = 0
-- `Atrasado`: Pendente após data de vencimento
+- `Atrasado`: Pendente após data de vencimento (marcado automaticamente pelo cron)
 
 ---
 
@@ -1028,120 +1343,42 @@ troco = max(0, valorRecebido - totalClientePaga)
 
 ### 🔄 Relocação de Produto
 
-Quando um produto precisa ser transferido de um cliente para outro:
-
 ```
-1. Usuário seleciona locação ativa
-   ↓
-2. Clica em "Relocar"
-   ↓
-3. Informa:
-   - Novo cliente
-   - Novo número do relógio
-   - Nova forma de pagamento
-   - Motivo da relocação
-   - Se houve troca de pano
-   ↓
-4. Sistema executa em TRANSAÇÃO ATÔMICA:
-   a) Finaliza locação atual (status = 'Finalizada')
+1. Usuário seleciona locação ativa → Clica em "Relocar"
+2. Informa: novo cliente, relógio, forma de pagamento, motivo, troca de pano
+3. Sistema em TRANSAÇÃO ATÔMICA:
+   a) Finaliza locação atual
    b) Cria nova locação para o novo cliente
    c) Registra manutenção (se troca de pano)
-   d) Registra no ChangeLog
-   ↓
-5. Produto continua locado, agora para novo cliente
+   d) Registra ChangeLog + LogAuditoria
+4. Produto continua locado para novo cliente
 ```
-
-**Endpoint:** `POST /api/locacoes/[id]/relocar`
-
-**Validações:**
-- Locação deve estar ativa
-- Novo cliente deve existir e estar ativo
-- Número do relógio é obrigatório
-
----
 
 ### 📦 Envio para Estoque
 
-Quando um produto volta para o estoque:
-
 ```
-1. Usuário seleciona locação ativa
-   ↓
-2. Clica em "Enviar para Estoque"
-   ↓
-3. Informa:
-   - Estabelecimento de destino
-   - Motivo do retorno
-   - Observações (opcional)
-   ↓
-4. Sistema executa em TRANSAÇÃO ATÔMICA:
-   a) Finaliza locação (status = 'Finalizada')
-   b) Atualiza produto:
-      - estabelecimento = destino
-      - statusProduto = 'Ativo'
-      - observacao = null (limpa)
-   c) Registra no ChangeLog
-   ↓
-5. Produto disponível para nova locação
+1. Usuário seleciona locação ativa → Clica em "Enviar para Estoque"
+2. Informa: estabelecimento, motivo, observações
+3. Sistema em TRANSAÇÃO ATÔMICA:
+   a) Finaliza locação
+   b) Atualiza produto (estabelecimento, statusProduto = 'Ativo')
+   c) Registra ChangeLog + LogAuditoria
+4. Produto disponível para nova locação
 ```
-
-**Endpoint:** `POST /api/locacoes/[id]/enviar-estoque`
-
-**Validações:**
-- Locação deve estar ativa
-- Estabelecimento é obrigatório
-- Motivo é obrigatório (mínimo 3 caracteres)
-
----
 
 ### 📱 Ativação de Dispositivo
 
-Fluxo para registrar um novo dispositivo móvel:
-
 ```
-1. Admin cria dispositivo no web
-   - Gera senha numérica de 6 dígitos
-   ↓
-2. Usuário no mobile informa:
-   - Nome do dispositivo
-   - Senha numérica
-   ↓
-3. Mobile POST /api/dispositivos/ativar
-   ↓
-4. Servidor valida:
-   - Senha confere
-   - Dispositivo não ativado anteriormente
-   ↓
-5. Servidor gera:
-   - deviceKey único
-   - Marca dispositivo como ativo
-   ↓
-6. Mobile armazena deviceKey
-   ↓
-7. Dispositivo pronto para sincronizar
+1. Admin cria dispositivo (gera senha 6 dígitos)
+2. Mobile informa nome + senha numérica
+3. POST /api/dispositivos/ativar
+4. Servidor valida e gera deviceKey
+5. Dispositivo pronto para sincronizar
 ```
 
 ---
 
 ## Segurança e Middleware
-
-### 🛡️ Middleware de Autenticação
-
-O middleware protege todas as rotas autenticadas:
-
-```typescript
-// Verificação em duas camadas:
-// 1. Middleware (frontend)
-// 2. Handler da API (backend)
-
-// Middleware verifica:
-- Token JWT válido (NextAuth)
-- tipoPermissao para rotas /admin
-
-// API handlers verificam:
-- getAuthSession() retorna sessão válida
-- Permissões específicas por operação
-```
 
 ### 🔒 Proteções Implementadas
 
@@ -1152,21 +1389,16 @@ O middleware protege todas as rotas autenticadas:
 | Soft delete | `deletedAt` em todas as entidades sincronizáveis |
 | Validação de input | Zod schemas centralizados em `lib/validations.ts` |
 | Transações atômicas | Prisma `$transaction()` em operações críticas |
-| Verificação de FK | Antes de inserir no sync |
-| Auth em todas as APIs | `getAuthSession()` em todos os endpoints CRUD |
+| Auth em todas as APIs | `getAuthSession()` em todos os endpoints |
 | Rota-filtering | AcessoControlado só vê dados das rotas atribuídas |
-| Mass assignment | Schemas Zod protegem contra campos indesejados no UPDATE |
-| Equipamentos legado | POST agora requer auth de admin |
-
-### ⚠️ Rate Limiting
-
-**Atenção:** O sistema atualmente não implementa rate limiting nas seguintes APIs:
-
-- `/api/auth/login` - Vulnerável a força bruta
-- `/api/sync/push` - Vulnerável a flood
-- `/api/sync/pull` - Vulnerável a flood
-
-**Recomendação:** Implementar rate limiting em produção.
+| Mass assignment | Schemas Zod protegem contra campos indesejados |
+| Rate limiting | Sliding window in-memory em `/api/auth/login` |
+| Tentativas de login | Rastreadas na tabela `TentativaLogin` |
+| Sessões ativas | Gerenciadas na tabela `Sessao` com refresh token |
+| Recuperação de senha | Tokens com hash SHA-256, expiração e uso único |
+| Auditoria | Todas as ações rastreadas com antes/depois |
+| Cron auth | Rotas de automação usam `CRON_SECRET` próprio |
+| Permissões granulares | Middleware com 18 permissões web distintas |
 
 ---
 
@@ -1174,64 +1406,123 @@ O middleware protege todas as rotas autenticadas:
 
 ### 📋 Arquivo: `lib/sync-engine.ts`
 
-O motor de sincronização é responsável por processar as mudanças enviadas pelo mobile e retornar as mudanças do servidor.
-
-### 🔧 Funções Principais
-
 #### `processPush(deviceId, changes)`
 
-Processa mudanças enviadas pelo mobile:
-
-```typescript
-// 1. Ordena mudanças por dependência
-const PROCESSING_ORDER = ['rota', 'cliente', 'produto', 'locacao', 'cobranca', 'usuario']
-
-// 2. Para cada mudança:
-//    - Filtra campos permitidos
-//    - Converte tipos (SQLite → Prisma)
-//    - Valida foreign keys
-//    - Detecta conflitos por versão
-//    - Registra no ChangeLog
-
-// 3. Retorna conflitos e erros
-```
+1. Ordena mudanças por dependência: rota → cliente → produto → locação → cobrança → usuario
+2. Filtra campos permitidos, converte tipos (SQLite → Prisma)
+3. Valida foreign keys, detecta conflitos por versão
+4. Registra no ChangeLog + LogAuditoria
+5. Retorna conflitos, erros e versões atualizadas
 
 #### `processPull(deviceId, lastSyncAt)`
 
-Retorna mudanças do servidor:
+1. Busca entidades modificadas após lastSyncAt
+2. Filtra mudanças de outros dispositivos
+3. Exclui registros com deletedAt
+4. Limita a 500 registros por tipo (paginação)
+5. Retorna entidades + atributos de produto
 
-```typescript
-// 1. Busca entidades modificadas após lastSyncAt
-// 2. Filtra mudanças de outros dispositivos
-// 3. Exclui registros com deletedAt
-// 4. Retorna todas as entidades + atributos de produto
-```
+---
 
-### 📊 Campos Permitidos por Entidade
+## Sistema de Auditoria
 
-O sync engine filtra apenas campos conhecidos:
+### 📋 Arquivo: `lib/auditoria.ts`
 
-```typescript
-const ALLOWED_FIELDS = {
-  cliente: ['tipoPessoa', 'identificador', 'nomeExibicao', ...],
-  produto: ['identificador', 'numeroRelogio', 'tipoId', ...],
-  locacao: ['clienteId', 'produtoId', 'formaPagamento', ...],
-  cobranca: ['locacaoId', 'relogioAnterior', 'relogioAtual', ...],
-  rota: ['descricao', 'status'],
-  usuario: ['nome', 'email', 'tipoPermissao', 'senha', ...], // ⚠️ Ver problemas conhecidos
+O sistema rastreia todas as ações importantes com snapshots antes/depois.
+
+### 🏷️ Ações Rastreadas
+
+| Categoria | Ações |
+|-----------|-------|
+| **Usuários** | criar_usuario, editar_usuario, excluir_usuario, desbloquear_usuario, reset_senha, alterar_permissao, login, logout, login_falha, alterar_senha, recuperar_senha |
+| **Clientes** | criar_cliente, editar_cliente, excluir_cliente |
+| **Produtos** | criar_produto, editar_produto, excluir_produto |
+| **Locações** | criar_locacao, editar_locacao, excluir_locacao, relocar_locacao, enviar_estoque, finalizar_locacao |
+| **Cobranças** | criar_cobranca, editar_cobranca, excluir_cobranca, alterar_status_cobranca, imprimir_recibo |
+| **Rotas** | criar_rota, editar_rota, excluir_rota |
+| **Manutenções** | criar_manutencao, editar_manutencao, excluir_manutencao |
+| **Atributos** | criar/editar/excluir_tipo_produto, criar/editar/excluir_descricao_produto, criar/editar/excluir_tamanho_produto |
+| **Estabelecimentos** | criar_estabelecimento, editar_estabelecimento, excluir_estabelecimento |
+| **Relógio** | atualizar_relogio |
+| **Dispositivos** | criar_dispositivo, editar_dispositivo, excluir_dispositivo, ativar_dispositivo |
+| **Metas** | criar_meta, editar_meta, excluir_meta |
+| **Notificações** | marcar_notificacao_lida, excluir_notificacao |
+| **Sync** | sync_push, sync_pull, sync_conflict_resolve |
+| **Sistema** | migracao_banco, init_admin, cron_vencimento, cron_gerar_cobrancas |
+| **Sessão** | revogar_sessao, revogar_todas_sessoes |
+
+### 🎯 Severidades
+
+| Severidade | Uso |
+|------------|-----|
+| `info` | Operações normais (CRUD, login) |
+| `aviso` | Operações sensíveis (reset de senha, alteração de permissão) |
+| `critico` | Ações destrutivas (exclusão, envio para estoque) |
+| `seguranca` | Eventos de segurança (login falha, bloqueio) |
+
+### 📍 Origens
+
+| Origem | Descrição |
+|--------|-----------|
+| `web` | Ações via interface web |
+| `mobile` | Ações via aplicativo mobile |
+| `sistema` | Ações automáticas do sistema |
+| `cron` | Ações executadas por cron jobs |
+
+---
+
+## Automação (Cron Jobs)
+
+### ⏰ Vencimento de Cobranças
+
+**Endpoint:** `POST /api/cron/vencimento`
+
+Verifica cobranças com `status = 'Pendente'` cuja `dataVencimento` já passou e atualiza para `'Atrasado'`. Também gera notificações para os usuários responsáveis.
+
+### 📝 Geração Automática de Cobranças
+
+**Endpoint:** `POST /api/cron/gerar-cobrancas`
+
+Gera cobranças pendentes para locações ativas com pagamento por período:
+- Calcula o período atual com base na `periodicidade`
+- Usa `dataPrimeiraCobranca` como referência
+- Não gera cobrança duplicada se já existe para o mesmo período
+- Registra auditoria (cron_gerar_cobrancas)
+
+### 🔑 Autenticação
+
+Cron jobs usam autenticação própria via `CRON_SECRET`:
+- Header: `x-cron-secret: <CRON_SECRET>`
+- Query: `?secret=<CRON_SECRET>`
+- Alternativa: Sessão de Administrador
+
+**Configuração Vercel:**
+```json
+{
+  "crons": [
+    { "path": "/api/cron/vencimento", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/gerar-cobrancas", "schedule": "0 6 1 * *" }
+  ]
 }
 ```
 
-### ⚠️ Validação de Foreign Keys
+---
 
-Antes de inserir, o motor valida referências:
+## Sistema de Email
 
-```typescript
-// Remove referências inválidas em vez de falhar
-if (!await prisma.rota.findUnique({ where: { id: rotaId } })) {
-  delete data.rotaId  // Remove referência inválida
-}
-```
+### 📧 Configuração (Nodemailer)
+
+Variáveis necessárias: `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`, `EMAIL_FROM`
+
+### 🔔 Notificação de Cobranças Atrasadas
+
+**Endpoint:** `POST /api/email/notificar-atrasadas`
+
+Envia email para todos os clientes com cobranças em atraso, listando número da cobrança, produto, valor pendente, dias de atraso.
+
+### 🧪 Email de Teste
+
+**Endpoint:** `POST /api/email/teste`
 
 ---
 
@@ -1239,111 +1530,180 @@ if (!await prisma.rota.findUnique({ where: { id: rotaId } })) {
 
 ```
 app-cobrancas-web/
-├── app/                          # Next.js App Router
+├── app/
 │   ├── (app)/                    # Rotas autenticadas
-│   │   ├── dashboard/            # Dashboard principal
+│   │   ├── dashboard/            # Dashboard
 │   │   ├── clientes/             # Gestão de clientes
-│   │   │   ├── [id]/             # Detalhes e edição
-│   │   │   └── novo/             # Novo cliente
 │   │   ├── produtos/             # Gestão de produtos
 │   │   ├── locacoes/             # Gestão de locações
 │   │   ├── cobrancas/            # Gestão de cobranças
-│   │   ├── relatorios/           # Relatórios
+│   │   ├── manutencoes/          # Manutenções
+│   │   ├── relogios/             # Alterações de relógio
+│   │   ├── agenda/               # Calendário de pagamentos
+│   │   ├── mapa/                 # Mapa interativo de rotas
+│   │   ├── relatorios/           # 14 tipos de relatório
+│   │   ├── perfil/               # Perfil do usuário
 │   │   └── admin/                # Área administrativa
 │   │       ├── usuarios/         # Gestão de usuários
 │   │       ├── rotas/            # Gestão de rotas
+│   │       ├── cadastros/        # Tipos/desc/tam/estabelecimentos
 │   │       ├── dispositivos/     # Dispositivos móveis
-│   │       └── sync/             # Monitor de sync
-│   ├── (auth)/                   # Rotas de autenticação
-│   │   └── login/                # Login web
-│   ├── api/                      # API Routes
-│   │   ├── auth/                 # Autenticação
-│   │   │   ├── login/            # Login mobile
-│   │   │   ├── me/               # Dados do usuário
-│   │   │   ├── logout/           # Logout
-│   │   │   ├── change-password/  # Alterar senha
-│   │   │   └── [...nextauth]/    # NextAuth
-│   │   ├── sync/                 # Sincronização
-│   │   │   ├── push/             # Enviar mudanças
-│   │   │   ├── pull/             # Receber mudanças
-│   │   │   ├── conflicts/        # Listar conflitos
-│   │   │   └── conflict/resolve/ # Resolver conflito
-│   │   ├── clientes/             # CRUD clientes
-│   │   ├── produtos/             # CRUD produtos
-│   │   ├── locacoes/             # CRUD locações
-│   │   │   └── [id]/
-│   │   │       ├── relocar/      # Relocar produto
-│   │   │       └── enviar-estoque/ # Enviar para estoque
-│   │   ├── cobrancas/            # CRUD cobranças
-│   │   ├── rotas/                # CRUD rotas
-│   │   ├── usuarios/             # CRUD usuários
-│   │   ├── dispositivos/         # CRUD dispositivos
-│   │   ├── dashboard/            # Métricas
-│   │   ├── relatorios/           # Relatórios
-│   │   ├── localizacao/          # CEP/Estados/Cidades
-│   │   └── health/               # Healthcheck
-│   ├── globals.css               # Estilos globais
-│   ├── layout.tsx                # Layout raiz
-│   └── page.tsx                  # Página inicial
-├── components/                   # Componentes React
-│   ├── layout/                   # Componentes de layout
-│   │   ├── header.tsx            # Cabeçalho
-│   │   └── sidebar.tsx           # Menu lateral
-│   ├── providers/                # Providers
-│   │   └── session-provider.tsx  # NextAuth provider
-│   └── ui/                       # Componentes UI
-│       ├── badge.tsx             # Badge de status
-│       ├── button.tsx            # Botão
-│       ├── card.tsx              # Card
-│       ├── input.tsx             # Input
-│       ├── pagination.tsx        # Paginação
-│       ├── empty-state.tsx       # Estado vazio
-│       ├── loading.tsx           # Loading
-│       └── stat-card.tsx         # Card de estatística
-├── lib/                          # Bibliotecas e utilitários
+│   │       ├── sync/             # Monitor de sincronização
+│   │       ├── auditoria/        # Logs de auditoria
+│   │       ├── metas/            # Metas de arrecadação
+│   │       ├── cron/             # Automação
+│   │       └── email/            # Configuração de email
+│   ├── (auth)/login/             # Login web
+│   └── api/                      # API Routes (50+ endpoints)
+│       ├── auth/                 # Login, logout, forgot/reset password
+│       ├── sync/                 # Push, Pull, Snapshot, Conflicts
+│       ├── clientes/             # CRUD + batch
+│       ├── produtos/             # CRUD + batch
+│       ├── locacoes/             # CRUD + relocar + enviar-estoque
+│       ├── cobrancas/            # CRUD + batch
+│       ├── rotas/                # CRUD
+│       ├── usuarios/             # CRUD
+│       ├── manutencoes/          # CRUD
+│       ├── historico-relogio/    # CRUD
+│       ├── dispositivos/         # CRUD + ativar/status
+│       ├── estabelecimentos/     # CRUD
+│       ├── tipos-produto/        # CRUD
+│       ├── descricoes-produto/   # CRUD
+│       ├── tamanhos-produto/     # CRUD
+│       ├── equipamentos/         # Listagem
+│       ├── dashboard/            # Métricas + atividade + mobile
+│       ├── relatorios/           # 14 tipos
+│       ├── mapa/                 # Dados + geocodificar + seed
+│       ├── agenda/               # Pagamentos por data
+│       ├── busca-global/         # Busca unificada
+│       ├── metas/                # CRUD
+│       ├── notificacoes/         # CRUD
+│       ├── auditoria/            # Logs
+│       ├── cron/                 # vencimento + gerar-cobrancas
+│       ├── email/                # notificar-atrasadas + teste
+│       ├── admin/                # init + migrate + migrate-db + sync
+│       ├── localizacao/          # CEP + estados + cidades
+│       ├── mobile/auth/          # Auth mobile
+│       └── health/               # Healthcheck
+├── components/
+│   ├── layout/
+│   │   ├── sidebar.tsx           # Menu lateral + botão X no mobile
+│   │   ├── top-bar.tsx           # Header com busca + hamburger
+│   │   ├── global-search.tsx     # Busca global (⌘K)
+│   │   ├── notification-bell.tsx # Sino de notificações
+│   │   └── theme-toggle.tsx      # Toggle dark/light
+│   ├── providers/                # Session + Theme providers
+│   ├── produtos/                 # ProdutoForm + AttributeCrud
+│   ├── usuarios/                 # UsuarioForm
+│   └── ui/                       # badge, confirm-modal, empty-state,
+│                                  # form, kpi-card, loading, pagination,
+│                                  # skeleton, stat-card, toast, toaster
+├── lib/
 │   ├── prisma.ts                 # Singleton Prisma Client
-│   ├── auth.ts                   # Configuração NextAuth
+│   ├── auth.ts                   # NextAuth config
+│   ├── auth-core.ts              # Auth compartilhada
 │   ├── jwt.ts                    # JWT para mobile
-│   ├── hash.ts                   # bcrypt para senhas
-│   ├── api-helpers.ts            # Helpers para API
-│   └── sync-engine.ts            # Motor de sincronização
-├── shared/                       # Código compartilhado
-│   └── types.ts                  # Tipos TypeScript
-├── prisma/                       # Prisma ORM
-│   ├── schema.prisma             # Schema do banco
+│   ├── hash.ts                   # bcrypt
+│   ├── api-helpers.ts            # getAuthSession, handleApiError
+│   ├── sync-engine.ts            # Motor de sincronização
+│   ├── sync-helpers.ts           # Helpers de sync
+│   ├── sync-conflict-resolver.ts # Resolução de conflitos
+│   ├── auditoria.ts              # Sistema de auditoria
+│   ├── notificacoes.ts           # Sistema de notificações
+│   ├── email.ts                  # Nodemailer
+│   ├── rate-limit.ts             # Sliding window rate limiter
+│   ├── logger.ts                 # Logger estruturado
+│   ├── pix.ts                    # QR Code PIX
+│   ├── pix-config.ts             # Config PIX
+│   ├── export-utils.ts           # Excel/PDF export
+│   ├── relatorios-helpers.ts     # Helpers relatórios
+│   ├── locacao-service.ts        # Serviços locação
+│   ├── produto-service.ts        # Serviços produto
+│   ├── dispositivo-helpers.ts    # Helpers dispositivos
+│   ├── permissoes-padrao.ts      # Permissões padrão
+│   ├── validations.ts            # Schemas Zod centralizados
+│   ├── utils.ts                  # Utilitários gerais
+│   └── utils/masks.ts            # Máscaras CPF/CNPJ/CEP/tel
+├── packages/
+│   └── shared/                   # @cobrancas/shared
+│       └── src/
+│           ├── types.ts          # Tipos compartilhados
+│           ├── constants.ts      # Constantes
+│           ├── schemas.ts        # Schemas Zod
+│           └── utils.ts          # Utilitários
+├── shared/types.ts               # Backward compat
+├── prisma/
+│   ├── schema.prisma             # 23 modelos
 │   └── seed.ts                   # Dados iniciais
-├── types/                        # Tipos TypeScript
-│   └── next-auth.d.ts            # Extensão NextAuth
-├── middleware.ts                 # Middleware de auth
-├── next.config.ts                # Configuração Next.js
-├── tailwind.config.ts            # Configuração Tailwind
-└── package.json                  # Dependências
+├── types/next-auth.d.ts          # Extensão NextAuth
+├── middleware.ts                 # Auth + permissões granulares
+├── next.config.ts
+├── tailwind.config.ts
+└── package.json
 ```
+
+---
+
+## Pacote Compartilhado (@cobrancas/shared)
+
+O projeto usa monorepo com `workspaces` para compartilhar tipos, constantes e schemas entre web e mobile.
+
+### Estrutura
+
+```
+packages/shared/src/
+├── types.ts      # Tipos TypeScript (SyncableEntity, Cliente, Produto, etc.)
+├── constants.ts  # Constantes (SYNC_PROCESSING_ORDER, SYNC_PULL_LIMIT, etc.)
+├── schemas.ts    # Schemas Zod compartilhados
+└── utils.ts      # Utilitários (getProdutoNome, formatarMoeda, etc.)
+```
+
+### Uso
+
+```typescript
+import { Cliente, SYNC_PROCESSING_ORDER } from '@cobrancas/shared'
+```
+
+### Constantes Importantes
+
+| Constante | Valor | Descrição |
+|-----------|-------|-----------|
+| `SYNC_PULL_LIMIT` | 500 | Máximo registros por entidade no pull |
+| `SYNC_STALE_THRESHOLD_DAYS` | 30 | Dias sem sync para considerar stale |
+| `DEFAULT_AUTO_SYNC_INTERVAL` | 5 | Intervalo de auto-sync (minutos) |
+| `SYNC_PROCESSING_ORDER` | ['rota', 'cliente', ...] | Ordem de processamento no push |
 
 ---
 
 ## Deploy
 
-### Vercel + Supabase/Railway
+### Vercel + Neon
 
 ```bash
-# 1. Criar banco no Supabase ou Railway
-#    Copiar DATABASE_URL
-
-# 2. Criar projeto na Vercel
-#    Conectar repositório GitHub
-
+# 1. Criar banco no Neon
+# 2. Criar projeto na Vercel, conectar repositório
 # 3. Configurar variáveis de ambiente:
 DATABASE_URL="postgresql://..."
+DIRECT_URL="postgresql://..."
 NEXTAUTH_SECRET="chave-secreta-32-caracteres"
 NEXTAUTH_URL="https://seu-dominio.vercel.app"
 JWT_SECRET="outra-chave-secreta-32-caracteres"
+CRON_SECRET="chave-secreta-para-cron"
 
-# 4. Rodar migrations (local ou via script)
+# 4. Migrations e seed
 npx prisma db push
-
-# 5. Popular banco
 npm run db:seed
+```
+
+### Cron Jobs na Vercel
+
+```json
+{
+  "crons": [
+    { "path": "/api/cron/vencimento", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/gerar-cobrancas", "schedule": "0 6 1 * *" }
+  ]
+}
 ```
 
 ### Build Local
@@ -1357,27 +1717,17 @@ npm start
 
 ## Integração com Mobile
 
-Configurar no app mobile (`app.json` ou `.env`):
-
-```json
-{
-  "expo": {
-    "extra": {
-      "API_URL": "https://seu-dominio.vercel.app",
-      "USE_MOCK": "false"
-    }
-  }
-}
-```
-
 ### Endpoints Consumidos pelo Mobile
 
 | Endpoint | Uso |
 |----------|-----|
 | `/api/health` | Verificar conexão |
 | `/api/auth/login` | Login |
+| `/api/auth/me` | Dados do usuário |
+| `/api/auth/change-password` | Alterar senha |
 | `/api/sync/push` | Enviar mudanças |
 | `/api/sync/pull` | Receber mudanças |
+| `/api/sync/snapshot` | Snapshot completo |
 | `/api/dispositivos/ativar` | Ativar dispositivo |
 | `/api/dispositivos/status` | Verificar ativação |
 
@@ -1385,34 +1735,21 @@ Configurar no app mobile (`app.json` ou `.env`):
 
 ## Problemas Conhecidos
 
-### 🔴 Bugs Críticos Identificados
+### 🔴 Bugs Críticos
 
 #### 1. Senha em Texto Plano no Mobile
 
 **Problema:** O mobile salva senhas em texto plano no SQLite local.
-
-**Impacto:** Qualquer acesso ao arquivo de banco expõe senhas.
-
-**Solução Recomendada:** Implementar hash bcrypt no mobile antes de salvar.
-
----
+**Solução Recomendada:** Implementar hash bcrypt no mobile.
 
 #### 2. Senha Apagada na Sincronização
 
-**Problema:** `upsertUsuarioFromSync` no mobile usa `INSERT OR REPLACE` que apaga campos não enviados pelo servidor (incluindo senha).
-
-**Impacto:** Após qualquer sync, o login offline quebra.
-
+**Problema:** `INSERT OR REPLACE` no mobile apaga campos não enviados (incluindo senha).
 **Solução Recomendada:** Usar `INSERT OR IGNORE` + `UPDATE` seletivo.
-
----
 
 #### 3. Campo `senha` no ALLOWED_FIELDS do Sync
 
 **Problema:** O campo `senha` está permitido no PUSH de sincronização.
-
-**Impacto:** Senha em texto plano pode ser enviada ao servidor.
-
 **Solução Recomendada:** Remover `senha` de `ALLOWED_FIELDS.usuario`.
 
 ---
@@ -1421,11 +1758,13 @@ Configurar no app mobile (`app.json` ou `.env`):
 
 | Item | Prioridade | Descrição |
 |------|------------|-----------|
-| Rate Limiting | Alta | Implementar em `/api/auth/login` e `/api/sync/*` |
-| Paginação no PULL | Média | Limitar registros por sincronização |
+| Rate Limiting em APIs de sync | Alta | Implementar em `/api/sync/push` e `/api/sync/pull` |
 | Campos de data como DateTime | Média | Migrar campos String para DateTime |
 | PRAGMA journal_mode=WAL | Baixa | Melhorar performance SQLite no mobile |
-| Sync fields em Manutencao/Meta | Média | Adicionar syncStatus, version, deviceId aos modelos |
+| Sync fields em Manutencao/Meta | Média | Adicionar syncStatus, version, deviceId |
+| Rate limiting persistente | Média | Migrar de in-memory para Redis/Vercel KV |
+| Email em massa | Baixa | Fila de emails para grandes volumes |
+| WebSocket | Baixa | Notificações em tempo real |
 
 ---
 
@@ -1433,28 +1772,37 @@ Configurar no app mobile (`app.json` ou `.env`):
 
 ### Fase 1 — Áreas Core (Concluída)
 - **Clientes**: API com Zod, auth, rota-filtering, batch, paginação
-- **Cobranças**: API com Zod, auth, rota-filtering, batch, recibo térmico
-- **Rotas**: API com Zod, auth, CRUD completo, vinculação de usuários
+- **Cobranças**: API com Zod, auth, rota-filtering, batch, recibo térmico, PIX
+- **Rotas**: API com Zod, auth, CRUD completo, cores para mapa
 - **Locações**: API com Zod, auth, relocar, enviar-estoque, transações atômicas
 - **Produtos**: API com Zod, auth, batch, filtros avançados
-- **Usuários**: API com auth granular, CRUD completo, permissões
+- **Usuários**: API com auth granular, CRUD completo, permissões expandidas
 
 ### Fase 2 — Áreas Administrativas (Concluída)
-- **Dispositivos**: CRUD completo, ativação com PIN, status de sincronização
-- **Sincronização**: Push/Pull com motor próprio, resolução de conflitos
-- **Relatórios**: 14 tipos de relatório com exportação
+- **Dispositivos**: CRUD completo, ativação com PIN
+- **Sincronização**: Push/Pull/Snapshot, resolução de conflitos, paginação
+- **Relatórios**: 14 tipos com exportação Excel e gráficos Recharts
 
-### Fase 3 — Refatoração de Segurança e Consistência (Concluída)
-- **Metas**: Auth adicionada, mass assignment corrigido, Zod validation
-- **Mapa**: Auth adicionada, rota-filtering para AcessoControlado
-- **Agenda**: Auth adicionada, rota-filtering para AcessoControlado
-- **Auditoria**: Auth adicionada, handleApiError centralizado
-- **Manutenções**: manutencaoUpdateSchema via Zod, transação atômica
-- **Histórico Relógio**: Zod centralizado em validations.ts, handleApiError
-- **Estabelecimentos**: Zod schemas, paginação, handleApiError
-- **Tipos/Descrições/Tamanhos Produto**: Auth consistente (NextAuth + JWT), Zod schemas
-- **Notificações**: handleApiError centralizado
-- **Equipamentos POST**: Auth de admin adicionada (antes era sem auth)
+### Fase 3 — Segurança e Consistência (Concluída)
+- **Metas**: Auth, mass assignment corrigido, Zod
+- **Mapa de Rotas**: Dados financeiros, cores do DB, Leaflet interativo
+- **Agenda**: Auth, rota-filtering
+- **Auditoria**: Auth centralizado, ações para todas as entidades
+- **Manutenções/Relógio/Estabelecimentos**: Zod centralizado
+- **Atributos de Produto**: Auth consistente, Zod schemas
+- **Notificações/Equipamentos**: Auth corrigida
+- **Busca Global**: ⌘K, 4 entidades, recentes, mobile-friendly
+- **Layout**: Menu na TopBar, dark mode, notificações
+
+### Fase 4 — Funcionalidades Novas (Concluída)
+- **Email**: Notificação de atrasadas via Nodemailer
+- **Cron Jobs**: Geração automática de cobranças, marcação de vencimento
+- **Recuperação de Senha**: Tokens com hash SHA-256 e expiração
+- **Rate Limiting**: Sliding window in-memory
+- **Sessões**: Tabela Sessao com refresh tokens
+- **Tentativas de Login**: Rastreamento de IP e user agent
+- **Permissões Granulares**: 18 permissões web no middleware
+- **Monorepo**: @cobrancas/shared com tipos, constantes e schemas
 
 ---
 

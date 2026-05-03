@@ -324,11 +324,11 @@ export default function GlobalSearch() {
       {/* Modal Overlay */}
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start sm:items-start justify-center pt-[5vh] sm:pt-[10vh] bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-start justify-center pt-0 sm:pt-[10vh] bg-black/40 backdrop-blur-sm"
           onClick={handleBackdropClick}
         >
           <div
-            className="relative w-full max-w-lg mx-2 sm:mx-4 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden"
+            className="relative w-full max-w-lg mx-0 sm:mx-4 bg-white rounded-b-xl sm:rounded-xl shadow-2xl border border-slate-200 sm:border overflow-hidden"
             onKeyDown={handleKeyDown}
           >
             {/* Search Input */}
